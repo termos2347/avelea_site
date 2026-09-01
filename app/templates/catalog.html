@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Каталог</h2>
+
+<!-- Фильтры -->
+<div class="flex flex-wrap gap-4 mb-6 p-4 bg-white rounded-lg border border-gray-200">
+    <form method="get" action="/catalog" class="flex flex-wrap gap-4 items-end">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+            <select name="category" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
+                <option value="">Все</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Бренд</label>
+            <select name="brand" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
+                <option value="">Все</option>
+                {% for brand in brands %}
+                <option value="{{ brand }}" {% if selected_brand == brand %}selected{% endif %}>{{ brand }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
+            <i class="fas fa-filter"></i> Применить
+        </button>
+        <a href="/catalog" class="text-gray-500 hover:text-black text-sm py-2">
+            <i class="fas fa-times"></i> Сбросить
+        </a>
+    </form>
+</div>
+
+<!-- Товары -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    {% for product in products %}
+    <div class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white">
+        <a href="/product/{{ product.id }}" class="block p-4">
+            <div class="w-full h-40 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg mb-3 flex items-center justify-center text-2xl font-bold text-white">
+                {{ product.name[:2].upper() }}
+            </div>
+            <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
+            <p class="text-sm text-gray-500">{{ product.category }}</p>
+            <p class="text-lg font-semibold mt-1">{{ product.price|int }} ₽</p>
+        </a>
+        <div class="px-4 pb-4">
+            <form method="post" action="/add_to_cart/{{ product.id }}">
+                <button type="submit" 
+                        class="w-full bg-black text-white rounded-md py-2 hover:opacity-90 transition text-sm font-medium">
+                    <i class="fas fa-cart-plus"></i> В корзину
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <p class="col-span-full text-gray-500 text-center py-8">Товары не найдены</p>
+    {% endfor %}
+</div>
+{% endblock %}

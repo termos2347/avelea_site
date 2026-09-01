@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Корзина</h2>
+
+{% if items %}
+<div class="space-y-3">
+    {% for item in items %}
+    <div class="flex flex-wrap items-center gap-4 border border-gray-200 rounded-lg p-4 bg-white">
+        <div class="w-16 h-16 bg-gradient-to-br from-amber-100 to-amber-200 rounded-md flex items-center justify-center text-xs font-bold text-white">
+            {{ item.product.name[:2].upper() }}
+        </div>
+        <div class="flex-1 min-w-[150px]">
+            <a href="/product/{{ item.product.id }}" class="font-medium hover:underline">
+                {{ item.product.name }}
+            </a>
+            <p class="text-sm text-gray-500">
+                {{ item.product.price|int }} ₽ · {{ item.product.volume }}
+            </p>
+        </div>
+        <form method="post" action="/update_cart" class="flex items-center gap-2">
+            <input type="hidden" name="product_id" value="{{ item.product.id }}">
+            <button type="submit" name="quantity" value="{{ item.qty - 1 }}" 
+                    class="border border-gray-300 rounded-md w-8 h-8 flex items-center justify-center hover:bg-gray-100">
+                <i class="fas fa-minus text-sm"></i>
+            </button>
+            <span class="w-8 text-center font-medium">{{ item.qty }}</span>
+            <button type="submit" name="quantity" value="{{ item.qty + 1 }}"
+                    class="border border-gray-300 rounded-md w-8 h-8 flex items-center justify-center hover:bg-gray-100">
+                <i class="fas fa-plus text-sm"></i>
+            </button>
+            <button type="submit" name="quantity" value="0"
+                    class="text-gray-400 hover:text-red-500 transition ml-2">
+                <i class="fas fa-trash"></i>
+            </button>
+        </form>
+        <div class="font-semibold min-w-[80px] text-right">
+            {{ (item.product.price * item.qty)|int }} ₽
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="mt-6 flex flex-wrap justify-between items-center gap-4 border-t border-gray-200 pt-4">
+    <div class="text-xl font-semibold">
+        Итого: {{ total|int }} ₽
+    </div>
+    <div class="flex gap-3">
+        <a href="/catalog" class="border border-gray-300 px-6 py-2 rounded-md hover:bg-gray-50 transition text-sm">
+            <i class="fas fa-arrow-left"></i> Продолжить покупки
+        </a>
+        <button onclick="alert('Оплата и доставка будут подключены позже')" 
+                class="bg-black text-white px-6 py-2 rounded-md hover:opacity-90 transition text-sm">
+            <i class="fas fa-check"></i> Оформить заказ
+        </button>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-16 bg-white rounded-lg border border-gray-200">
+    <i class="fas fa-shopping-cart text-6xl text-gray-300 mb-4"></i>
+    <p class="text-gray-500">Корзина пуста</p>
+    <a href="/catalog" class="inline-block mt-4 bg-black text-white px-6 py-2 rounded-md hover:opacity-90">
+        Перейти в каталог
+    </a>
+</div>
+{% endif %}
+{% endblock %}

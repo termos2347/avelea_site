@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Hero -->
+    <div class="text-center py-12 bg-gray-900 text-white rounded-xl mb-8">
+        <h1 class="text-4xl font-bold">Мы — avelea</h1>
+        <p class="text-gray-300 mt-2">Создаём косметику, в которую влюбляются с первого использования.</p>
+    </div>
+
+    <!-- Миссия -->
+    <div class="bg-amber-50 p-8 rounded-xl mb-8">
+        <h2 class="text-2xl font-semibold text-center">Наша миссия</h2>
+        <p class="text-gray-700 mt-3 text-center max-w-2xl mx-auto">
+            Сделать уход за собой понятным, доступным и безопасным для каждого. 
+            Мы верим, что красивая кожа — это не привилегия, а право.
+        </p>
+        <blockquote class="text-center italic border-t-2 border-b-2 border-gray-800 py-3 mt-4 text-lg">
+            «Красота начинается с уважения к себе и природе»
+        </blockquote>
+    </div>
+
+    <!-- История -->
+    <div class="grid md:grid-cols-2 gap-8 items-center mb-8">
+        <div>
+            <h2 class="text-2xl font-semibold mb-3">Наша история</h2>
+            <p class="text-gray-700">
+                Всё началось с простой идеи: косметика должна быть эффективной, безопасной 
+                и приносить удовольствие. Мы объединили знания химиков-косметологов 
+                и любовь к природе, чтобы создавать формулы, которые реально работают.
+            </p>
+            <p class="text-gray-700 mt-3">
+                Сегодня avelea — это команда единомышленников, которые каждый день 
+                доказывают, что натуральное может быть по-настоящему роскошным.
+            </p>
+        </div>
+        <div class="flex justify-center">
+            <div class="w-48 h-48 bg-gradient-to-br from-amber-100 to-amber-200 rounded-full flex items-center justify-center text-6xl shadow-lg">
+                ✨
+            </div>
+        </div>
+    </div>
+
+    <!-- Ценности (кратко) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div class="border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition">
+            <div class="text-4xl mb-2">🌿</div>
+            <h3 class="font-semibold">Честный состав</h3>
+            <p class="text-sm text-gray-600">Все ингредиенты указаны и проверены</p>
+        </div>
+        <div class="border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition">
+            <div class="text-4xl mb-2">♻️</div>
+            <h3 class="font-semibold">Экологичность</h3>
+            <p class="text-sm text-gray-600">Перерабатываемая упаковка</p>
+        </div>
+        <div class="border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition">
+            <div class="text-4xl mb-2">🐰</div>
+            <h3 class="font-semibold">Без жестокости</h3>
+            <p class="text-sm text-gray-600">Не тестируем на животных</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
