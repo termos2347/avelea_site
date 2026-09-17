@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>{% block title %}Avelea — Натуральная косметика{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
@@ -18,12 +21,6 @@
                 <a href="/" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Главная</a>
                 <a href="/catalog" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Каталог</a>
                 <a href="/about" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">О нас</a>
-                <a href="/cart" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base relative">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span class="absolute -top-1 -right-1 bg-black text-white text-xs font-medium px-1.5 py-0.5 rounded-full">
-                        {{ cart|length if cart else 0 }}
-                    </span>
-                </a>
             </div>
         </nav>
 

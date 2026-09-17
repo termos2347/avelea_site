@@ -1,41 +1,50 @@
-from fastapi import FastAPI, Request, Depends, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import HTMLResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
-import json
+from urllib.parse import urlencode
 import os
 
 from app.database import engine, get_db, Base
 from app.models import Product
 
-# Создаём таблицы
+os.makedirs("instance", exist_ok=True)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Avelea Shop")
-
-# Шаблоны
 templates = Jinja2Templates(directory="app/templates")
 
-# ============== Хелпер для корзины ==============
-def get_cart_from_request(request: Request):
-    cart = request.cookies.get("cart")
-    if cart:
-        try:
-            return json.loads(cart)
-        except:
-            return {}
-    return {}
 
-def set_cart_in_response(response, cart):
-    response.set_cookie(key="cart", value=json.dumps(cart))
+# ============== ХЕЛПЕР ДЛЯ URL БЕЗ ОДНОГО ФИЛЬТРА ==============
+def build_filter_url(params, remove_key: str, remove_value: str = None) -> str:
+    """Собирает /catalog?... без указанного параметра (или одного из его значений)."""
+    pairs = []
+    for k in params.keys():
+        for v in params.getlist(k):
+            if k == remove_key and (remove_value is None or v == remove_value):
+                continue
+            pairs.append((k, v))
+    qs = urlencode(pairs)
+    return "/catalog" + ("?" + qs if qs else "")
 
-# ============== СТРАНИЦА "О НАС" ==============
-@app.get("/about", response_class=HTMLResponse)
-async def about(request: Request):
-    return templates.TemplateResponse("about.html", {
-        "request": request,
-        "cart": get_cart_from_request(request)
-    })
+
+# ============== ГЛОБАЛЬНЫЙ 404 ==============
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    return HTMLResponse(content=str(exc.detail), status_code=exc.status_code)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/product/"):
+        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    return HTMLResponse(content="Bad request", status_code=400)
+
 
 # ============== ГЛАВНАЯ ==============
 @app.get("/", response_class=HTMLResponse)
@@ -44,80 +53,101 @@ async def index(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("index.html", {
         "request": request,
         "popular": popular,
-        "cart": get_cart_from_request(request)
     })
+
 
 # ============== КАТАЛОГ С ФИЛЬТРАМИ ==============
 @app.get("/catalog", response_class=HTMLResponse)
-async def catalog(
-    request: Request,
-    category: str = None,
-    brand: str = None,
-    db: Session = Depends(get_db)
-):
+async def catalog(request: Request, db: Session = Depends(get_db)):
+    params = request.query_params
+
+    q = (params.get("q") or "").strip()
+    selected_categories = params.getlist("category")
+    selected_brands = params.getlist("brand")
+    selected_tags = params.getlist("tag")
+    price_min = params.get("price_min") or ""
+    price_max = params.get("price_max") or ""
+    sort = params.get("sort") or ""
+
     query = db.query(Product)
-    if category:
-        query = query.filter(Product.category == category)
-    if brand:
-        query = query.filter(Product.brand == brand)
-    
+
+    if q:
+        query = query.filter(Product.name.ilike(f"%{q}%"))
+    if selected_categories:
+        query = query.filter(Product.category.in_(selected_categories))
+    if selected_brands:
+        query = query.filter(Product.brand.in_(selected_brands))
+    if selected_tags:
+        query = query.filter(or_(*[Product.tags.ilike(f"%{t}%") for t in selected_tags]))
+    if price_min:
+        try:
+            query = query.filter(Product.price >= int(price_min))
+        except ValueError:
+            pass
+    if price_max:
+        try:
+            query = query.filter(Product.price <= int(price_max))
+        except ValueError:
+            pass
+
+    if sort == "price_asc":
+        query = query.order_by(Product.price.asc())
+    elif sort == "price_desc":
+        query = query.order_by(Product.price.desc())
+    elif sort == "name":
+        query = query.order_by(Product.name.asc())
+    elif sort == "popular":
+        query = query.order_by(Product.popular.desc(), Product.id.asc())
+    else:
+        query = query.order_by(Product.id.asc())
+
     products = query.all()
-    
-    categories = db.query(Product.category).distinct().all()
-    brands = db.query(Product.brand).distinct().all()
-    
+
+    # Опции для фильтров — из БД
+    all_categories = [c[0] for c in db.query(Product.category).distinct().all() if c[0]]
+    all_brands = [b[0] for b in db.query(Product.brand).distinct().all() if b[0]]
+
+    tags_set = set()
+    for (tags_str,) in db.query(Product.tags).all():
+        if tags_str:
+            for t in tags_str.split(","):
+                t = t.strip()
+                if t:
+                    tags_set.add(t)
+    all_tags = sorted(tags_set)
+
+    # Чипсы активных фильтров
+    active_filters = []
+    if q:
+        active_filters.append({"label": f"Поиск: {q}", "remove_url": build_filter_url(params, "q")})
+    for c in selected_categories:
+        active_filters.append({"label": c, "remove_url": build_filter_url(params, "category", c)})
+    for b in selected_brands:
+        active_filters.append({"label": b, "remove_url": build_filter_url(params, "brand", b)})
+    for t in selected_tags:
+        active_filters.append({"label": t, "remove_url": build_filter_url(params, "tag", t)})
+    if price_min:
+        active_filters.append({"label": f"от {price_min} ₽", "remove_url": build_filter_url(params, "price_min")})
+    if price_max:
+        active_filters.append({"label": f"до {price_max} ₽", "remove_url": build_filter_url(params, "price_max")})
+
     return templates.TemplateResponse("catalog.html", {
         "request": request,
         "products": products,
-        "categories": [c[0] for c in categories if c[0]],
-        "brands": [b[0] for b in brands if b[0]],
-        "selected_category": category,
-        "selected_brand": brand,
-        "cart": get_cart_from_request(request)
+        "total_count": len(products),
+        "categories": all_categories,
+        "brands": all_brands,
+        "all_tags": all_tags,
+        "selected_categories": selected_categories,
+        "selected_brands": selected_brands,
+        "selected_tags": selected_tags,
+        "price_min": price_min,
+        "price_max": price_max,
+        "q": q,
+        "sort": sort,
+        "active_filters": active_filters,
     })
 
-# ============== ДОБАВЛЕНИЕ В КОРЗИНУ ==============
-@app.post("/add_to_cart/{product_id}")
-async def add_to_cart(request: Request, product_id: int):
-    cart = get_cart_from_request(request)
-    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
-    response = RedirectResponse(url="/catalog", status_code=303)
-    set_cart_in_response(response, cart)
-    return response
-
-# ============== КОРЗИНА ==============
-@app.get("/cart", response_class=HTMLResponse)
-async def cart_page(request: Request, db: Session = Depends(get_db)):
-    cart = get_cart_from_request(request)
-    items = []
-    total = 0
-    for pid, qty in cart.items():
-        product = db.query(Product).filter(Product.id == int(pid)).first()
-        if product:
-            items.append({"product": product, "qty": qty})
-            total += product.price * qty
-    return templates.TemplateResponse("cart.html", {
-        "request": request,
-        "items": items,
-        "total": total,
-        "cart": cart
-    })
-
-# ============== ОБНОВЛЕНИЕ КОЛИЧЕСТВА ==============
-@app.post("/update_cart")
-async def update_cart(
-    request: Request,
-    product_id: int = Form(...),
-    quantity: int = Form(...)
-):
-    cart = get_cart_from_request(request)
-    if quantity <= 0:
-        cart.pop(str(product_id), None)
-    else:
-        cart[str(product_id)] = quantity
-    response = RedirectResponse(url="/cart", status_code=303)
-    set_cart_in_response(response, cart)
-    return response
 
 # ============== СТРАНИЦА ТОВАРА ==============
 @app.get("/product/{product_id}", response_class=HTMLResponse)
@@ -128,10 +158,16 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
     return templates.TemplateResponse("product.html", {
         "request": request,
         "product": product,
-        "cart": get_cart_from_request(request)
     })
 
-# ============== ЗАПОЛНЕНИЕ ТЕСТОВЫМИ ДАННЫМИ ==============
+
+# ============== СТРАНИЦА "О НАС" ==============
+@app.get("/about", response_class=HTMLResponse)
+async def about(request: Request):
+    return templates.TemplateResponse("about.html", {"request": request})
+
+
+# ============== ТЕСТОВЫЕ ДАННЫЕ ==============
 @app.on_event("startup")
 async def startup():
     db = next(get_db())
