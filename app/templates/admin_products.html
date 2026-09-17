@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h1 class="text-2xl font-semibold">Товары</h1>
+    <div class="flex flex-wrap gap-2">
+        <a href="/admin/products/new"
+           class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
+            <i class="fas fa-plus"></i> Добавить товар
+        </a>
+        <a href="/admin/categories"
+           class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm">
+            <i class="fas fa-folder"></i> Категории
+        </a>
+        <a href="/admin/brands"
+           class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm">
+            <i class="fas fa-tag"></i> Бренды
+        </a>
+        <a href="/admin/logout"
+           class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm">
+            <i class="fas fa-sign-out-alt"></i> Выйти
+        </a>
+    </div>
+</div>
+
+{% if products %}
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
+            <tr>
+                <th class="px-4 py-3 w-16"></th>
+                <th class="px-4 py-3">Название</th>
+                <th class="px-4 py-3">Категории</th>
+                <th class="px-4 py-3">Бренд</th>
+                <th class="px-4 py-3 text-right">Цена</th>
+                <th class="px-4 py-3 w-32 text-right">Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <td class="px-4 py-2">
+                    {% if p.image %}
+                    <img src="{{ p.image }}" alt="" class="w-10 h-10 rounded object-cover">
+                    {% else %}
+                    <div class="w-10 h-10 rounded bg-amber-100 flex items-center justify-center text-xs font-bold text-white">
+                        {{ p.name[:2].upper() }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2">
+                    {{ p.name }}
+                    {% if p.popular %}
+                    <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">популярное</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-gray-600">{{ p.category.replace(',', ', ') if p.category else "—" }}</td>
+                <td class="px-4 py-2 text-gray-600">{{ p.brand or "—" }}</td>
+                <td class="px-4 py-2 text-right font-medium">{{ p.price|int }} ₽</td>
+                <td class="px-4 py-2 text-right whitespace-nowrap">
+                    <a href="/admin/products/{{ p.id }}/edit"
+                       class="text-gray-500 hover:text-black p-1" title="Редактировать">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                    <form method="post" action="/admin/products/{{ p.id }}/delete"
+                          onsubmit="return confirm('Удалить «{{ p.name }}»?');"
+                          class="inline">
+                        <button type="submit"
+                                class="text-gray-400 hover:text-red-500 p-1" title="Удалить">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
+    <p class="text-gray-500">Товаров пока нет</p>
+    <a href="/admin/products/new" class="inline-block mt-3 text-sm text-black underline">Добавить первый</a>
+</div>
+{% endif %}
+{% endblock %}

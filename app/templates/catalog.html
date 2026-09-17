@@ -2,16 +2,21 @@
 {% block content %}
 <div class="flex flex-wrap items-baseline justify-between gap-3 mb-4">
     <h2 class="text-2xl font-semibold">Каталог</h2>
-    <span class="text-sm text-gray-500">Найдено: {{ total_count }}</span>
+    <span class="text-sm text-gray-500">
+        {% if total_count %}
+            {{ start_idx }}–{{ end_idx }} из {{ total_count }}
+        {% else %}
+            Ничего не найдено
+        {% endif %}
+    </span>
 </div>
 
 <form method="get" action="/catalog" id="filters-form" autocomplete="off">
     <div class="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
 
-        <!-- Сайдбар с фильтрами -->
+        <!-- Сайдбар -->
         <aside class="space-y-4">
 
-            <!-- Поиск -->
             <div class="bg-white border border-gray-200 rounded-lg p-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Поиск</label>
                 <input type="search" name="q" value="{{ q }}" placeholder="Название..."
@@ -19,7 +24,6 @@
                        class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
             </div>
 
-            <!-- Категории -->
             {% if categories %}
             <div class="bg-white border border-gray-200 rounded-lg p-4">
                 <h3 class="font-medium text-sm text-gray-900 mb-2">Категория</h3>
@@ -38,7 +42,6 @@
             </div>
             {% endif %}
 
-            <!-- Бренды -->
             {% if brands %}
             <div class="bg-white border border-gray-200 rounded-lg p-4">
                 <h3 class="font-medium text-sm text-gray-900 mb-2">Бренд</h3>
@@ -57,30 +60,6 @@
             </div>
             {% endif %}
 
-            <!-- Свойства (теги) -->
-            {% if all_tags %}
-            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                <h3 class="font-medium text-sm text-gray-900 mb-2">Свойства</h3>
-                <div class="flex flex-wrap gap-1.5">
-                    {% for tag in all_tags %}
-                    <label class="cursor-pointer">
-                        <input type="checkbox" name="tag" value="{{ tag }}"
-                               {% if tag in selected_tags %}checked{% endif %}
-                               autocomplete="off"
-                               onchange="this.form.submit()"
-                               class="peer sr-only">
-                        <span class="inline-block px-2.5 py-1 rounded-full text-xs border transition
-                                     border-gray-300 hover:border-gray-400
-                                     peer-checked:bg-black peer-checked:text-white peer-checked:border-black">
-                            {{ tag }}
-                        </span>
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Цена -->
             <div class="bg-white border border-gray-200 rounded-lg p-4">
                 <h3 class="font-medium text-sm text-gray-900 mb-2">Цена, ₽</h3>
                 <div class="flex gap-2 items-center">
@@ -96,19 +75,19 @@
                 </div>
             </div>
 
-            <a href="/catalog"
-               onclick="event.preventDefault(); document.getElementById('filters-form').reset(); window.location.href='/catalog';"
+            <a href="{{ reset_url }}"
+               onclick="event.preventDefault(); document.getElementById('filters-form').reset(); window.location.href='{{ reset_url }}';"
                class="block text-center text-sm text-gray-500 hover:text-black py-2 cursor-pointer">
                 <i class="fas fa-times"></i> Сбросить всё
             </a>
         </aside>
 
-        <!-- Список товаров -->
+        <!-- Товары -->
         <div>
 
-            <!-- Активные фильтры + сортировка -->
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <div class="flex flex-wrap gap-1.5">
+            <!-- Панель: активные фильтры + вид + кол-во + сортировка -->
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div class="flex flex-wrap gap-1.5 max-w-full">
                     {% for f in active_filters %}
                     <a href="{{ f.remove_url }}"
                        class="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-full text-xs transition">
@@ -117,36 +96,146 @@
                     </a>
                     {% endfor %}
                 </div>
-                <select name="sort" onchange="this.form.submit()" autocomplete="off"
-                        class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-                    <option value=""            {% if not sort %}selected{% endif %}>По умолчанию</option>
-                    <option value="popular"     {% if sort == 'popular' %}selected{% endif %}>Популярные</option>
-                    <option value="price_asc"   {% if sort == 'price_asc' %}selected{% endif %}>Цена ↑</option>
-                    <option value="price_desc"  {% if sort == 'price_desc' %}selected{% endif %}>Цена ↓</option>
-                    <option value="name"        {% if sort == 'name' %}selected{% endif %}>По названию</option>
-                </select>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Переключатель вид -->
+                    <div class="inline-flex border border-gray-300 rounded-md overflow-hidden">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="view" value="grid" class="peer sr-only"
+                                   {% if view == 'grid' %}checked{% endif %}
+                                   autocomplete="off" onchange="this.form.submit()">
+                            <span class="px-3 py-1.5 text-sm inline-block
+                                         peer-checked:bg-black peer-checked:text-white hover:bg-gray-100">
+                                <i class="fas fa-th-large"></i>
+                            </span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="view" value="list" class="peer sr-only"
+                                   {% if view == 'list' %}checked{% endif %}
+                                   autocomplete="off" onchange="this.form.submit()">
+                            <span class="px-3 py-1.5 text-sm inline-block border-l border-gray-300
+                                         peer-checked:bg-black peer-checked:text-white hover:bg-gray-100">
+                                <i class="fas fa-list"></i>
+                            </span>
+                        </label>
+                    </div>
+
+                    <!-- Кол-во на странице -->
+                    <select name="per_page" onchange="this.form.submit()" autocomplete="off"
+                            title="Товаров на странице"
+                            class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                        {% for n in per_page_options %}
+                        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} / стр.</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Сортировка -->
+                    <select name="sort" onchange="this.form.submit()" autocomplete="off"
+                            class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                        <option value=""           {% if not sort %}selected{% endif %}>По умолчанию</option>
+                        <option value="popular"    {% if sort == 'popular' %}selected{% endif %}>Популярные</option>
+                        <option value="price_asc"  {% if sort == 'price_asc' %}selected{% endif %}>Цена ↑</option>
+                        <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Цена ↓</option>
+                        <option value="name"       {% if sort == 'name' %}selected{% endif %}>По названию</option>
+                    </select>
+                </div>
             </div>
 
+            <!-- Список товаров -->
             {% if products %}
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {% for product in products %}
-                <a href="/product/{{ product.id }}"
-                   class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-4 block">
-                    <div class="w-full h-40 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg mb-3 flex items-center justify-center text-2xl font-bold text-white">
-                        {{ product.name[:2].upper() }}
-                    </div>
-                    <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
-                    <p class="text-sm text-gray-500">{{ product.category }}</p>
-                    <p class="text-lg font-semibold mt-1">{{ product.price|int }} ₽</p>
-                </a>
-                {% endfor %}
-            </div>
+                {% if view == 'grid' %}
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% for product in products %}
+                    <a href="/product/{{ product.id }}"
+                       class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-4 block">
+                        {% if product.image %}
+                        <img src="{{ product.image }}" alt="{{ product.name }}"
+                             class="w-full h-40 object-cover rounded-lg mb-3">
+                        {% else %}
+                        <div class="w-full h-40 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg mb-3 flex items-center justify-center text-2xl font-bold text-white">
+                            {{ product.name[:2].upper() }}
+                        </div>
+                        {% endif %}
+                        <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
+                        <p class="text-sm text-gray-500">
+                            {{ product.category.replace(',', ', ') if product.category else "" }}
+                        </p>
+                        <p class="text-lg font-semibold mt-1">{{ product.price|int }} ₽</p>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="space-y-3">
+                    {% for product in products %}
+                    <a href="/product/{{ product.id }}"
+                       class="flex gap-4 border border-gray-200 rounded-xl bg-white p-4 hover:shadow-md transition">
+                        {% if product.image %}
+                        <img src="{{ product.image }}" alt="{{ product.name }}"
+                             class="w-24 h-24 shrink-0 object-cover rounded-lg">
+                        {% else %}
+                        <div class="w-24 h-24 shrink-0 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg flex items-center justify-center text-xl font-bold text-white">
+                            {{ product.name[:2].upper() }}
+                        </div>
+                        {% endif %}
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
+                            <p class="text-sm text-gray-500">
+                                {{ product.category.replace(',', ', ') if product.category else "" }}{% if product.brand %} · {{ product.brand }}{% endif %}
+                            </p>
+                            {% if product.description %}
+                            <p class="text-sm text-gray-600 mt-1 line-clamp-2">{{ product.description }}</p>
+                            {% endif %}
+                            <p class="text-lg font-semibold mt-2">{{ product.price|int }} ₽</p>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Пагинация -->
+                {% if total_pages > 1 %}
+                <nav class="mt-8 flex flex-wrap items-center justify-center gap-1">
+                    {% if page > 1 %}
+                    <a href="/catalog?{% for k in request.query_params.keys() %}{% if k != 'page' %}{{ k }}={{ request.query_params.get(k) }}&{% endif %}{% endfor %}page={{ page - 1 }}"
+                       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+                        <i class="fas fa-chevron-left text-xs"></i>
+                    </a>
+                    {% else %}
+                    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+                        <i class="fas fa-chevron-left text-xs"></i>
+                    </span>
+                    {% endif %}
+
+                    {% for it in page_items %}
+                        {% if it.ellipsis %}
+                        <span class="px-2 text-gray-400">…</span>
+                        {% elif it.current %}
+                        <span class="px-3 py-1.5 bg-black text-white rounded-md text-sm font-medium">{{ it.num }}</span>
+                        {% else %}
+                        <a href="{{ it.url }}"
+                           class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">{{ it.num }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                    <a href="/catalog?{% for k in request.query_params.keys() %}{% if k != 'page' %}{{ k }}={{ request.query_params.get(k) }}&{% endif %}{% endfor %}page={{ page + 1 }}"
+                       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+                        <i class="fas fa-chevron-right text-xs"></i>
+                    </a>
+                    {% else %}
+                    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+                        <i class="fas fa-chevron-right text-xs"></i>
+                    </span>
+                    {% endif %}
+                </nav>
+                {% endif %}
+
             {% else %}
             <div class="text-center py-16 bg-white rounded-lg border border-gray-200">
                 <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
                 <p class="text-gray-500">Ничего не найдено</p>
-                <a href="/catalog"
-                   onclick="event.preventDefault(); document.getElementById('filters-form').reset(); window.location.href='/catalog';"
+                <a href="{{ reset_url }}"
+                   onclick="event.preventDefault(); document.getElementById('filters-form').reset(); window.location.href='{{ reset_url }}';"
                    class="inline-block mt-3 text-sm text-black underline hover:no-underline cursor-pointer">
                     Сбросить фильтры
                 </a>
