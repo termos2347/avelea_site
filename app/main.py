@@ -49,7 +49,6 @@ def require_admin(request: Request):
 
 # ============== ХЕЛПЕРЫ ==============
 def _parse_list(s: str | None) -> list[str]:
-    """'a, b, c' -> ['a','b','c'] без пустых и дублей, порядок сохранён."""
     if not s:
         return []
     seen = []
@@ -133,24 +132,6 @@ def _save_upload(file: UploadFile) -> str | None:
     return f"/static/uploads/{name}"
 
 
-def _ensure_categories_exist(db: Session, names: list[str]):
-    if not names:
-        return
-    existing = {c.name for c in db.query(Category).filter(Category.name.in_(names)).all()}
-    for n in names:
-        if n not in existing:
-            db.add(Category(name=n))
-
-
-def _ensure_brand_exists(db: Session, name: str | None):
-    name = (name or "").strip()
-    if not name:
-        return
-    exists = db.query(Brand).filter(Brand.name == name).first()
-    if not exists:
-        db.add(Brand(name=name))
-
-
 def _remove_category_from_all_products(db: Session, name: str):
     for p in db.query(Product).all():
         cats = _parse_list(p.category)
@@ -219,7 +200,6 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     if q:
         query = query.filter(Product.name.ilike(f"%{q}%"))
     if selected_categories:
-        # Категории хранятся строкой через запятую — ищем по подстроке
         query = query.filter(or_(*[Product.category.ilike(f"%{c}%") for c in selected_categories]))
     if selected_brands:
         query = query.filter(Product.brand.in_(selected_brands))
@@ -252,9 +232,7 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 
     products = query.offset((page - 1) * per_page).limit(per_page).all()
 
-    # Категории — из справочника (все, даже неиспользуемые)
     all_categories = [c.name for c in db.query(Category).order_by(Category.name).all()]
-    # Бренды — только используемые в товарах
     all_brands = [b[0] for b in db.query(Product.brand).distinct().all() if b[0]]
 
     active_filters = []
@@ -388,31 +366,19 @@ async def admin_product_create(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    new_categories: str = Form(""),
     brand: str = Form(""),
-    new_brand: str = Form(""),
     price: int = Form(...),
     volume: str = Form(""),
     description: str = Form(""),
     popular: str = Form(None),
     image: UploadFile = File(None),
 ):
-    final_categories = list(categories)
-    for c in _parse_list(new_categories):
-        if c not in final_categories:
-            final_categories.append(c)
-
-    brand_value = (new_brand or brand or "").strip()
-
-    _ensure_categories_exist(db, final_categories)
-    _ensure_brand_exists(db, brand_value)
-
     image_url = _save_upload(image)
 
     product = Product(
         name=name.strip(),
-        category=",".join(final_categories) if final_categories else None,
-        brand=brand_value or None,
+        category=",".join(categories) if categories else None,
+        brand=brand.strip() or None,
         price=price,
         volume=volume.strip() or None,
         description=description.strip() or None,
@@ -447,9 +413,7 @@ async def admin_product_update(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    new_categories: str = Form(""),
     brand: str = Form(""),
-    new_brand: str = Form(""),
     price: int = Form(...),
     volume: str = Form(""),
     description: str = Form(""),
@@ -461,19 +425,9 @@ async def admin_product_update(
     if not product:
         raise HTTPException(status_code=404)
 
-    final_categories = list(categories)
-    for c in _parse_list(new_categories):
-        if c not in final_categories:
-            final_categories.append(c)
-
-    brand_value = (new_brand or brand or "").strip()
-
-    _ensure_categories_exist(db, final_categories)
-    _ensure_brand_exists(db, brand_value)
-
     product.name = name.strip()
-    product.category = ",".join(final_categories) if final_categories else None
-    product.brand = brand_value or None
+    product.category = ",".join(categories) if categories else None
+    product.brand = brand.strip() or None
     product.price = price
     product.volume = volume.strip() or None
     product.description = description.strip() or None

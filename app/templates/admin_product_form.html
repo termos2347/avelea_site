@@ -1,5 +1,13 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "admin_base.html" %}
+
+{% block admin_action %}
+<a href="/admin/products"
+   class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm text-gray-700">
+    <i class="fas fa-arrow-left"></i> К товарам
+</a>
+{% endblock %}
+
+{% block admin_content %}
 <h1 class="text-2xl font-semibold mb-6">
     {% if product %}Редактирование товара{% else %}Новый товар{% endif %}
 </h1>
@@ -17,7 +25,7 @@
                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
         </div>
 
-        <!-- КАТЕГОРИИ (мультивыбор) -->
+        <!-- КАТЕГОРИИ -->
         <div class="sm:col-span-2">
             <div class="flex items-center justify-between mb-2">
                 <label class="block text-sm font-medium text-gray-700">Категории</label>
@@ -27,7 +35,7 @@
             </div>
 
             {% if all_categories %}
-            <div class="flex flex-wrap gap-1.5 mb-3">
+            <div class="flex flex-wrap gap-1.5">
                 {% for c in all_categories %}
                 <label class="cursor-pointer">
                     <input type="checkbox" name="categories" value="{{ c.name }}"
@@ -41,20 +49,13 @@
                 </label>
                 {% endfor %}
             </div>
+            <p class="text-xs text-gray-500 mt-2">У товара может быть несколько категорий.</p>
             {% else %}
-            <p class="text-sm text-gray-500 mb-3">
-                Категорий пока нет. Добавь их в <a href="/admin/categories" class="underline">разделе «Категории»</a>
-                или введи ниже — они создадутся автоматически.
-            </p>
+            <div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                Категорий пока нет.
+                <a href="/admin/categories" class="underline text-black">Создать категории →</a>
+            </div>
             {% endif %}
-
-            <input type="text" name="new_categories" value=""
-                   placeholder="Новые категории через запятую: Крем, Маска"
-                   autocomplete="off"
-                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-            <p class="text-xs text-gray-500 mt-1">
-                У товара может быть несколько категорий. Отметь существующие или введи новые.
-            </p>
         </div>
 
         <div>
@@ -81,7 +82,7 @@
 
             {% if all_brands %}
             <select name="brand"
-                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black mb-2">
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
                 <option value="">— не указан —</option>
                 {% for b in all_brands %}
                 <option value="{{ b.name }}" {% if product and product.brand == b.name %}selected{% endif %}>
@@ -90,16 +91,11 @@
                 {% endfor %}
             </select>
             {% else %}
-            <p class="text-sm text-gray-500 mb-2">
-                Брендов пока нет. Добавь их в <a href="/admin/brands" class="underline">разделе «Бренды»</a>
-                или введи ниже — они создадутся автоматически.
-            </p>
+            <div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                Брендов пока нет.
+                <a href="/admin/brands" class="underline text-black">Создать бренды →</a>
+            </div>
             {% endif %}
-
-            <input type="text" name="new_brand" value=""
-                   placeholder="Или новый бренд (приоритетнее выбранного)"
-                   autocomplete="off"
-                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
         </div>
 
         <div class="sm:col-span-2">
