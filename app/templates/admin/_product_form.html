@@ -1,22 +1,8 @@
-{% extends "admin_base.html" %}
-
-{% block admin_action %}
-<a href="/admin/products"
-   class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm text-gray-700">
-    <i class="fas fa-arrow-left"></i> К товарам
-</a>
-{% endblock %}
-
-{% block admin_content %}
-<h1 class="text-2xl font-semibold mb-6">
-    {% if product %}Редактирование товара{% else %}Новый товар{% endif %}
-</h1>
-
 <form method="post"
       enctype="multipart/form-data"
       action="{% if product %}/admin/products/{{ product.id }}/edit{% else %}/admin/products/new{% endif %}"
       autocomplete="off"
-      class="bg-white border border-gray-200 rounded-xl p-6 space-y-4 max-w-2xl">
+      class="space-y-4">
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="sm:col-span-2">
@@ -25,7 +11,6 @@
                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
         </div>
 
-        <!-- КАТЕГОРИИ -->
         <div class="sm:col-span-2">
             <div class="flex items-center justify-between mb-2">
                 <label class="block text-sm font-medium text-gray-700">Категории</label>
@@ -71,7 +56,6 @@
                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
         </div>
 
-        <!-- БРЕНД -->
         <div class="sm:col-span-2">
             <div class="flex items-center justify-between mb-2">
                 <label class="block text-sm font-medium text-gray-700">Бренд</label>
@@ -135,10 +119,16 @@
                 class="bg-black text-white px-6 py-2 rounded-md hover:opacity-90">
             {% if product %}Сохранить{% else %}Создать{% endif %}
         </button>
+        {% if in_dialog %}
+        <button type="button" onclick="closeProductDialog()"
+                class="border border-gray-300 px-6 py-2 rounded-md hover:bg-gray-50">
+            Отмена
+        </button>
+        {% else %}
         <a href="/admin/products"
            class="border border-gray-300 px-6 py-2 rounded-md hover:bg-gray-50">
             Отмена
         </a>
+        {% endif %}
     </div>
 </form>
-{% endblock %}

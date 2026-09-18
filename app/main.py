@@ -25,7 +25,9 @@ app = FastAPI(title="Avelea Shop")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-templates = Jinja2Templates(directory="app/templates")
+# Два независимых набора шаблонов
+site_templates = Jinja2Templates(directory="app/templates/site")
+admin_templates = Jinja2Templates(directory="app/templates/admin")
 
 ALLOWED_PER_PAGE = (12, 24, 48)
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -144,14 +146,14 @@ def _remove_category_from_all_products(db: Session, name: str):
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
-        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+        return site_templates.TemplateResponse("404.html", {"request": request}, status_code=404)
     return HTMLResponse(content=str(exc.detail), status_code=exc.status_code)
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/product/"):
-        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+        return site_templates.TemplateResponse("404.html", {"request": request}, status_code=404)
     return HTMLResponse(content="Bad request", status_code=400)
 
 
@@ -159,7 +161,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
     popular = db.query(Product).filter(Product.popular == True).limit(6).all()
-    return templates.TemplateResponse("index.html", {
+    return site_templates.TemplateResponse("index.html", {
         "request": request,
         "popular": popular,
     })
@@ -250,7 +252,7 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     start_idx = (page - 1) * per_page + 1 if total_count else 0
     end_idx = min(page * per_page, total_count)
 
-    return templates.TemplateResponse("catalog.html", {
+    return site_templates.TemplateResponse("catalog.html", {
         "request": request,
         "products": products,
         "total_count": total_count,
@@ -280,8 +282,8 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 async def product_page(request: Request, product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
-        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
-    return templates.TemplateResponse("product.html", {
+        return site_templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    return site_templates.TemplateResponse("product.html", {
         "request": request,
         "product": product,
         "product_categories": _parse_list(product.category),
@@ -291,7 +293,7 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
 # ============== О НАС ==============
 @app.get("/about", response_class=HTMLResponse)
 async def about(request: Request):
-    return templates.TemplateResponse("about.html", {"request": request})
+    return site_templates.TemplateResponse("about.html", {"request": request})
 
 
 # ==================================================
@@ -302,7 +304,7 @@ async def about(request: Request):
 async def admin_login_form(request: Request):
     if request.session.get("admin"):
         return RedirectResponse(url="/admin/products", status_code=303)
-    return templates.TemplateResponse("admin_login.html", {
+    return admin_templates.TemplateResponse("login.html", {
         "request": request,
         "error": None,
     })
@@ -313,7 +315,7 @@ async def admin_login_submit(request: Request, password: str = Form(...)):
     if secrets.compare_digest(password, ADMIN_PASSWORD):
         request.session["admin"] = True
         return RedirectResponse(url="/admin/products", status_code=303)
-    return templates.TemplateResponse("admin_login.html", {
+    return admin_templates.TemplateResponse("login.html", {
         "request": request,
         "error": "Неверный пароль",
     }, status_code=401)
@@ -337,9 +339,11 @@ async def admin_root(request: Request):
 @app.get("/admin/products", response_class=HTMLResponse)
 async def admin_products(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
     products = db.query(Product).order_by(Product.id.desc()).all()
-    return templates.TemplateResponse("admin_products.html", {
+    return admin_templates.TemplateResponse("products.html", {
         "request": request,
         "products": products,
+        "all_categories": db.query(Category).order_by(Category.name).all(),
+        "all_brands": db.query(Brand).order_by(Brand.name).all(),
     })
 
 
@@ -353,10 +357,8 @@ def _product_form_context(db: Session, product: Product | None):
 
 
 @app.get("/admin/products/new", response_class=HTMLResponse)
-async def admin_product_new(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
-    ctx = _product_form_context(db, None)
-    ctx["request"] = request
-    return templates.TemplateResponse("admin_product_form.html", ctx)
+async def admin_product_new(request: Request, _: bool = Depends(require_admin)):
+    return RedirectResponse(url="/admin/products", status_code=303)
 
 
 @app.post("/admin/products/new")
@@ -402,7 +404,7 @@ async def admin_product_edit(
         raise HTTPException(status_code=404)
     ctx = _product_form_context(db, product)
     ctx["request"] = request
-    return templates.TemplateResponse("admin_product_form.html", ctx)
+    return admin_templates.TemplateResponse("product_form.html", ctx)
 
 
 @app.post("/admin/products/{product_id}/edit")
@@ -470,7 +472,7 @@ async def admin_categories(request: Request, db: Session = Depends(get_db), _: b
         for c in _parse_list(cat_str):
             counts[c] = counts.get(c, 0) + 1
 
-    return templates.TemplateResponse("admin_categories.html", {
+    return admin_templates.TemplateResponse("categories.html", {
         "request": request,
         "categories": categories,
         "counts": counts,
@@ -521,7 +523,7 @@ async def admin_brands(request: Request, db: Session = Depends(get_db), _: bool 
         if b:
             counts[b] = counts.get(b, 0) + 1
 
-    return templates.TemplateResponse("admin_brands.html", {
+    return admin_templates.TemplateResponse("brands.html", {
         "request": request,
         "brands": brands,
         "counts": counts,
@@ -590,7 +592,6 @@ async def startup():
         db.commit()
         print("✅ База данных заполнена тестовыми товарами")
 
-    # Миграция: старые теги -> категории
     migrated = 0
     for p in db.query(Product).all():
         if p.tags:
@@ -605,7 +606,6 @@ async def startup():
         db.commit()
         print(f"✅ Теги перенесены в категории у {migrated} товаров")
 
-    # Миграция категорий в справочник
     if db.query(Category).count() == 0:
         seen = set()
         for (cat_str,) in db.query(Product.category).all():
@@ -617,7 +617,6 @@ async def startup():
             db.commit()
             print(f"✅ В справочник категорий мигрировано: {len(seen)}")
 
-    # Миграция брендов
     if db.query(Brand).count() == 0:
         seen = set()
         for (b,) in db.query(Product.brand).all():

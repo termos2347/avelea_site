@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>{% block title %}Админка — avelea{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 max-w-6xl py-6">
+
+        {% set path = request.url.path %}
+        <nav class="mb-6 border-b border-gray-200">
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3">
+
+                <div class="flex flex-wrap items-center gap-1">
+                    <a href="/admin/products"
+                       class="px-4 py-2 rounded-md text-sm font-medium transition
+                              {% if path.startswith('/admin/products') %}bg-black text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                        <i class="fas fa-box"></i> Товары
+                    </a>
+                    <a href="/admin/brands"
+                       class="px-4 py-2 rounded-md text-sm font-medium transition
+                              {% if path.startswith('/admin/brands') %}bg-black text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                        <i class="fas fa-tag"></i> Бренды
+                    </a>
+                    <a href="/admin/categories"
+                       class="px-4 py-2 rounded-md text-sm font-medium transition
+                              {% if path.startswith('/admin/categories') %}bg-black text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                        <i class="fas fa-folder"></i> Категории
+                    </a>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    {% block admin_action %}{% endblock %}
+                    <a href="/" target="_blank"
+                       class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm text-gray-700">
+                        <i class="fas fa-external-link-alt"></i> На сайт
+                    </a>
+                    <a href="/admin/logout"
+                       class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm text-gray-700">
+                        <i class="fas fa-sign-out-alt"></i> Выйти
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        {% block admin_content %}{% endblock %}
+    </div>
+</body>
+</html>

@@ -1,10 +1,10 @@
-{% extends "admin_base.html" %}
+{% extends "base.html" %}
 
 {% block admin_action %}
-<a href="/admin/products/new"
-   class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
+<button type="button" onclick="openProductDialog()"
+        class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
     <i class="fas fa-plus"></i> Добавить
-</a>
+</button>
 {% endblock %}
 
 {% block admin_content %}
@@ -66,7 +66,43 @@
 {% else %}
 <div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
     <p class="text-gray-500">Товаров пока нет</p>
-    <a href="/admin/products/new" class="inline-block mt-3 text-sm text-black underline">Добавить первый</a>
+    <button type="button" onclick="openProductDialog()"
+            class="inline-block mt-3 text-sm text-black underline">Добавить первый</button>
 </div>
 {% endif %}
+
+<dialog id="create-product-dialog"
+        class="rounded-xl p-0 w-full max-w-2xl backdrop:bg-black/40">
+    <div class="bg-white rounded-xl max-h-[90vh] overflow-y-auto">
+        <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold">Новый товар</h2>
+            <button type="button" onclick="closeProductDialog()"
+                    class="text-gray-400 hover:text-black w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            {% with product=None, product_categories=[], in_dialog=True %}
+                {% include "_product_form.html" %}
+            {% endwith %}
+        </div>
+    </div>
+</dialog>
+
+<script>
+function openProductDialog() {
+    const dlg = document.getElementById('create-product-dialog');
+    if (!dlg) return;
+    dlg.showModal();
+    setTimeout(() => {
+        const first = dlg.querySelector('input[name="name"]');
+        if (first) first.focus();
+    }, 0);
+}
+
+function closeProductDialog() {
+    const dlg = document.getElementById('create-product-dialog');
+    if (dlg) dlg.close();
+}
+</script>
 {% endblock %}

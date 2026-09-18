@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="view-transition" content="same-origin">
+    <title>{% block title %}Avelea — Натуральная косметика{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
+
+    <style>
+        /* View Transitions: лёгкий кроссфейд между страницами */
+        @view-transition {
+            navigation: auto;
+        }
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+            animation-duration: 180ms;
+        }
+    </style>
+</head>
+<body class="bg-gray-50" hx-boost="true">
+
+    <!-- Прогресс-полоска сверху -->
+    <div id="htmx-progress"
+         class="fixed top-0 left-0 h-0.5 bg-black w-0 transition-all duration-200 z-50 opacity-0"></div>
+
+    <div class="container mx-auto px-4 max-w-6xl">
+        <nav class="flex flex-wrap items-center justify-between py-4 border-b border-gray-200 mb-6">
+            <a href="/" class="text-2xl font-semibold tracking-tight hover:opacity-80">
+                avelea
+            </a>
+            <div class="flex gap-1 sm:gap-2 flex-wrap items-center">
+                <a href="/" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Главная</a>
+                <a href="/catalog" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Каталог</a>
+                <a href="/about" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">О нас</a>
+            </div>
+        </nav>
+
+        <main class="py-6 min-h-[60vh]">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="mt-12 py-8 border-t border-gray-200 text-sm text-gray-600">
+            <div class="flex flex-wrap justify-between gap-6">
+                <div>
+                    <h4 class="font-semibold text-gray-900">avelea</h4>
+                    <p>Натуральная косметика для бережного ухода</p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900">Контакты</h4>
+                    <p><i class="fas fa-phone"></i> +7 (999) 123-45-67</p>
+                    <p><i class="fas fa-envelope"></i> info@avelea.ru</p>
+                </div>
+            </div>
+            <div class="mt-4 text-center text-gray-400 text-xs">
+                © 2026 avelea. Все права защищены.
+            </div>
+        </footer>
+    </div>
+
+    <script>
+    (function () {
+        // Прогресс-полоска
+        const bar = document.getElementById('htmx-progress');
+        let hideTimer = null;
+
+        document.body.addEventListener('htmx:beforeRequest', () => {
+            clearTimeout(hideTimer);
+            bar.classList.remove('opacity-0');
+            bar.style.width = '20%';
+            setTimeout(() => { bar.style.width = '70%'; }, 120);
+        });
+
+        document.body.addEventListener('htmx:afterRequest', () => {
+            bar.style.width = '100%';
+            hideTimer = setTimeout(() => {
+                bar.classList.add('opacity-0');
+                setTimeout(() => { bar.style.width = '0'; }, 200);
+            }, 150);
+        });
+
+        // Скролл вверх при смене страницы.
+        // В каталоге не скроллим — там фильтры и сохранение позиции логичнее.
+        document.body.addEventListener('htmx:afterSettle', () => {
+            if (window.location.pathname.startsWith('/catalog')) return;
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        });
+
+        // Клик по активной ссылке в навигации — не делаем запрос
+        document.addEventListener('click', (e) => {
+            const a = e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('http') || href.startsWith('#')) return;
+            if (href === window.location.pathname + window.location.search) {
+                e.preventDefault();
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
