@@ -14,7 +14,7 @@ cd ~/avelea_site
 ./install.sh
 
 # Запустить сервер
-./start,sh
+./start.sh
 ```
 
 ## Дерево файлов

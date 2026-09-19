@@ -6,23 +6,30 @@
 </div>
 
 <h2 class="text-xl font-semibold mb-4">Популярное</h2>
-<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+
+{# Та же сетка, что и в каталоге: ровно 6 колонок на десктопе #}
+<div class="grid gap-3 sm:gap-4
+            grid-cols-2
+            sm:grid-cols-3
+            md:grid-cols-4
+            lg:grid-cols-6">
     {% for product in popular %}
     <a href="/product/{{ product.id }}"
-       class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-4 block">
-        {% if product.image %}
-        <img src="{{ product.image }}" alt="{{ product.name }}"
-             class="w-full h-40 object-cover rounded-lg mb-3">
-        {% else %}
-        <div class="w-full h-40 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg mb-3 flex items-center justify-center text-2xl font-bold text-white">
+       class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-3 block">
+        <div class="aspect-square w-full rounded-lg mb-3 overflow-hidden flex items-center justify-center
+                    bg-gradient-to-br from-amber-100 to-amber-200 text-2xl font-bold text-white">
+            {% if product.image %}
+            <img src="{{ product.image }}" alt="{{ product.name }}"
+                 class="w-full h-full object-cover">
+            {% else %}
             {{ product.name[:2].upper() }}
+            {% endif %}
         </div>
-        {% endif %}
-        <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
-        <p class="text-sm text-gray-500">
+        <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
+        <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
             {{ product.category.replace(',', ', ') if product.category else "" }}
         </p>
-        <p class="text-lg font-semibold mt-1">{{ product.price|int }} ₽</p>
+        <p class="text-base font-semibold mt-1">{{ product.price|int }} ₽</p>
     </a>
     {% endfor %}
 </div>

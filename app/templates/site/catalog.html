@@ -1,87 +1,201 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="flex flex-wrap items-baseline justify-between gap-3 mb-4">
-    <h2 class="text-2xl font-semibold">Каталог</h2>
-    <span class="text-sm text-gray-500">
-        {% if total_count %}
-            {{ start_idx }}–{{ end_idx }} из {{ total_count }}
-        {% else %}
-            Ничего не найдено
-        {% endif %}
-    </span>
+
+{# --- 1. Ранняя синхронизация свёрнутого состояния (desktop) --- #}
+<script>
+(function () {
+    try {
+        if (localStorage.getItem('catalog_filters_collapsed') === '1') {
+            document.body.classList.add('catalog-filters-collapsed');
+        }
+    } catch (e) { /* localStorage может быть недоступен */ }
+})();
+</script>
+
+<style>
+    /* ============================================================
+       DESKTOP (>= 768px)
+       ============================================================ */
+    @media (min-width: 768px) {
+        #catalog-layout {
+            display: flex;
+            align-items: flex-start;
+        }
+
+        #filters-panel {
+            width: 240px;
+            flex-shrink: 0;
+            margin-right: 1.5rem;
+            overflow: hidden;
+            transition:
+                width 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                margin-right 320ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #filters-panel > .filters-inner {
+            width: 240px;
+            transform: translateX(0);
+            opacity: 1;
+            transition:
+                transform 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 240ms ease;
+        }
+
+        #catalog-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        body.catalog-filters-collapsed #filters-panel {
+            width: 0;
+            margin-right: 0;
+            pointer-events: none;
+        }
+        body.catalog-filters-collapsed #filters-panel > .filters-inner {
+            transform: translateX(-100%);
+            opacity: 0;
+        }
+    }
+
+    /* ============================================================
+       MOBILE (<= 767px) — панель как полноэкранный overlay
+       ============================================================ */
+    @media (max-width: 767px) {
+        #filters-panel {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            background: #f9fafb;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        body.mobile-filters-open #filters-panel { display: block; }
+        body.mobile-filters-open { overflow: hidden; }
+    }
+</style>
+
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div class="flex items-center gap-3">
+        <h2 class="text-2xl font-semibold">Каталог</h2>
+
+        <button type="button" id="filters-toggle-desktop"
+                aria-expanded="true" aria-controls="filters-panel"
+                title="Свернуть / развернуть фильтры"
+                class="hidden md:inline-flex items-center gap-2 border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black">
+            <span>Фильтры</span>
+            <i class="fas fa-chevron-left text-xs opacity-60"
+               id="filters-toggle-icon" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+        <span class="text-sm text-gray-500">
+            {% if total_count %}
+                {{ start_idx }}–{{ end_idx }} из {{ total_count }}
+            {% else %}
+                Ничего не найдено
+            {% endif %}
+        </span>
+
+        <button type="button" id="open-filters-mobile"
+                class="md:hidden inline-flex items-center gap-2 border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+            <i class="fas fa-sliders-h" aria-hidden="true"></i>
+            Фильтры
+            {% if active_filters %}
+            <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-black text-white rounded-full">
+                {{ active_filters|length }}
+            </span>
+            {% endif %}
+        </button>
+    </div>
 </div>
 
 <form method="get" action="/catalog" id="filters-form" autocomplete="off">
-    <div class="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
+    <div id="catalog-layout">
 
-        <aside class="space-y-4">
+        <aside id="filters-panel">
+            <div class="filters-inner">
 
-            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Поиск</label>
-                <input type="search" name="q" value="{{ q }}" placeholder="Название..."
-                       autocomplete="off"
-                       class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-            </div>
+                <div class="md:hidden flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-900">Фильтры</h3>
+                    <button type="button" id="close-filters-mobile"
+                            aria-label="Закрыть фильтры"
+                            class="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:text-black hover:bg-gray-100">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
 
-            {% if categories %}
-            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                <h3 class="font-medium text-sm text-gray-900 mb-2">Категория</h3>
-                <div class="space-y-1.5">
-                    {% for cat in categories %}
-                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-black">
-                        <input type="checkbox" name="category" value="{{ cat }}"
-                               {% if cat in selected_categories %}checked{% endif %}
+                <div class="space-y-4">
+
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Поиск</label>
+                        <input type="search" name="q" value="{{ q }}" placeholder="Название..."
                                autocomplete="off"
-                               onchange="this.form.submit()"
-                               class="rounded border-gray-300 text-black focus:ring-black">
-                        {{ cat }}
-                    </label>
-                    {% endfor %}
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                    </div>
+
+                    {% if categories %}
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <h3 class="font-medium text-sm text-gray-900 mb-2">Категория</h3>
+                        <div class="space-y-1.5">
+                            {% for cat in categories %}
+                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-black">
+                                <input type="checkbox" name="category" value="{{ cat }}"
+                                       {% if cat in selected_categories %}checked{% endif %}
+                                       autocomplete="off"
+                                       class="rounded border-gray-300 text-black focus:ring-black">
+                                {{ cat }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if brands %}
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <h3 class="font-medium text-sm text-gray-900 mb-2">Бренд</h3>
+                        <div class="space-y-1.5">
+                            {% for brand in brands %}
+                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-black">
+                                <input type="checkbox" name="brand" value="{{ brand }}"
+                                       {% if brand in selected_brands %}checked{% endif %}
+                                       autocomplete="off"
+                                       class="rounded border-gray-300 text-black focus:ring-black">
+                                {{ brand }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <h3 class="font-medium text-sm text-gray-900 mb-2">Цена, ₽</h3>
+                        <div class="flex gap-2 items-center">
+                            <input type="number" name="price_min" value="{{ price_min }}" placeholder="от" min="0"
+                                   autocomplete="off"
+                                   class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                            <span class="text-gray-400">—</span>
+                            <input type="number" name="price_max" value="{{ price_max }}" placeholder="до" min="0"
+                                   autocomplete="off"
+                                   class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                        </div>
+                    </div>
+
+                    <a href="{{ reset_url }}" id="reset-filters"
+                       class="block text-center text-sm text-gray-500 hover:text-black py-2 cursor-pointer">
+                        <i class="fas fa-times"></i> Сбросить всё
+                    </a>
+
+                    <button type="button" id="apply-filters-mobile"
+                            class="md:hidden w-full bg-black text-white py-2.5 rounded-md hover:opacity-90 text-sm font-medium">
+                        Применить
+                    </button>
                 </div>
             </div>
-            {% endif %}
-
-            {% if brands %}
-            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                <h3 class="font-medium text-sm text-gray-900 mb-2">Бренд</h3>
-                <div class="space-y-1.5">
-                    {% for brand in brands %}
-                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-black">
-                        <input type="checkbox" name="brand" value="{{ brand }}"
-                               {% if brand in selected_brands %}checked{% endif %}
-                               autocomplete="off"
-                               onchange="this.form.submit()"
-                               class="rounded border-gray-300 text-black focus:ring-black">
-                        {{ brand }}
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                <h3 class="font-medium text-sm text-gray-900 mb-2">Цена, ₽</h3>
-                <div class="flex gap-2 items-center">
-                    <input type="number" name="price_min" value="{{ price_min }}" placeholder="от" min="0"
-                           autocomplete="off"
-                           class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                           onchange="this.form.submit()">
-                    <span class="text-gray-400">—</span>
-                    <input type="number" name="price_max" value="{{ price_max }}" placeholder="до" min="0"
-                           autocomplete="off"
-                           class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                           onchange="this.form.submit()">
-                </div>
-            </div>
-
-            <a href="{{ reset_url }}"
-               onclick="event.preventDefault(); document.getElementById('filters-form').reset(); window.location.href='{{ reset_url }}';"
-               class="block text-center text-sm text-gray-500 hover:text-black py-2 cursor-pointer">
-                <i class="fas fa-times"></i> Сбросить всё
-            </a>
         </aside>
 
-        <div>
+        <div id="catalog-content">
 
             <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
                 <div class="flex flex-wrap gap-1.5 max-w-full">
@@ -95,36 +209,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <div class="inline-flex border border-gray-300 rounded-md overflow-hidden">
-                        <label class="cursor-pointer">
-                            <input type="radio" name="view" value="grid" class="peer sr-only"
-                                   {% if view == 'grid' %}checked{% endif %}
-                                   autocomplete="off" onchange="this.form.submit()">
-                            <span class="px-3 py-1.5 text-sm inline-block
-                                         peer-checked:bg-black peer-checked:text-white hover:bg-gray-100">
-                                <i class="fas fa-th-large"></i>
-                            </span>
-                        </label>
-                        <label class="cursor-pointer">
-                            <input type="radio" name="view" value="list" class="peer sr-only"
-                                   {% if view == 'list' %}checked{% endif %}
-                                   autocomplete="off" onchange="this.form.submit()">
-                            <span class="px-3 py-1.5 text-sm inline-block border-l border-gray-300
-                                         peer-checked:bg-black peer-checked:text-white hover:bg-gray-100">
-                                <i class="fas fa-list"></i>
-                            </span>
-                        </label>
-                    </div>
-
-                    <select name="per_page" onchange="this.form.submit()" autocomplete="off"
-                            title="Товаров на странице"
-                            class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-                        {% for n in per_page_options %}
-                        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} / стр.</option>
-                        {% endfor %}
-                    </select>
-
-                    <select name="sort" onchange="this.form.submit()" autocomplete="off"
+                    <select name="sort" autocomplete="off"
                             class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
                         <option value=""           {% if not sort %}selected{% endif %}>По умолчанию</option>
                         <option value="popular"    {% if sort == 'popular' %}selected{% endif %}>Популярные</option>
@@ -136,91 +221,68 @@
             </div>
 
             {% if products %}
-                {% if view == 'grid' %}
-                <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {% for product in products %}
-                    <a href="/product/{{ product.id }}"
-                       class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-4 block">
+            <div class="grid gap-3 sm:gap-4
+                        grid-cols-2
+                        sm:grid-cols-3
+                        md:grid-cols-4
+                        lg:grid-cols-6">
+                {% for product in products %}
+                <a href="/product/{{ product.id }}"
+                   class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-3 block">
+                    <div class="aspect-square w-full rounded-lg mb-3 overflow-hidden flex items-center justify-center
+                                bg-gradient-to-br from-amber-100 to-amber-200 text-2xl font-bold text-white">
                         {% if product.image %}
                         <img src="{{ product.image }}" alt="{{ product.name }}"
-                             class="w-full h-40 object-cover rounded-lg mb-3">
+                             class="w-full h-full object-cover">
                         {% else %}
-                        <div class="w-full h-40 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg mb-3 flex items-center justify-center text-2xl font-bold text-white">
-                            {{ product.name[:2].upper() }}
-                        </div>
+                        {{ product.name[:2].upper() }}
                         {% endif %}
-                        <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
-                        <p class="text-sm text-gray-500">
-                            {{ product.category.replace(',', ', ') if product.category else "" }}
-                        </p>
-                        <p class="text-lg font-semibold mt-1">{{ product.price|int }} ₽</p>
-                    </a>
-                    {% endfor %}
-                </div>
+                    </div>
+                    <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
+                    <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
+                        {{ product.category.replace(',', ', ') if product.category else "" }}
+                    </p>
+                    <p class="text-base font-semibold mt-1">{{ product.price|int }} ₽</p>
+                </a>
+                {% endfor %}
+            </div>
+
+            {% if total_pages > 1 %}
+            <nav class="mt-8 flex flex-wrap items-center justify-center gap-1">
+                {% if page > 1 %}
+                <a href="{{ build_page_url(request.query_params, page - 1) }}"
+                   class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+                    <i class="fas fa-chevron-left text-xs"></i>
+                </a>
                 {% else %}
-                <div class="space-y-3">
-                    {% for product in products %}
-                    <a href="/product/{{ product.id }}"
-                       class="flex gap-4 border border-gray-200 rounded-xl bg-white p-4 hover:shadow-md transition">
-                        {% if product.image %}
-                        <img src="{{ product.image }}" alt="{{ product.name }}"
-                             class="w-24 h-24 shrink-0 object-cover rounded-lg">
-                        {% else %}
-                        <div class="w-24 h-24 shrink-0 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg flex items-center justify-center text-xl font-bold text-white">
-                            {{ product.name[:2].upper() }}
-                        </div>
-                        {% endif %}
-                        <div class="flex-1 min-w-0">
-                            <h3 class="font-medium text-gray-900">{{ product.name }}</h3>
-                            <p class="text-sm text-gray-500">
-                                {{ product.category.replace(',', ', ') if product.category else "" }}{% if product.brand %} · {{ product.brand }}{% endif %}
-                            </p>
-                            {% if product.description %}
-                            <p class="text-sm text-gray-600 mt-1 line-clamp-2">{{ product.description }}</p>
-                            {% endif %}
-                            <p class="text-lg font-semibold mt-2">{{ product.price|int }} ₽</p>
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
+                <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+                    <i class="fas fa-chevron-left text-xs"></i>
+                </span>
                 {% endif %}
 
-                {% if total_pages > 1 %}
-                <nav class="mt-8 flex flex-wrap items-center justify-center gap-1">
-                    {% if page > 1 %}
-                    <a href="/catalog?{% for k in request.query_params.keys() %}{% if k != 'page' %}{{ k }}={{ request.query_params.get(k) }}&{% endif %}{% endfor %}page={{ page - 1 }}"
-                       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
-                        <i class="fas fa-chevron-left text-xs"></i>
-                    </a>
+                {% for it in page_items %}
+                    {% if it.ellipsis %}
+                    <span class="px-2 text-gray-400">…</span>
+                    {% elif it.current %}
+                    <span class="px-3 py-1.5 bg-black text-white rounded-md text-sm font-medium">{{ it.num }}</span>
                     {% else %}
-                    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
-                        <i class="fas fa-chevron-left text-xs"></i>
-                    </span>
+                    <a href="{{ it.url }}"
+                       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">{{ it.num }}</a>
                     {% endif %}
+                {% endfor %}
 
-                    {% for it in page_items %}
-                        {% if it.ellipsis %}
-                        <span class="px-2 text-gray-400">…</span>
-                        {% elif it.current %}
-                        <span class="px-3 py-1.5 bg-black text-white rounded-md text-sm font-medium">{{ it.num }}</span>
-                        {% else %}
-                        <a href="{{ it.url }}"
-                           class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">{{ it.num }}</a>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if page < total_pages %}
-                    <a href="/catalog?{% for k in request.query_params.keys() %}{% if k != 'page' %}{{ k }}={{ request.query_params.get(k) }}&{% endif %}{% endfor %}page={{ page + 1 }}"
-                       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
-                        <i class="fas fa-chevron-right text-xs"></i>
-                    </a>
-                    {% else %}
-                    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
-                        <i class="fas fa-chevron-right text-xs"></i>
-                    </span>
-                    {% endif %}
-                </nav>
+                {% if page < total_pages %}
+                <a href="{{ build_page_url(request.query_params, page + 1) }}"
+                   class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+                    <i class="fas fa-chevron-right text-xs"></i>
+                </a>
+                {% else %}
+                <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+                    <i class="fas fa-chevron-right text-xs"></i>
+                </span>
                 {% endif %}
+            </nav>
+            {% endif %}
 
             {% else %}
             <div class="text-center py-16 bg-white rounded-lg border border-gray-200">
@@ -236,4 +298,75 @@
         </div>
     </div>
 </form>
+
+<script>
+(function () {
+    const body = document.body;
+    const form = document.getElementById('filters-form');
+    const KEY  = 'catalog_filters_collapsed';
+    const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
+
+    /* ===== Desktop: сворачивание панели ===== */
+    const toggleBtn  = document.getElementById('filters-toggle-desktop');
+    const toggleIcon = document.getElementById('filters-toggle-icon');
+
+    function syncToggle() {
+        const collapsed = body.classList.contains('catalog-filters-collapsed');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+        if (toggleIcon) {
+            toggleIcon.classList.toggle('fa-chevron-left', !collapsed);
+            toggleIcon.classList.toggle('fa-chevron-right', collapsed);
+        }
+    }
+
+    function setCollapsed(collapsed) {
+        body.classList.toggle('catalog-filters-collapsed', collapsed);
+        syncToggle();
+        try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) {}
+    }
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            setCollapsed(!body.classList.contains('catalog-filters-collapsed'));
+        });
+    }
+
+    syncToggle();
+
+    /* ===== Mobile: полноэкранный overlay ===== */
+    const openBtn  = document.getElementById('open-filters-mobile');
+    const closeBtn = document.getElementById('close-filters-mobile');
+    const applyBtn = document.getElementById('apply-filters-mobile');
+
+    if (openBtn)  openBtn.addEventListener('click', () => body.classList.add('mobile-filters-open'));
+    if (closeBtn) closeBtn.addEventListener('click', () => body.classList.remove('mobile-filters-open'));
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+            body.classList.remove('mobile-filters-open');
+            if (form) form.submit();
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') body.classList.remove('mobile-filters-open');
+    });
+
+    /* ===== Авто-применение фильтров ===== */
+    if (form) {
+        form.addEventListener('change', (e) => {
+            const t = e.target;
+            if (t.matches('select[name="sort"]')) {
+                form.submit();
+                return;
+            }
+            if (t.matches('input[name="category"], input[name="brand"], input[name="price_min"], input[name="price_max"]')) {
+                if (isMobile()) return;
+                form.submit();
+            }
+        });
+    }
+})();
+</script>
+
 {% endblock %}

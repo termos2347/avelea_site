@@ -25,11 +25,10 @@ app = FastAPI(title="Avelea Shop")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Два независимых набора шаблонов
-site_templates = Jinja2Templates(directory="app/templates/site")
-admin_templates = Jinja2Templates(directory="app/templates/admin")
+# Сколько товаров показывать на одной странице каталога.
+# Хочешь другое число — поменяй здесь (например, 14).
+PER_PAGE = 12
 
-ALLOWED_PER_PAGE = (12, 24, 48)
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
@@ -83,13 +82,9 @@ def build_page_url(params, page_num: int) -> str:
     return "/catalog?" + urlencode(pairs)
 
 
-def build_reset_url(view: str, per_page: int) -> str:
-    keep = []
-    if view != "grid":
-        keep.append(("view", view))
-    if per_page != ALLOWED_PER_PAGE[0]:
-        keep.append(("per_page", str(per_page)))
-    return "/catalog" + ("?" + urlencode(keep) if keep else "")
+def build_reset_url() -> str:
+    # Per_page теперь фиксирован, view убран — сброс ведёт на чистый каталог
+    return "/catalog"
 
 
 def make_page_items(current: int, total: int, params):
@@ -142,6 +137,15 @@ def _remove_category_from_all_products(db: Session, name: str):
             p.category = ",".join(cats) if cats else None
 
 
+# ============== ШАБЛОНЫ ==============
+site_templates = Jinja2Templates(directory="app/templates/site")
+admin_templates = Jinja2Templates(directory="app/templates/admin")
+
+site_templates.env.globals["build_page_url"] = build_page_url
+site_templates.env.globals["build_filter_url"] = build_filter_url
+site_templates.env.globals["build_reset_url"] = build_reset_url
+
+
 # ============== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==============
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
@@ -178,17 +182,6 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     price_min = params.get("price_min") or ""
     price_max = params.get("price_max") or ""
     sort = params.get("sort") or ""
-
-    view = params.get("view") or "grid"
-    if view not in ("grid", "list"):
-        view = "grid"
-
-    try:
-        per_page = int(params.get("per_page") or ALLOWED_PER_PAGE[0])
-    except ValueError:
-        per_page = ALLOWED_PER_PAGE[0]
-    if per_page not in ALLOWED_PER_PAGE:
-        per_page = ALLOWED_PER_PAGE[0]
 
     try:
         page = int(params.get("page") or 1)
@@ -228,11 +221,11 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
         query = query.order_by(Product.id.asc())
 
     total_count = query.count()
-    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    total_pages = max(1, (total_count + PER_PAGE - 1) // PER_PAGE)
     if page > total_pages:
         page = total_pages
 
-    products = query.offset((page - 1) * per_page).limit(per_page).all()
+    products = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
 
     all_categories = [c.name for c in db.query(Category).order_by(Category.name).all()]
     all_brands = [b[0] for b in db.query(Product.brand).distinct().all() if b[0]]
@@ -249,8 +242,8 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     if price_max:
         active_filters.append({"label": f"до {price_max} ₽", "remove_url": build_filter_url(params, "price_max")})
 
-    start_idx = (page - 1) * per_page + 1 if total_count else 0
-    end_idx = min(page * per_page, total_count)
+    start_idx = (page - 1) * PER_PAGE + 1 if total_count else 0
+    end_idx = min(page * PER_PAGE, total_count)
 
     return site_templates.TemplateResponse("catalog.html", {
         "request": request,
@@ -266,14 +259,11 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
         "price_max": price_max,
         "q": q,
         "sort": sort,
-        "view": view,
-        "per_page": per_page,
-        "per_page_options": ALLOWED_PER_PAGE,
         "page": page,
         "total_pages": total_pages,
         "page_items": make_page_items(page, total_pages, params),
         "active_filters": active_filters,
-        "reset_url": build_reset_url(view, per_page),
+        "reset_url": build_reset_url(),
     })
 
 

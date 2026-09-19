@@ -29,7 +29,9 @@
     <div id="htmx-progress"
          class="fixed top-0 left-0 h-0.5 bg-black w-0 transition-all duration-200 z-50 opacity-0"></div>
 
-    <div class="container mx-auto px-4 max-w-6xl">
+    {# Контейнер: на широких экранах занимает ~80% ширины окна,
+       но не больше 1536px (screen-2xl). На мобилке — вся ширина. #}
+    <div class="mx-auto px-4 md:px-6 max-w-screen-2xl">
         <nav class="flex flex-wrap items-center justify-between py-4 border-b border-gray-200 mb-6">
             <a href="/" class="text-2xl font-semibold tracking-tight hover:opacity-80">
                 avelea
