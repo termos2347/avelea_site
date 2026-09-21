@@ -36,13 +36,17 @@ avelea_site/
 │       │   ├── _product_form.html
 │       │   ├── product_form.html
 │       │   └── products.html
-│       └── site/            # HTML шаблоны сайта
-│           ├── 404.html
-│           ├── about.html
-│           ├── base.html
-│           ├── catalog.html
-│           ├── index.html
-│           └── product.html
+│       ├── site/            # HTML шаблоны сайта
+│       │   ├── 404.html
+│       │   ├── about.html
+│       │   ├── base.html
+│       │   ├── catalog.html
+│       │   ├── index.html
+│       │   └── product.html
+│   static/          # CSS шаблоны сайта
+│   └── css/
+│       ├── admin.css
+│       └── site.css
 ├── instance/
 │   └── shop.db              # Файл SQLite
 ├── .venv/                   # Виртуальное окружение

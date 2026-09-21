@@ -5,8 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import or_
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import NoSuchTableError
 from urllib.parse import urlencode
 from pathlib import Path
 import os
@@ -14,7 +15,8 @@ import secrets
 import uuid
 
 from app.database import engine, get_db, Base
-from app.models import Product, Brand, Category
+from app.models import Product, Brand, Category, product_categories
+from app.seed import seed_database
 from app.config import SECRET_KEY, ADMIN_PASSWORD
 
 os.makedirs("instance", exist_ok=True)
@@ -26,7 +28,6 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Сколько товаров показывать на одной странице каталога.
-# Хочешь другое число — поменяй здесь (например, 14).
 PER_PAGE = 12
 
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -49,17 +50,6 @@ def require_admin(request: Request):
 
 
 # ============== ХЕЛПЕРЫ ==============
-def _parse_list(s: str | None) -> list[str]:
-    if not s:
-        return []
-    seen = []
-    for t in s.split(","):
-        t = t.strip()
-        if t and t not in seen:
-            seen.append(t)
-    return seen
-
-
 def build_filter_url(params, remove_key: str, remove_value: str = None) -> str:
     pairs = []
     for k in params.keys():
@@ -83,7 +73,6 @@ def build_page_url(params, page_num: int) -> str:
 
 
 def build_reset_url() -> str:
-    # Per_page теперь фиксирован, view убран — сброс ведёт на чистый каталог
     return "/catalog"
 
 
@@ -129,12 +118,12 @@ def _save_upload(file: UploadFile) -> str | None:
     return f"/static/uploads/{name}"
 
 
-def _remove_category_from_all_products(db: Session, name: str):
-    for p in db.query(Product).all():
-        cats = _parse_list(p.category)
-        if name in cats:
-            cats = [x for x in cats if x != name]
-            p.category = ",".join(cats) if cats else None
+def _resolve_categories(db: Session, names: list[str]) -> list[Category]:
+    """Превращает список имён категорий в список ORM-объектов Category.
+    Имена, которых нет в БД, молча игнорируются."""
+    if not names:
+        return []
+    return db.query(Category).filter(Category.name.in_(names)).all()
 
 
 # ============== ШАБЛОНЫ ==============
@@ -194,10 +183,16 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 
     if q:
         query = query.filter(Product.name.ilike(f"%{q}%"))
+
     if selected_categories:
-        query = query.filter(or_(*[Product.category.ilike(f"%{c}%") for c in selected_categories]))
+        # many-to-many: EXISTS-подзапрос по связке, без дублей
+        query = query.filter(
+            Product.categories.any(Category.name.in_(selected_categories))
+        )
+
     if selected_brands:
         query = query.filter(Product.brand.in_(selected_brands))
+
     if price_min:
         try:
             query = query.filter(Product.price >= int(price_min))
@@ -276,7 +271,7 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
     return site_templates.TemplateResponse("product.html", {
         "request": request,
         "product": product,
-        "product_categories": _parse_list(product.category),
+        "product_categories": [c.name for c in product.categories],
     })
 
 
@@ -340,7 +335,7 @@ async def admin_products(request: Request, db: Session = Depends(get_db), _: boo
 def _product_form_context(db: Session, product: Product | None):
     return {
         "product": product,
-        "product_categories": _parse_list(product.category) if product else [],
+        "product_categories": [c.name for c in product.categories] if product else [],
         "all_categories": db.query(Category).order_by(Category.name).all(),
         "all_brands": db.query(Brand).order_by(Brand.name).all(),
     }
@@ -369,7 +364,6 @@ async def admin_product_create(
 
     product = Product(
         name=name.strip(),
-        category=",".join(categories) if categories else None,
         brand=brand.strip() or None,
         price=price,
         volume=volume.strip() or None,
@@ -377,6 +371,8 @@ async def admin_product_create(
         popular=bool(popular),
         image=image_url,
     )
+    product.categories = _resolve_categories(db, categories)
+
     db.add(product)
     db.commit()
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -418,12 +414,14 @@ async def admin_product_update(
         raise HTTPException(status_code=404)
 
     product.name = name.strip()
-    product.category = ",".join(categories) if categories else None
     product.brand = brand.strip() or None
     product.price = price
     product.volume = volume.strip() or None
     product.description = description.strip() or None
     product.popular = bool(popular)
+
+    # Полностью заменяем набор категорий
+    product.categories = _resolve_categories(db, categories)
 
     if remove_image:
         product.image = None
@@ -457,10 +455,8 @@ async def admin_product_delete(
 async def admin_categories(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
     categories = db.query(Category).order_by(Category.name).all()
 
-    counts = {}
-    for (cat_str,) in db.query(Product.category).all():
-        for c in _parse_list(cat_str):
-            counts[c] = counts.get(c, 0) + 1
+    # Счётчики использования — из relationship, без парсинга строк
+    counts = {c.name: len(c.products) for c in categories}
 
     return admin_templates.TemplateResponse("categories.html", {
         "request": request,
@@ -494,7 +490,7 @@ async def admin_category_delete(
 ):
     category = db.query(Category).filter(Category.id == category_id).first()
     if category:
-        _remove_category_from_all_products(db, category.name)
+        # SQLAlchemy сам удалит записи из product_categories (secondary)
         db.delete(category)
         db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
@@ -552,68 +548,78 @@ async def admin_brand_delete(
     return RedirectResponse(url="/admin/brands", status_code=303)
 
 
-# ============== СТАРТ: тестовые данные + миграция ==============
+# ==================================================
+# ==============  СТАРТ: миграция + тестовые данные
+# ==================================================
+
 @app.on_event("startup")
 async def startup():
     db = next(get_db())
+    try:
+        # 1. Создать недостающие таблицы (products, categories, brands, product_categories)
+        Base.metadata.create_all(bind=engine)
 
-    if db.query(Product).count() == 0:
-        test_products = [
-            Product(name="Гидрофильное масло", category="Очищение,Уход", brand="Avelea", price=1290, popular=True,
-                   description="Нежное гидрофильное масло на основе натуральных растительных экстрактов.",
-                   volume="150 мл"),
-            Product(name="Сыворотка с витамином C", category="Уход", brand="Avelea", price=2450, popular=True,
-                   description="Концентрированная сыворотка с 15% стабильным витамином C.",
-                   volume="30 мл"),
-            Product(name="Увлажняющий крем", category="Уход", brand="Avelea", price=1890, popular=True,
-                   description="Лёгкий увлажняющий крем с комплексом из 5 типов гиалуроновой кислоты.",
-                   volume="50 мл"),
-            Product(name="SPF 50+ тональный", category="Макияж,Уход", brand="Avelea", price=1680, popular=False,
-                   description="Тональный крем с высокой солнцезащитой SPF 50+.",
-                   volume="40 мл"),
-            Product(name="Мицеллярная вода", category="Очищение", brand="Avelea", price=890, popular=False,
-                   description="Мягкая мицеллярная вода для бережного очищения.",
-                   volume="250 мл"),
-            Product(name="Бальзам для губ", category="Уход", brand="Avelea", price=450, popular=True,
-                   description="Питательный бальзам для губ с маслом ши и витамином E.",
-                   volume="4.5 г"),
-        ]
-        db.add_all(test_products)
-        db.commit()
-        print("✅ База данных заполнена тестовыми товарами")
+        # 2. Миграция старой колонки category → product_categories (только если БД старая)
+        insp = inspect(engine)
+        try:
+            product_cols = {c["name"] for c in insp.get_columns("products")}
+        except NoSuchTableError:
+            product_cols = set()
 
-    migrated = 0
-    for p in db.query(Product).all():
-        if p.tags:
-            cats = _parse_list(p.category)
-            for t in _parse_list(p.tags):
-                if t not in cats:
-                    cats.append(t)
-            p.category = ",".join(cats) if cats else None
-            p.tags = None
-            migrated += 1
-    if migrated:
-        db.commit()
-        print(f"✅ Теги перенесены в категории у {migrated} товаров")
+        if "category" in product_cols:
+            with engine.connect() as conn:
+                rows = conn.execute(
+                    text(
+                        "SELECT id, category FROM products "
+                        "WHERE category IS NOT NULL AND category != ''"
+                    )
+                ).fetchall()
 
-    if db.query(Category).count() == 0:
-        seen = set()
-        for (cat_str,) in db.query(Product.category).all():
-            for c in _parse_list(cat_str):
-                seen.add(c)
-        for c in sorted(seen):
-            db.add(Category(name=c))
-        if seen:
-            db.commit()
-            print(f"✅ В справочник категорий мигрировано: {len(seen)}")
+            # Кеш категорий в Python — потому что SQLite LOWER() не знает кириллицу
+            cat_cache: dict[str, Category] = {
+                c.name.lower(): c for c in db.query(Category).all()
+            }
 
-    if db.query(Brand).count() == 0:
-        seen = set()
-        for (b,) in db.query(Product.brand).all():
-            if b:
-                seen.add(b)
-        for b in sorted(seen):
-            db.add(Brand(name=b))
-        if seen:
-            db.commit()
-            print(f"✅ В справочник брендов мигрировано: {len(seen)}")
+            def get_or_create_cat(name: str) -> Category:
+                key = name.strip().lower()
+                if key in cat_cache:
+                    return cat_cache[key]
+                c = Category(name=name.strip())
+                db.add(c)
+                db.flush()
+                cat_cache[key] = c
+                return c
+
+            migrated = 0
+            for product_id, cat_str in rows:
+                product = db.query(Product).filter(Product.id == product_id).first()
+                if not product:
+                    continue
+
+                names = []
+                for t in (cat_str or "").split(","):
+                    t = t.strip()
+                    if t and t not in names:
+                        names.append(t)
+
+                product.categories = [get_or_create_cat(n) for n in names]
+                migrated += 1
+
+            if migrated:
+                db.commit()
+                print(f"✅ Категории мигрированы у {migrated} товаров")
+
+            # Снести старые колонки (SQLite 3.35+), иначе просто обнулить
+            for col in ("category", "tags"):
+                if col in product_cols:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE products DROP COLUMN {col}"))
+                    except Exception:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"UPDATE products SET {col} = NULL"))
+
+        # 3. Наполнение тестовыми данными (только если products пустая)
+        seed_database(db)
+    finally:
+        db.close()

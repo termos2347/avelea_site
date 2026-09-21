@@ -1,43 +1,114 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="grid md:grid-cols-2 gap-8 bg-white p-6 rounded-xl border border-gray-200">
-    {% if product.image %}
-    <img src="{{ product.image }}" alt="{{ product.name }}"
-         class="aspect-square w-full object-cover rounded-xl">
-    {% else %}
-    <div class="aspect-square bg-gradient-to-br from-amber-100 to-amber-200 rounded-xl flex items-center justify-center text-7xl font-bold text-white">
-        {{ product.name[:2].upper() }}
-    </div>
-    {% endif %}
-    <div>
-        <h1 class="text-3xl font-bold">{{ product.name }}</h1>
 
-        {% if product_categories %}
-        <div class="flex flex-wrap gap-2 mt-3">
-            {% for cat in product_categories %}
-            <span class="bg-gray-100 px-3 py-1 rounded-full text-sm">{{ cat }}</span>
+{% block admin_action %}
+<button type="button" onclick="openProductDialog()"
+        class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
+    <i class="fas fa-plus"></i> Добавить
+</button>
+{% endblock %}
+
+{% block admin_content %}
+<h1 class="text-2xl font-semibold mb-4">Товары</h1>
+
+{% if products %}
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
+            <tr>
+                <th class="px-4 py-3 w-16"></th>
+                <th class="px-4 py-3">Название</th>
+                <th class="px-4 py-3">Категории</th>
+                <th class="px-4 py-3">Бренд</th>
+                <th class="px-4 py-3 text-right">Цена</th>
+                <th class="px-4 py-3 w-32 text-right">Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <td class="px-4 py-2">
+                    {% if p.image %}
+                    <img src="{{ p.image }}" alt="" class="w-10 h-10 rounded object-cover">
+                    {% else %}
+                    <div class="w-10 h-10 rounded bg-amber-100 flex items-center justify-center text-xs font-bold text-white">
+                        {{ p.name[:2].upper() }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2">
+                    {{ p.name }}
+                    {% if p.popular %}
+                    <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">популярное</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-gray-600">
+                    {% if p.categories %}
+                        {{ p.categories|map(attribute='name')|join(', ') }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-gray-600">{{ p.brand or "—" }}</td>
+                <td class="px-4 py-2 text-right font-medium">{{ p.price|int }} ₽</td>
+                <td class="px-4 py-2 text-right whitespace-nowrap">
+                    <a href="/admin/products/{{ p.id }}/edit"
+                       class="text-gray-500 hover:text-black p-1" title="Редактировать">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                    <form method="post" action="/admin/products/{{ p.id }}/delete"
+                          onsubmit="return confirm('Удалить «{{ p.name }}»?');"
+                          class="inline">
+                        <button type="submit"
+                                class="text-gray-400 hover:text-red-500 p-1" title="Удалить">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
             {% endfor %}
-        </div>
-        {% endif %}
-
-        {% if product.brand %}
-        <p class="text-sm text-gray-500 mt-3">Бренд: {{ product.brand }}</p>
-        {% endif %}
-
-        <p class="text-3xl font-bold mt-4">{{ product.price|int }} ₽</p>
-        {% if product.volume %}
-        <p class="text-sm text-gray-500 mt-1">Объём: {{ product.volume }}</p>
-        {% endif %}
-
-        <div class="mt-8">
-            <h3 class="font-semibold text-lg">Описание</h3>
-            <p class="text-gray-700 mt-2 leading-relaxed">{{ product.description }}</p>
-        </div>
-
-        <a href="/catalog"
-           class="inline-block mt-8 border border-gray-300 px-6 py-3 rounded-md hover:bg-gray-50 transition text-sm font-medium">
-            <i class="fas fa-arrow-left"></i> Назад в каталог
-        </a>
-    </div>
+        </tbody>
+    </table>
 </div>
+{% else %}
+<div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
+    <p class="text-gray-500">Товаров пока нет</p>
+    <button type="button" onclick="openProductDialog()"
+            class="inline-block mt-3 text-sm text-black underline">Добавить первый</button>
+</div>
+{% endif %}
+
+<dialog id="create-product-dialog"
+        class="rounded-xl p-0 w-full max-w-2xl backdrop:bg-black/40">
+    <div class="bg-white rounded-xl max-h-[90vh] overflow-y-auto">
+        <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold">Новый товар</h2>
+            <button type="button" onclick="closeProductDialog()"
+                    class="text-gray-400 hover:text-black w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            {% with product=None, product_categories=[], in_dialog=True %}
+                {% include "_product_form.html" %}
+            {% endwith %}
+        </div>
+    </div>
+</dialog>
+
+<script>
+function openProductDialog() {
+    const dlg = document.getElementById('create-product-dialog');
+    if (!dlg) return;
+    dlg.showModal();
+    setTimeout(() => {
+        const first = dlg.querySelector('input[name="name"]');
+        if (first) first.focus();
+    }, 0);
+}
+
+function closeProductDialog() {
+    const dlg = document.getElementById('create-product-dialog');
+    if (dlg) dlg.close();
+}
+</script>
 {% endblock %}

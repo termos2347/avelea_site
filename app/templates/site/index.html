@@ -27,7 +27,7 @@
         </div>
         <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
         <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
-            {{ product.category.replace(',', ', ') if product.category else "" }}
+            {{ product.categories|map(attribute='name')|join(', ') }}
         </p>
         <p class="text-base font-semibold mt-1">{{ product.price|int }} ₽</p>
     </a>

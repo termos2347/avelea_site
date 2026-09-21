@@ -41,7 +41,9 @@
                     <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">популярное</span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-gray-600">{{ p.category.replace(',', ', ') if p.category else "—" }}</td>
+                <td class="px-4 py-2 text-gray-600">
+                    {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
+                </td>
                 <td class="px-4 py-2 text-gray-600">{{ p.brand or "—" }}</td>
                 <td class="px-4 py-2 text-right font-medium">{{ p.price|int }} ₽</td>
                 <td class="px-4 py-2 text-right whitespace-nowrap">

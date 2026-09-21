@@ -1,0 +1,71 @@
+/* ============================================================
+   View Transitions — плавный кроссфейд между страницами сайта
+   ============================================================ */
+@view-transition {
+    navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation-duration: 180ms;
+}
+
+/* ============================================================
+   Каталог: свёртывание фильтров на десктопе (>= 768px)
+   ============================================================ */
+@media (min-width: 768px) {
+    #catalog-layout {
+        display: flex;
+        align-items: flex-start;
+    }
+
+    #filters-panel {
+        width: 240px;
+        flex-shrink: 0;
+        margin-right: 1.5rem;
+        overflow: hidden;
+        transition:
+            width 320ms cubic-bezier(0.4, 0, 0.2, 1),
+            margin-right 320ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #filters-panel > .filters-inner {
+        width: 240px;
+        transform: translateX(0);
+        opacity: 1;
+        transition:
+            transform 320ms cubic-bezier(0.4, 0, 0.2, 1),
+            opacity 240ms ease;
+    }
+
+    #catalog-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    body.catalog-filters-collapsed #filters-panel {
+        width: 0;
+        margin-right: 0;
+        pointer-events: none;
+    }
+    body.catalog-filters-collapsed #filters-panel > .filters-inner {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+}
+
+/* ============================================================
+   Каталог: мобильные фильтры как полноэкранный overlay (<= 767px)
+   ============================================================ */
+@media (max-width: 767px) {
+    #filters-panel {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        background: #f9fafb;
+        padding: 1rem;
+        overflow-y: auto;
+    }
+    body.mobile-filters-open #filters-panel { display: block; }
+    body.mobile-filters-open { overflow: hidden; }
+}
