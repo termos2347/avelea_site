@@ -27,6 +27,7 @@ avelea_site/
 │   ├── config.py            # Конфиг сайта
 │   ├── models.py            # SQLAlchemy модели (таблицы БД)
 │   ├── database.py          # Подключение к БД и сессии
+│   ├── seed.py
 │   └── templates/           # HTML шаблоны
 │       ├── admin/           # HTML шаблоны админки
 │       │   ├── base.html
@@ -35,23 +36,34 @@ avelea_site/
 │       │   ├── login.html
 │       │   ├── _product_form.html
 │       │   ├── product_form.html
-│       │   └── products.html
-│       ├── site/            # HTML шаблоны сайта
-│       │   ├── 404.html
-│       │   ├── about.html
-│       │   ├── base.html
-│       │   ├── catalog.html
-│       │   ├── index.html
-│       │   └── product.html
-│   static/          # CSS шаблоны сайта
-│   └── css/
-│       ├── admin.css
-│       └── site.css
+│       │   ├── products.html
+│       │   └── 404.html
+│       └── site/            # HTML шаблоны сайта
+│           ├── 404.html
+│           ├── about.html
+│           ├── base.html
+│           ├── catalog.html
+│           ├── index.html
+│           └── product.html
+├── static/
+│   ├── css/
+│   │   ├── admin.css
+│   │   └── site.css
+│   ├── js/
+│   │   ├── admin.js
+│   │   ├── catalog.js
+│   │   └── site.js
+│   └── uploads/
 ├── instance/
 │   └── shop.db              # Файл SQLite
+├── tests/
+│   ├── conftest.py
+│   ├── test_admin.py
+│   └── test_smoke.py
+
 ├── .venv/                   # Виртуальное окружение
 ├── .gitignore               # Ну это .gitignore 
-├── .env                     # Настройки проекта 
+├── .env.example             # Настройки проекта 
 ├── requirements.txt         # Список зависимостей
 ├── main.py                  # Точка входа
 ├── start.sh                 # Скрипт для быстрого запуска
