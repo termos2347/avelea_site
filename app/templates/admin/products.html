@@ -54,6 +54,7 @@
                     <form method="post" action="/admin/products/{{ p.id }}/delete"
                           onsubmit="return confirm('Удалить «{{ p.name }}»?');"
                           class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit"
                                 class="text-gray-400 hover:text-red-500 p-1" title="Удалить">
                             <i class="fas fa-trash"></i>

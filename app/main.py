@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, Depends, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
@@ -21,16 +23,108 @@ from app.config import SECRET_KEY, ADMIN_PASSWORD
 
 os.makedirs("instance", exist_ok=True)
 os.makedirs("static/uploads", exist_ok=True)
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="Avelea Shop")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Сколько товаров показывать на одной странице каталога.
 PER_PAGE = 12
 
-ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+# Максимальный размер загружаемой картинки — 5 МБ.
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+# Сигнатуры (magic bytes) допустимых форматов. Расширение из имени файла
+# НЕ используется — определяем формат по содержимому.
+_MAGIC = (
+    (b"\xff\xd8\xff",          ".jpg"),
+    (b"\x89PNG\r\n\x1a\n",     ".png"),
+    (b"GIF87a",                ".gif"),
+    (b"GIF89a",                ".gif"),
+)
+
+
+# ============== LIFESPAN ==============
+def _migrate_legacy_category_column(db: Session) -> None:
+    """Миграция старой колонки products.category → many-to-many.
+
+    Выполняется только если в БД реально осталась старая колонка.
+    """
+    insp = inspect(engine)
+    try:
+        product_cols = {c["name"] for c in insp.get_columns("products")}
+    except NoSuchTableError:
+        return
+
+    if "category" not in product_cols:
+        return
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, category FROM products "
+                "WHERE category IS NOT NULL AND category != ''"
+            )
+        ).fetchall()
+
+    # Кеш категорий в Python — потому что SQLite LOWER() не знает кириллицу
+    cat_cache: dict[str, Category] = {
+        c.name.lower(): c for c in db.query(Category).all()
+    }
+
+    def get_or_create_cat(name: str) -> Category:
+        key = name.strip().lower()
+        if key in cat_cache:
+            return cat_cache[key]
+        c = Category(name=name.strip())
+        db.add(c)
+        db.flush()
+        cat_cache[key] = c
+        return c
+
+    migrated = 0
+    for product_id, cat_str in rows:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            continue
+
+        names = []
+        for t in (cat_str or "").split(","):
+            t = t.strip()
+            if t and t not in names:
+                names.append(t)
+
+        product.categories = [get_or_create_cat(n) for n in names]
+        migrated += 1
+
+    if migrated:
+        db.commit()
+        print(f"✅ Категории мигрированы у {migrated} товаров")
+
+    # Снести старые колонки (SQLite 3.35+), иначе просто обнулить
+    for col in ("category", "tags"):
+        if col in product_cols:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE products DROP COLUMN {col}"))
+            except Exception:
+                with engine.begin() as conn:
+                    conn.execute(text(f"UPDATE products SET {col} = NULL"))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- startup ---
+    db = next(get_db())
+    try:
+        Base.metadata.create_all(bind=engine)
+        _migrate_legacy_category_column(db)
+        seed_database(db)
+    finally:
+        db.close()
+    yield
+    # --- shutdown --- (пока ничего не нужно)
+
+
+app = FastAPI(title="Avelea Shop", lifespan=lifespan)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ============== АВТОРИЗАЦИЯ ==============
@@ -43,9 +137,36 @@ async def not_auth_handler(request: Request, exc: NotAuthenticated):
     return RedirectResponse(url="/admin/login", status_code=303)
 
 
-def require_admin(request: Request):
+def get_csrf_token(request: Request) -> str:
+    """Возвращает CSRF-токен текущей сессии, создавая при необходимости."""
+    token = request.session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        request.session["csrf_token"] = token
+    return token
+
+
+async def _check_csrf(request: Request) -> None:
+    """Проверяет csrf_token из формы против токена в сессии.
+
+    Starlette кеширует request.form(), поэтому повторное чтение формы
+    в самом обработчике (через Form(...)) безопасно."""
+    form = await request.form()
+    token = form.get("csrf_token")
+    session_token = request.session.get("csrf_token")
+    if (
+        not token
+        or not session_token
+        or not secrets.compare_digest(str(token), str(session_token))
+    ):
+        raise HTTPException(status_code=403, detail="CSRF token invalid")
+
+
+async def require_admin(request: Request):
     if not request.session.get("admin"):
         raise NotAuthenticated()
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        await _check_csrf(request)
     return True
 
 
@@ -105,17 +226,60 @@ def make_page_items(current: int, total: int, params):
     return items
 
 
-def _save_upload(file: UploadFile) -> str | None:
+def _sniff_image_ext(head: bytes) -> str | None:
+    """Определяет расширение по magic bytes. None — если формат не поддерживается."""
+    for magic, ext in _MAGIC:
+        if head.startswith(magic):
+            return ext
+    # WebP: "RIFF" .... "WEBP"
+    if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _save_upload(file: UploadFile | None) -> str | None:
+    """Сохраняет картинку в static/uploads и возвращает URL.
+
+    Возвращает None, если файл пуст, слишком большой или не является
+    картинкой поддерживаемого формата. Расширение берётся из magic bytes,
+    имя файла из запроса игнорируется — это защищает от подмены расширения.
+    """
     if not file or not file.filename:
         return None
-    ext = Path(file.filename).suffix.lower()
-    if ext not in ALLOWED_IMAGE_EXT:
+
+    content = file.file.read()
+    if not content:
         return None
+    if len(content) > MAX_UPLOAD_BYTES:
+        return None
+
+    ext = _sniff_image_ext(content[:16])
+    if ext is None:
+        return None
+
     name = f"{uuid.uuid4().hex}{ext}"
     dest = Path("static/uploads") / name
     with dest.open("wb") as f:
-        f.write(file.file.read())
+        f.write(content)
     return f"/static/uploads/{name}"
+
+
+def _delete_upload(image_url: str | None) -> None:
+    """Удаляет файл из static/uploads по URL вида /static/uploads/<name>.
+
+    Молча игнорирует всё, что не совпадает с ожидаемым префиксом —
+    чтобы случайно не снести что-то вне папки загрузок.
+    """
+    if not image_url or not image_url.startswith("/static/uploads/"):
+        return
+    name = image_url.rsplit("/", 1)[-1]
+    if not name or "/" in name or ".." in name:
+        return
+    path = Path("static/uploads") / name
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _resolve_categories(db: Session, names: list[str]) -> list[Category]:
@@ -134,14 +298,24 @@ site_templates.env.globals["build_page_url"] = build_page_url
 site_templates.env.globals["build_filter_url"] = build_filter_url
 site_templates.env.globals["build_reset_url"] = build_reset_url
 
+site_templates.env.globals["csrf_token"] = get_csrf_token
+admin_templates.env.globals["csrf_token"] = get_csrf_token
+
 
 # ============== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==============
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
-        return site_templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+        if request.url.path.startswith("/admin"):
+            if not request.session.get("admin"):
+                return RedirectResponse(url="/admin/login", status_code=303)
+            return admin_templates.TemplateResponse(
+                "404.html", {"request": request}, status_code=404,
+            )
+        return site_templates.TemplateResponse(
+            "404.html", {"request": request}, status_code=404,
+        )
     return HTMLResponse(content=str(exc.detail), status_code=exc.status_code)
-
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -185,7 +359,6 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
         query = query.filter(Product.name.ilike(f"%{q}%"))
 
     if selected_categories:
-        # many-to-many: EXISTS-подзапрос по связке, без дублей
         query = query.filter(
             Product.categories.any(Category.name.in_(selected_categories))
         )
@@ -295,7 +468,7 @@ async def admin_login_form(request: Request):
     })
 
 
-@app.post("/admin/login")
+@app.post("/admin/login", dependencies=[Depends(_check_csrf)])
 async def admin_login_submit(request: Request, password: str = Form(...)):
     if secrets.compare_digest(password, ADMIN_PASSWORD):
         request.session["admin"] = True
@@ -423,11 +596,24 @@ async def admin_product_update(
     # Полностью заменяем набор категорий
     product.categories = _resolve_categories(db, categories)
 
-    if remove_image:
-        product.image = None
+    # Логика с картинкой:
+    #   новый файл        → берём его, старый удаляем;
+    #   remove_image      → стираем старую, ставим None;
+    #   ни то, ни другое  → оставляем как было.
+    old_image = product.image
     new_image = _save_upload(image)
+
     if new_image:
-        product.image = new_image
+        final_image = new_image
+    elif remove_image:
+        final_image = None
+    else:
+        final_image = old_image
+
+    if old_image and old_image != final_image:
+        _delete_upload(old_image)
+
+    product.image = final_image
 
     db.commit()
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -442,6 +628,7 @@ async def admin_product_delete(
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if product:
+        _delete_upload(product.image)
         db.delete(product)
         db.commit()
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -454,8 +641,6 @@ async def admin_product_delete(
 @app.get("/admin/categories", response_class=HTMLResponse)
 async def admin_categories(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
     categories = db.query(Category).order_by(Category.name).all()
-
-    # Счётчики использования — из relationship, без парсинга строк
     counts = {c.name: len(c.products) for c in categories}
 
     return admin_templates.TemplateResponse("categories.html", {
@@ -490,7 +675,6 @@ async def admin_category_delete(
 ):
     category = db.query(Category).filter(Category.id == category_id).first()
     if category:
-        # SQLAlchemy сам удалит записи из product_categories (secondary)
         db.delete(category)
         db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
@@ -546,80 +730,3 @@ async def admin_brand_delete(
         db.delete(brand)
         db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)
-
-
-# ==================================================
-# ==============  СТАРТ: миграция + тестовые данные
-# ==================================================
-
-@app.on_event("startup")
-async def startup():
-    db = next(get_db())
-    try:
-        # 1. Создать недостающие таблицы (products, categories, brands, product_categories)
-        Base.metadata.create_all(bind=engine)
-
-        # 2. Миграция старой колонки category → product_categories (только если БД старая)
-        insp = inspect(engine)
-        try:
-            product_cols = {c["name"] for c in insp.get_columns("products")}
-        except NoSuchTableError:
-            product_cols = set()
-
-        if "category" in product_cols:
-            with engine.connect() as conn:
-                rows = conn.execute(
-                    text(
-                        "SELECT id, category FROM products "
-                        "WHERE category IS NOT NULL AND category != ''"
-                    )
-                ).fetchall()
-
-            # Кеш категорий в Python — потому что SQLite LOWER() не знает кириллицу
-            cat_cache: dict[str, Category] = {
-                c.name.lower(): c for c in db.query(Category).all()
-            }
-
-            def get_or_create_cat(name: str) -> Category:
-                key = name.strip().lower()
-                if key in cat_cache:
-                    return cat_cache[key]
-                c = Category(name=name.strip())
-                db.add(c)
-                db.flush()
-                cat_cache[key] = c
-                return c
-
-            migrated = 0
-            for product_id, cat_str in rows:
-                product = db.query(Product).filter(Product.id == product_id).first()
-                if not product:
-                    continue
-
-                names = []
-                for t in (cat_str or "").split(","):
-                    t = t.strip()
-                    if t and t not in names:
-                        names.append(t)
-
-                product.categories = [get_or_create_cat(n) for n in names]
-                migrated += 1
-
-            if migrated:
-                db.commit()
-                print(f"✅ Категории мигрированы у {migrated} товаров")
-
-            # Снести старые колонки (SQLite 3.35+), иначе просто обнулить
-            for col in ("category", "tags"):
-                if col in product_cols:
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text(f"ALTER TABLE products DROP COLUMN {col}"))
-                    except Exception:
-                        with engine.begin() as conn:
-                            conn.execute(text(f"UPDATE products SET {col} = NULL"))
-
-        # 3. Наполнение тестовыми данными (только если products пустая)
-        seed_database(db)
-    finally:
-        db.close()

@@ -1,6 +1,7 @@
 app/__pycache__/
 __pycache__/
 .venv
+.env
 task.txt
 instance/shop.db
 shop.db

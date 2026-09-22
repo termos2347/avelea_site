@@ -47,6 +47,7 @@
                     <form method="post" action="/admin/categories/{{ c.id }}/delete"
                           onsubmit="return confirm('Удалить категорию «{{ c.name }}»? Она будет убрана из всех товаров.');"
                           class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit"
                                 class="text-gray-400 hover:text-red-500 p-1" title="Удалить">
                             <i class="fas fa-trash"></i>
@@ -73,6 +74,7 @@
 <dialog id="create-dialog" class="rounded-xl p-0 w-full max-w-sm backdrop:bg-black/40">
     <form method="post" action="/admin/categories/new"
           class="p-6 bg-white rounded-xl" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
         <h2 class="text-lg font-semibold mb-4">Новая категория</h2>
         <label class="block text-sm font-medium text-gray-700 mb-1">Название</label>
         <input type="text" name="name" id="create-name" required autocomplete="off"

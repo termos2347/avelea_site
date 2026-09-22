@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Страница не найдена — админка avelea{% endblock %}
+
+{% block admin_content %}
+<div class="text-center py-20 bg-white border border-gray-200 rounded-xl">
+    <div class="text-6xl font-bold text-gray-900 mb-2">404</div>
+    <p class="text-gray-500 mb-6">Такой страницы в админке нет.</p>
+    <a href="/admin/products"
+       class="inline-block bg-black text-white px-6 py-2 rounded-md hover:opacity-90">
+        <i class="fas fa-box"></i> К товарам
+    </a>
+</div>
+{% endblock %}
