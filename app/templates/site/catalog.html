@@ -1,17 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-{# --- 1. Ранняя синхронизация свёрнутого состояния (desktop) --- #}
-<script>
-(function () {
-    try {
-        if (localStorage.getItem('catalog_filters_collapsed') === '1') {
-            document.body.classList.add('catalog-filters-collapsed');
-        }
-    } catch (e) { /* localStorage может быть недоступен */ }
-})();
-</script>
-
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="flex items-center gap-3">
         <h2 class="text-2xl font-semibold">Каталог</h2>
@@ -226,8 +215,7 @@
                 <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
                 <p class="text-gray-500">Ничего не найдено</p>
                 <a href="{{ reset_url }}"
-                   onclick="event.preventDefault(); document.getElementById('filters-form').reset(); window.location.href='{{ reset_url }}';"
-                   class="inline-block mt-3 text-sm text-black underline hover:no-underline cursor-pointer">
+                class="inline-block mt-3 text-sm text-black underline hover:no-underline">
                     Сбросить фильтры
                 </a>
             </div>
@@ -236,74 +224,5 @@
     </div>
 </form>
 
-<script>
-(function () {
-    const body = document.body;
-    const form = document.getElementById('filters-form');
-    const KEY  = 'catalog_filters_collapsed';
-    const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
-
-    /* ===== Desktop: сворачивание панели ===== */
-    const toggleBtn  = document.getElementById('filters-toggle-desktop');
-    const toggleIcon = document.getElementById('filters-toggle-icon');
-
-    function syncToggle() {
-        const collapsed = body.classList.contains('catalog-filters-collapsed');
-        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', String(!collapsed));
-        if (toggleIcon) {
-            toggleIcon.classList.toggle('fa-chevron-left', !collapsed);
-            toggleIcon.classList.toggle('fa-chevron-right', collapsed);
-        }
-    }
-
-    function setCollapsed(collapsed) {
-        body.classList.toggle('catalog-filters-collapsed', collapsed);
-        syncToggle();
-        try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) {}
-    }
-
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            setCollapsed(!body.classList.contains('catalog-filters-collapsed'));
-        });
-    }
-
-    syncToggle();
-
-    /* ===== Mobile: полноэкранный overlay ===== */
-    const openBtn  = document.getElementById('open-filters-mobile');
-    const closeBtn = document.getElementById('close-filters-mobile');
-    const applyBtn = document.getElementById('apply-filters-mobile');
-
-    if (openBtn)  openBtn.addEventListener('click', () => body.classList.add('mobile-filters-open'));
-    if (closeBtn) closeBtn.addEventListener('click', () => body.classList.remove('mobile-filters-open'));
-
-    if (applyBtn) {
-        applyBtn.addEventListener('click', () => {
-            body.classList.remove('mobile-filters-open');
-            if (form) form.submit();
-        });
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') body.classList.remove('mobile-filters-open');
-    });
-
-    /* ===== Авто-применение фильтров ===== */
-    if (form) {
-        form.addEventListener('change', (e) => {
-            const t = e.target;
-            if (t.matches('select[name="sort"]')) {
-                form.submit();
-                return;
-            }
-            if (t.matches('input[name="category"], input[name="brand"], input[name="price_min"], input[name="price_max"]')) {
-                if (isMobile()) return;
-                form.submit();
-            }
-        });
-    }
-})();
-</script>
-
+<script src="/static/js/catalog.js"></script>
 {% endblock %}

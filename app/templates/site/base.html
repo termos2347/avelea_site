@@ -55,45 +55,6 @@
         </footer>
     </div>
 
-    <script>
-    (function () {
-        // Прогресс-полоска
-        const bar = document.getElementById('htmx-progress');
-        let hideTimer = null;
-
-        document.body.addEventListener('htmx:beforeRequest', () => {
-            clearTimeout(hideTimer);
-            bar.classList.remove('opacity-0');
-            bar.style.width = '20%';
-            setTimeout(() => { bar.style.width = '70%'; }, 120);
-        });
-
-        document.body.addEventListener('htmx:afterRequest', () => {
-            bar.style.width = '100%';
-            hideTimer = setTimeout(() => {
-                bar.classList.add('opacity-0');
-                setTimeout(() => { bar.style.width = '0'; }, 200);
-            }, 150);
-        });
-
-        // Скролл вверх при смене страницы.
-        // В каталоге не скроллим — там фильтры и сохранение позиции логичнее.
-        document.body.addEventListener('htmx:afterSettle', () => {
-            if (window.location.pathname.startsWith('/catalog')) return;
-            window.scrollTo({ top: 0, behavior: 'instant' });
-        });
-
-        // Клик по активной ссылке в навигации — не делаем запрос
-        document.addEventListener('click', (e) => {
-            const a = e.target.closest('a[href]');
-            if (!a) return;
-            const href = a.getAttribute('href');
-            if (!href || href.startsWith('http') || href.startsWith('#')) return;
-            if (href === window.location.pathname + window.location.search) {
-                e.preventDefault();
-            }
-        });
-    })();
-    </script>
+    <script src="/static/js/site.js"></script>
 </body>
 </html>

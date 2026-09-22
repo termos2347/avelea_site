@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block admin_action %}
-<button type="button" onclick="openCreateDialog()"
+<button type="button" data-action="open-create-dialog"
         class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
     <i class="fas fa-plus"></i> Добавить
 </button>
@@ -14,7 +14,7 @@
     <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
     <input type="search" id="search-input" placeholder="Поиск по категориям..."
            autocomplete="off"
-           oninput="filterRows()"
+           data-action="filter-rows"
            class="w-full border border-gray-300 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
 </div>
 
@@ -66,7 +66,7 @@
 <div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
     <i class="fas fa-folder text-4xl text-gray-300 mb-3"></i>
     <p class="text-gray-500">Категорий пока нет</p>
-    <button type="button" onclick="openCreateDialog()"
+    <button type="button" data-action="open-create-dialog"
             class="inline-block mt-3 text-sm text-black underline">Создать первую</button>
 </div>
 {% endif %}
@@ -80,7 +80,7 @@
         <input type="text" name="name" id="create-name" required autocomplete="off"
                class="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-black">
         <div class="flex justify-end gap-2">
-            <button type="button" onclick="closeCreateDialog()"
+            <button type="button" data-action="close-create-dialog"
                     class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm">
                 Отмена
             </button>
@@ -91,32 +91,4 @@
         </div>
     </form>
 </dialog>
-
-<script>
-function filterRows() {
-    const q = document.getElementById('search-input').value.trim().toLowerCase();
-    const rows = document.querySelectorAll('.row-item');
-    let visible = 0;
-    rows.forEach(r => {
-        const name = r.dataset.name || '';
-        const match = !q || name.includes(q);
-        r.style.display = match ? '' : 'none';
-        if (match) visible++;
-    });
-    const no = document.getElementById('no-results');
-    if (no) no.classList.toggle('hidden', visible > 0);
-}
-
-function openCreateDialog() {
-    const dlg = document.getElementById('create-dialog');
-    if (!dlg) return;
-    dlg.showModal();
-    setTimeout(() => document.getElementById('create-name').focus(), 0);
-}
-
-function closeCreateDialog() {
-    const dlg = document.getElementById('create-dialog');
-    if (dlg) dlg.close();
-}
-</script>
 {% endblock %}

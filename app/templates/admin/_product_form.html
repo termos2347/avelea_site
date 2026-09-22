@@ -122,7 +122,7 @@
             {% if product %}Сохранить{% else %}Создать{% endif %}
         </button>
         {% if in_dialog %}
-        <button type="button" onclick="closeProductDialog()"
+        <button type="button" data-action="close-product-dialog"
                 class="border border-gray-300 px-6 py-2 rounded-md hover:bg-gray-50">
             Отмена
         </button>
