@@ -60,7 +60,6 @@ avelea_site/
 │   ├── conftest.py
 │   ├── test_admin.py
 │   └── test_smoke.py
-
 ├── .venv/                   # Виртуальное окружение
 ├── .gitignore               # Ну это .gitignore 
 ├── .env.example             # Настройки проекта 
