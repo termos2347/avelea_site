@@ -27,6 +27,9 @@ os.makedirs("static/uploads", exist_ok=True)
 # Сколько товаров показывать на одной странице каталога.
 PER_PAGE = 12
 
+# Сколько товаров показывать на одной странице админского списка.
+ADMIN_PRODUCTS_PER_PAGE = 50
+
 # Максимальный размер загружаемой картинки — 5 МБ.
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
@@ -150,15 +153,26 @@ async def _check_csrf(request: Request) -> None:
     """Проверяет csrf_token из формы против токена в сессии.
 
     Starlette кеширует request.form(), поэтому повторное чтение формы
-    в самом обработчике (через Form(...)) безопасно."""
+    в самом обработчике (через Form(...)) безопасно.
+    """
     form = await request.form()
     token = form.get("csrf_token")
     session_token = request.session.get("csrf_token")
-    if (
-        not token
-        or not session_token
-        or not secrets.compare_digest(str(token), str(session_token))
-    ):
+
+    ok = False
+    if token and session_token:
+        # compare_digest умеет только ASCII-строки / bytes.
+        # Кириллица в теле запроса не должна ронять обработчик —
+        # поэтому сравниваем байты в UTF-8.
+        try:
+            ok = secrets.compare_digest(
+                str(token).encode("utf-8"),
+                str(session_token).encode("utf-8"),
+            )
+        except (TypeError, ValueError):
+            ok = False
+
+    if not ok:
         raise HTTPException(status_code=403, detail="CSRF token invalid")
 
 
@@ -182,7 +196,7 @@ def build_filter_url(params, remove_key: str, remove_value: str = None) -> str:
     return "/catalog" + ("?" + qs if qs else "")
 
 
-def build_page_url(params, page_num: int) -> str:
+def build_page_url(params, page_num: int, base_path: str = "/catalog") -> str:
     pairs = []
     for k in params.keys():
         if k == "page":
@@ -190,14 +204,14 @@ def build_page_url(params, page_num: int) -> str:
         for v in params.getlist(k):
             pairs.append((k, v))
     pairs.append(("page", str(page_num)))
-    return "/catalog?" + urlencode(pairs)
+    return base_path + "?" + urlencode(pairs)
 
 
 def build_reset_url() -> str:
     return "/catalog"
 
 
-def make_page_items(current: int, total: int, params):
+def make_page_items(current: int, total: int, params, base_path: str = "/catalog"):
     if total <= 1:
         return []
     if total <= 7:
@@ -220,7 +234,7 @@ def make_page_items(current: int, total: int, params):
         else:
             items.append({
                 "num": p,
-                "url": build_page_url(params, p),
+                "url": build_page_url(params, p, base_path),
                 "current": (p == current),
             })
     return items
@@ -306,21 +320,24 @@ admin_templates.env.globals["csrf_token"] = get_csrf_token
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
+        # /admin/... → если не залогинен, уводим на логин;
+        #             если залогинен, показываем админский 404.
         if request.url.path.startswith("/admin"):
             if not request.session.get("admin"):
                 return RedirectResponse(url="/admin/login", status_code=303)
             return admin_templates.TemplateResponse(
-                "404.html", {"request": request}, status_code=404,
+                request, "404.html", status_code=404,
             )
         return site_templates.TemplateResponse(
-            "404.html", {"request": request}, status_code=404,
+            request, "404.html", status_code=404,
         )
     return HTMLResponse(content=str(exc.detail), status_code=exc.status_code)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/product/"):
-        return site_templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+        return site_templates.TemplateResponse(request, "404.html", status_code=404)
     return HTMLResponse(content="Bad request", status_code=400)
 
 
@@ -328,8 +345,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
     popular = db.query(Product).filter(Product.popular == True).limit(6).all()
-    return site_templates.TemplateResponse("index.html", {
-        "request": request,
+    return site_templates.TemplateResponse(request, "index.html", {
         "popular": popular,
     })
 
@@ -413,8 +429,7 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     start_idx = (page - 1) * PER_PAGE + 1 if total_count else 0
     end_idx = min(page * PER_PAGE, total_count)
 
-    return site_templates.TemplateResponse("catalog.html", {
-        "request": request,
+    return site_templates.TemplateResponse(request, "catalog.html", {
         "products": products,
         "total_count": total_count,
         "start_idx": start_idx,
@@ -440,9 +455,8 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 async def product_page(request: Request, product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
-        return site_templates.TemplateResponse("404.html", {"request": request}, status_code=404)
-    return site_templates.TemplateResponse("product.html", {
-        "request": request,
+        return site_templates.TemplateResponse(request, "404.html", status_code=404)
+    return site_templates.TemplateResponse(request, "product.html", {
         "product": product,
         "product_categories": [c.name for c in product.categories],
     })
@@ -451,7 +465,7 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
 # ============== О НАС ==============
 @app.get("/about", response_class=HTMLResponse)
 async def about(request: Request):
-    return site_templates.TemplateResponse("about.html", {"request": request})
+    return site_templates.TemplateResponse(request, "about.html")
 
 
 # ==================================================
@@ -462,8 +476,7 @@ async def about(request: Request):
 async def admin_login_form(request: Request):
     if request.session.get("admin"):
         return RedirectResponse(url="/admin/products", status_code=303)
-    return admin_templates.TemplateResponse("login.html", {
-        "request": request,
+    return admin_templates.TemplateResponse(request, "login.html", {
         "error": None,
     })
 
@@ -473,10 +486,9 @@ async def admin_login_submit(request: Request, password: str = Form(...)):
     if secrets.compare_digest(password, ADMIN_PASSWORD):
         request.session["admin"] = True
         return RedirectResponse(url="/admin/products", status_code=303)
-    return admin_templates.TemplateResponse("login.html", {
-        "request": request,
-        "error": "Неверный пароль",
-    }, status_code=401)
+    return admin_templates.TemplateResponse(
+        request, "login.html", {"error": "Неверный пароль"}, status_code=401,
+    )
 
 
 @app.get("/admin/logout")
@@ -495,13 +507,61 @@ async def admin_root(request: Request):
 # ==================================================
 
 @app.get("/admin/products", response_class=HTMLResponse)
-async def admin_products(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
-    products = db.query(Product).order_by(Product.id.desc()).all()
-    return admin_templates.TemplateResponse("products.html", {
-        "request": request,
+async def admin_products(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+):
+    params = request.query_params
+    q = (params.get("q") or "").strip()
+
+    try:
+        page = int(params.get("page") or 1)
+    except ValueError:
+        page = 1
+    if page < 1:
+        page = 1
+
+    query = db.query(Product)
+    if q:
+        query = query.filter(Product.name.ilike(f"%{q}%"))
+    query = query.order_by(Product.id.desc())
+
+    total_count = query.count()
+    total_pages = max(
+        1,
+        (total_count + ADMIN_PRODUCTS_PER_PAGE - 1) // ADMIN_PRODUCTS_PER_PAGE,
+    )
+    if page > total_pages:
+        page = total_pages
+
+    products = (
+        query
+        .offset((page - 1) * ADMIN_PRODUCTS_PER_PAGE)
+        .limit(ADMIN_PRODUCTS_PER_PAGE)
+        .all()
+    )
+
+    start_idx = (page - 1) * ADMIN_PRODUCTS_PER_PAGE + 1 if total_count else 0
+    end_idx = min(page * ADMIN_PRODUCTS_PER_PAGE, total_count)
+
+    return admin_templates.TemplateResponse(request, "products.html", {
         "products": products,
         "all_categories": db.query(Category).order_by(Category.name).all(),
         "all_brands": db.query(Brand).order_by(Brand.name).all(),
+        "q": q,
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
+        "start_idx": start_idx,
+        "end_idx": end_idx,
+        "page_items": make_page_items(page, total_pages, params, "/admin/products"),
+        "prev_url": (
+            build_page_url(params, page - 1, "/admin/products") if page > 1 else None
+        ),
+        "next_url": (
+            build_page_url(params, page + 1, "/admin/products") if page < total_pages else None
+        ),
     })
 
 
@@ -562,8 +622,7 @@ async def admin_product_edit(
     if not product:
         raise HTTPException(status_code=404)
     ctx = _product_form_context(db, product)
-    ctx["request"] = request
-    return admin_templates.TemplateResponse("product_form.html", ctx)
+    return admin_templates.TemplateResponse(request, "product_form.html", ctx)
 
 
 @app.post("/admin/products/{product_id}/edit")
@@ -643,8 +702,7 @@ async def admin_categories(request: Request, db: Session = Depends(get_db), _: b
     categories = db.query(Category).order_by(Category.name).all()
     counts = {c.name: len(c.products) for c in categories}
 
-    return admin_templates.TemplateResponse("categories.html", {
-        "request": request,
+    return admin_templates.TemplateResponse(request, "categories.html", {
         "categories": categories,
         "counts": counts,
     })
@@ -693,8 +751,7 @@ async def admin_brands(request: Request, db: Session = Depends(get_db), _: bool 
         if b:
             counts[b] = counts.get(b, 0) + 1
 
-    return admin_templates.TemplateResponse("brands.html", {
-        "request": request,
+    return admin_templates.TemplateResponse(request, "brands.html", {
         "brands": brands,
         "counts": counts,
     })

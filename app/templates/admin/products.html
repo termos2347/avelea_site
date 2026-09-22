@@ -8,7 +8,30 @@
 {% endblock %}
 
 {% block admin_content %}
-<h1 class="text-2xl font-semibold mb-4">Товары</h1>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h1 class="text-2xl font-semibold">Товары</h1>
+    {% if total_count %}
+    <span class="text-sm text-gray-500">
+        {{ start_idx }}–{{ end_idx }} из {{ total_count }}
+    </span>
+    {% endif %}
+</div>
+
+<form method="get" action="/admin/products" autocomplete="off" class="mb-4 max-w-md">
+    <div class="relative">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+        <input type="search" name="q" value="{{ q }}"
+               placeholder="Поиск по названию..."
+               class="w-full border border-gray-300 rounded-md pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+        {% if q %}
+        <a href="/admin/products"
+           class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
+           title="Сбросить">
+            <i class="fas fa-times text-xs"></i>
+        </a>
+        {% endif %}
+    </div>
+</form>
 
 {% if products %}
 <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -66,6 +89,52 @@
         </tbody>
     </table>
 </div>
+
+{% if total_pages > 1 %}
+<nav class="mt-6 flex flex-wrap items-center justify-center gap-1">
+    {% if prev_url %}
+    <a href="{{ prev_url }}"
+       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+        <i class="fas fa-chevron-left text-xs"></i>
+    </a>
+    {% else %}
+    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+        <i class="fas fa-chevron-left text-xs"></i>
+    </span>
+    {% endif %}
+
+    {% for it in page_items %}
+        {% if it.ellipsis %}
+        <span class="px-2 text-gray-400">…</span>
+        {% elif it.current %}
+        <span class="px-3 py-1.5 bg-black text-white rounded-md text-sm font-medium">{{ it.num }}</span>
+        {% else %}
+        <a href="{{ it.url }}"
+           class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">{{ it.num }}</a>
+        {% endif %}
+    {% endfor %}
+
+    {% if next_url %}
+    <a href="{{ next_url }}"
+       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+        <i class="fas fa-chevron-right text-xs"></i>
+    </a>
+    {% else %}
+    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+        <i class="fas fa-chevron-right text-xs"></i>
+    </span>
+    {% endif %}
+</nav>
+{% endif %}
+
+{% elif q %}
+<div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
+    <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
+    <p class="text-gray-500">По запросу «{{ q }}» ничего не найдено</p>
+    <a href="/admin/products"
+       class="inline-block mt-3 text-sm text-black underline">Сбросить поиск</a>
+</div>
+
 {% else %}
 <div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
     <p class="text-gray-500">Товаров пока нет</p>
