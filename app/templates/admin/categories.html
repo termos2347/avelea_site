@@ -36,7 +36,7 @@
                     <span class="inline-block px-3 py-1 bg-gray-100 rounded-full text-xs">{{ c.name }}</span>
                 </td>
                 <td class="px-4 py-2 text-gray-600">
-                    {% set n = counts.get(c.name, 0) %}
+                    {% set n = counts.get(c.id, 0) %}
                     {% if n %}
                         {{ n }} {{ "товар" if n == 1 else ("товара" if n < 5 else "товаров") }}
                     {% else %}

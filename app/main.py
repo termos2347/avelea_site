@@ -18,7 +18,7 @@ import secrets
 import uuid
 
 from app.database import engine, get_db, Base, SessionLocal
-from app.models import Product, Brand, Category
+from app.models import Product, Brand, Category, product_categories
 from app.seed import seed_database
 from app.config import (
     SECRET_KEY,
@@ -877,9 +877,23 @@ async def admin_product_delete(
 # ==================================================
 
 @app.get("/admin/categories", response_class=HTMLResponse)
-async def admin_categories(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
+async def admin_categories(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+):
     categories = db.query(Category).order_by(Category.name).all()
-    counts = {c.name: len(c.products) for c in categories}
+
+    # Один SQL с GROUP BY вместо N+1.
+    # Ключ — category_id (int), см. categories.html.
+    counts = dict(
+        db.query(
+            product_categories.c.category_id,
+            func.count(product_categories.c.product_id),
+        )
+        .group_by(product_categories.c.category_id)
+        .all()
+    )
 
     return admin_templates.TemplateResponse(request, "categories.html", {
         "categories": categories,
