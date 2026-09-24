@@ -5,6 +5,14 @@ set -e
 # Всегда работаем из директории скрипта
 cd "$(dirname "$0")"
 
+# 0. Проверяем наличие .env
+if [ ! -f ".env" ]; then
+    echo "❌ Файл .env не найден." >&2
+    echo "   Скопируйте шаблон:  cp .env.example .env" >&2
+    echo "   И заполните SECRET_KEY и ADMIN_PASSWORD." >&2
+    exit 1
+fi
+
 # 1. Проверяем, что .venv существует
 if [ ! -d ".venv" ]; then
     echo "❌ Виртуальное окружение .venv не найдено." >&2

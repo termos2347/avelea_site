@@ -6,9 +6,7 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # корень проекта
 
-# Читаем .env из корня. override=True — .env побеждает уже
-# установленные env-vars (один источник правды).
-load_dotenv(BASE_DIR / ".env", override=True)
+load_dotenv(BASE_DIR / ".env")
 
 
 def _require(name: str, hint: str = "") -> str:
