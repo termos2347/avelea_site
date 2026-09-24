@@ -27,10 +27,11 @@ from app.config import (
     SESSION_SAME_SITE,
     SESSION_MAX_AGE,
     MAX_UPLOAD_BYTES,
+    BASE_DIR,
 )
 
-os.makedirs("instance", exist_ok=True)
-os.makedirs("static/uploads", exist_ok=True)
+(BASE_DIR / "instance").mkdir(exist_ok=True)
+(BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
 
 # Сколько товаров показывать на одной странице каталога.
 PER_PAGE = 12
@@ -249,8 +250,11 @@ app.add_middleware(
     same_site=SESSION_SAME_SITE,
     max_age=SESSION_MAX_AGE,
 )
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
+app.mount(
+    "/static",
+    StaticFiles(directory=BASE_DIR / "static"),
+    name="static",
+)
 
 # ============== АВТОРИЗАЦИЯ ==============
 class NotAuthenticated(Exception):
@@ -406,7 +410,7 @@ def _save_upload(file: UploadFile | None) -> tuple[str | None, str | None]:
         )
 
     name = f"{uuid.uuid4().hex}{ext}"
-    dest = Path("static/uploads") / name
+    dest = BASE_DIR / "static" / "uploads" / name
     with dest.open("wb") as f:
         f.write(content)
     return f"/static/uploads/{name}", None
@@ -423,7 +427,7 @@ def _delete_upload(image_url: str | None) -> None:
     name = image_url.rsplit("/", 1)[-1]
     if not name or "/" in name or ".." in name:
         return
-    path = Path("static/uploads") / name
+    path = BASE_DIR / "static" / "uploads" / name
     try:
         path.unlink(missing_ok=True)
     except OSError:
@@ -454,8 +458,8 @@ def _resolve_brand_id(db: Session, raw: str) -> int | None:
 
 
 # ============== ШАБЛОНЫ ==============
-site_templates = Jinja2Templates(directory="app/templates/site")
-admin_templates = Jinja2Templates(directory="app/templates/admin")
+site_templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates" / "site")
+admin_templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates" / "admin")
 
 site_templates.env.globals["build_page_url"] = build_page_url
 site_templates.env.globals["build_filter_url"] = build_filter_url
