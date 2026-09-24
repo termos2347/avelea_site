@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/site.css">
 </head>
-<body class="bg-gray-50" hx-boost="true">
+<body class="bg-gray-50 overflow-x-hidden" hx-boost="true">
 
     <!-- Прогресс-полоска сверху -->
     <div id="htmx-progress"
@@ -22,14 +22,24 @@
     {# Контейнер: на широких экранах занимает ~80% ширины окна,
        но не больше 1536px (screen-2xl). На мобилке — вся ширина. #}
     <div class="mx-auto px-4 md:px-6 max-w-screen-2xl">
-        <nav class="flex flex-wrap items-center justify-between py-4 border-b border-gray-200 mb-6">
-            <a href="/" class="text-2xl font-semibold tracking-tight hover:opacity-80">
+        <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-4 border-b border-gray-200 mb-6">
+
+            {# Слева — подпись студии #}
+            <div class="text-[9px] md:text-[10px] uppercase tracking-[0.15em] font-medium whitespace-nowrap">
+                <span class="hidden sm:inline text-gray-400">prod by </span>
+                <span class="text-pink-500 font-semibold">96 team</span>
+            </div>
+
+            {# Центр — название бренда #}
+            <a href="/" class="text-xl md:text-2xl font-semibold tracking-tight hover:opacity-80 text-center whitespace-nowrap">
                 avelea
             </a>
-            <div class="flex gap-1 sm:gap-2 flex-wrap items-center">
-                <a href="/" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Главная</a>
-                <a href="/catalog" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Каталог</a>
-                <a href="/about" class="px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">О нас</a>
+
+            {# Справа — навигация #}
+            <div class="flex gap-1 sm:gap-2 flex-wrap items-center justify-end">
+                <a href="/" class="px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Главная</a>
+                <a href="/catalog" class="px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Каталог</a>
+                <a href="/about" class="px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">О нас</a>
             </div>
         </nav>
 
@@ -50,7 +60,7 @@
                 </div>
             </div>
             <div class="mt-4 text-center text-gray-400 text-xs">
-                © 2026 avelea. Все права защищены.
+                © 2026 avelea · prod by 96 team
             </div>
         </footer>
     </div>

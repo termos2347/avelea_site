@@ -56,11 +56,11 @@
         if (!track || slides.length < 2) return;
 
         const INTERVAL = 5500;
+        // Ширина зон по краям, реагирующих на клик (в долях ширины)
+        const EDGE = 0.3;
         let current = 0;
         let timer   = null;
 
-        // Полоски-индикаторы внизу: кликабельные, показывают активный слайд.
-        // Без заливки — просто цветом.
         const segments = slides.map((_, i) => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -81,7 +81,6 @@
             });
         }
 
-        // Прогресс-бар в верхнем углу — просто заполняется за INTERVAL
         function restartBar() {
             if (!bar) return;
             bar.style.transition = 'none';
@@ -104,6 +103,31 @@
             render();
             startTimer();
         }
+
+        // ===== Клик по левой / правой зоне =====
+        // Игнорируем клики по ссылкам, кнопкам, полоскам-индикаторам
+        // и любому интерактиву — они обрабатываются сами.
+        root.addEventListener('click', (e) => {
+            if (e.target.closest('a, button, input, select, textarea')) return;
+
+            const rect = root.getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+
+            if (pct < EDGE) {
+                goTo(current - 1);
+            } else if (pct > 1 - EDGE) {
+                goTo(current + 1);
+            }
+        });
+
+        // Курсор-подсказка над краями
+        root.addEventListener('mousemove', (e) => {
+            const rect = root.getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            const overEdge = pct < EDGE || pct > 1 - EDGE;
+            const overInteractive = e.target.closest('a, button, input, select, textarea');
+            root.style.cursor = (overEdge && !overInteractive) ? 'pointer' : '';
+        });
 
         // Свайп на мобиле
         let x0 = null;
