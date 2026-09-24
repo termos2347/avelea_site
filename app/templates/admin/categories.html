@@ -45,7 +45,7 @@
                 </td>
                 <td class="px-4 py-2 text-right">
                     <form method="post" action="/admin/categories/{{ c.id }}/delete"
-                          onsubmit="return confirm('Удалить категорию «{{ c.name }}»? Она будет убрана из всех товаров.');"
+                          data-confirm="Удалить категорию «{{ c.name }}»? Она будет убрана из всех товаров."
                           class="inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit"

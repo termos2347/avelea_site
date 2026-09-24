@@ -42,8 +42,11 @@ def seed_database(db: Session) -> None:
     # ------------------------------------------------------------------
     brand_cache = {b.name.lower(): b for b in db.query(Brand).all()}
     if "avelea" not in brand_cache:
-        db.add(Brand(name="Avelea"))
+        b = Brand(name="Avelea")
+        db.add(b)
         db.flush()
+        brand_cache["avelea"] = b
+    avelea_brand = brand_cache["avelea"]
 
     # ------------------------------------------------------------------
     # Предсоздаём все категории заранее. Иначе cat() внутри списка
@@ -60,7 +63,7 @@ def seed_database(db: Session) -> None:
         Product(
             name="Гидрофильное масло",
             categories=[cat("Очищение"), cat("Уход")],
-            brand="Avelea",
+            brand_id=avelea_brand.id,
             price=1290,
             popular=True,
             description="Нежное гидрофильное масло на основе натуральных растительных экстрактов.",
@@ -69,7 +72,7 @@ def seed_database(db: Session) -> None:
         Product(
             name="Сыворотка с витамином C",
             categories=[cat("Уход")],
-            brand="Avelea",
+            brand_id=avelea_brand.id,
             price=2450,
             popular=True,
             description="Концентрированная сыворотка с 15% стабильным витамином C.",
@@ -78,7 +81,7 @@ def seed_database(db: Session) -> None:
         Product(
             name="Увлажняющий крем",
             categories=[cat("Уход")],
-            brand="Avelea",
+            brand_id=avelea_brand.id,
             price=1890,
             popular=True,
             description="Лёгкий увлажняющий крем с комплексом из 5 типов гиалуроновой кислоты.",
@@ -87,7 +90,7 @@ def seed_database(db: Session) -> None:
         Product(
             name="SPF 50+ тональный",
             categories=[cat("Макияж"), cat("Уход")],
-            brand="Avelea",
+            brand_id=avelea_brand.id,
             price=1680,
             popular=False,
             description="Тональный крем с высокой солнцезащитой SPF 50+.",
@@ -96,7 +99,7 @@ def seed_database(db: Session) -> None:
         Product(
             name="Мицеллярная вода",
             categories=[cat("Очищение")],
-            brand="Avelea",
+            brand_id=avelea_brand.id,
             price=890,
             popular=False,
             description="Мягкая мицеллярная вода для бережного очищения.",
@@ -105,7 +108,7 @@ def seed_database(db: Session) -> None:
         Product(
             name="Бальзам для губ",
             categories=[cat("Уход")],
-            brand="Avelea",
+            brand_id=avelea_brand.id,
             price=450,
             popular=True,
             description="Питательный бальзам для губ с маслом ши и витамином E.",

@@ -13,8 +13,8 @@ if [ ! -d ".venv" ]; then
 fi
 
 # 2. Проверяем точку входа
-if [ ! -f "main.py" ]; then
-    echo "❌ Не найден main.py в $(pwd)" >&2
+if [ ! -f "run.py" ]; then
+    echo "❌ Не найден run.py в $(pwd)" >&2
     exit 1
 fi
 
@@ -30,4 +30,4 @@ echo ""
 
 # 5. exec заменяет процесс bash процессом python —
 #    это корректно передаёт сигналы (Ctrl+C, SIGTERM) самому приложению
-exec python main.py
+exec python run.py

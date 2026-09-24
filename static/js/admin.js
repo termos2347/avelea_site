@@ -89,6 +89,22 @@
         }
     });
 
+    // ===== Подтверждение удаления через data-confirm =====
+    // Единый делегированный обработчик вместо inline onsubmit="return confirm(...)".
+    // Inline-подход ломался на именах с апострофом: Jinja экранировала ' в &#39;,
+    // HTML-парсер декодировал обратно, и JS видел незакрытую строку.
+    //
+    // Capture-фаза + stopPropagation: чтобы htmx (hx-boost на <body>)
+    // не перехватил submit после того, как мы отменили действие.
+    document.addEventListener('submit', (e) => {
+        const msg = e.target.dataset && e.target.dataset.confirm;
+        if (!msg) return;
+        if (!window.confirm(msg)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
     // ===== Живой фильтр строк в таблицах =====
     document.addEventListener('input', (e) => {
         const input = e.target.closest('input[data-action="filter-rows"]');

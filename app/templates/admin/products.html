@@ -17,6 +17,12 @@
     {% endif %}
 </div>
 
+{% if flash_error %}
+<div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-md">
+    <i class="fas fa-exclamation-triangle"></i> {{ flash_error }}
+</div>
+{% endif %}
+
 <form method="get" action="/admin/products" autocomplete="off" class="mb-4 max-w-md">
     <div class="relative">
         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
@@ -75,7 +81,7 @@
                         <i class="fas fa-pen"></i>
                     </a>
                     <form method="post" action="/admin/products/{{ p.id }}/delete"
-                          onsubmit="return confirm('Удалить «{{ p.name }}»?');"
+                          data-confirm="Удалить «{{ p.name }}»?"
                           class="inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit"

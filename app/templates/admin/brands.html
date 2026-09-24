@@ -34,7 +34,7 @@
                 data-name="{{ b.name|lower }}">
                 <td class="px-4 py-2 font-medium">{{ b.name }}</td>
                 <td class="px-4 py-2 text-gray-600">
-                    {% set n = counts.get(b.name, 0) %}
+                    {% set n = counts.get(b.id, 0) %}
                     {% if n %}
                         {{ n }} {{ "товар" if n == 1 else ("товара" if n < 5 else "товаров") }}
                     {% else %}
@@ -43,7 +43,7 @@
                 </td>
                 <td class="px-4 py-2 text-right">
                     <form method="post" action="/admin/brands/{{ b.id }}/delete"
-                          onsubmit="return confirm('Удалить бренд «{{ b.name }}»? У всех товаров бренд станет пустым.');"
+                          data-confirm="Удалить бренд «{{ b.name }}»? У всех товаров бренд станет пустым."
                           class="inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit"

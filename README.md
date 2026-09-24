@@ -64,7 +64,7 @@ avelea_site/
 ├── .gitignore               # Ну это .gitignore 
 ├── .env.example             # Настройки проекта 
 ├── requirements.txt         # Список зависимостей
-├── main.py                  # Точка входа
+├── run.py                   # Точка входа
 ├── start.sh                 # Скрипт для быстрого запуска
 ├── install.sh               # Скрипт для быстрой установки
 └── README.md                # Этот файл

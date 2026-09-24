@@ -1,3 +1,5 @@
+import os
+
 from tests.conftest import extract_csrf
 
 
@@ -99,7 +101,7 @@ def test_upload_rejects_non_image(admin_client):
     )
     assert r.status_code == 303
 
-    r = admin_client.get("/admin/products?q=Мусорный")
+    r = admin_client.get("/admin/products", params={"q": "Мусорный"})
     assert "Мусорный файл" in r.text
     # Файл не должен был сохраниться — картинка отсутствует
     assert "/static/uploads/" not in r.text

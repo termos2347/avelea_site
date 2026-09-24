@@ -7,19 +7,27 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoSuchTableError
 from urllib.parse import urlencode
 from pathlib import Path
 import os
+import sys
 import secrets
 import uuid
 
-from app.database import engine, get_db, Base
-from app.models import Product, Brand, Category, product_categories
+from app.database import engine, get_db, Base, SessionLocal
+from app.models import Product, Brand, Category
 from app.seed import seed_database
-from app.config import SECRET_KEY, ADMIN_PASSWORD
+from app.config import (
+    SECRET_KEY,
+    ADMIN_PASSWORD,
+    SESSION_HTTPS_ONLY,
+    SESSION_SAME_SITE,
+    SESSION_MAX_AGE,
+    MAX_UPLOAD_BYTES,
+)
 
 os.makedirs("instance", exist_ok=True)
 os.makedirs("static/uploads", exist_ok=True)
@@ -29,9 +37,6 @@ PER_PAGE = 12
 
 # Сколько товаров показывать на одной странице админского списка.
 ADMIN_PRODUCTS_PER_PAGE = 50
-
-# Максимальный размер загружаемой картинки — 5 МБ.
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 # Сигнатуры (magic bytes) допустимых форматов. Расширение из имени файла
 # НЕ используется — определяем формат по содержимому.
@@ -44,6 +49,115 @@ _MAGIC = (
 
 
 # ============== LIFESPAN ==============
+def _migrate_brand_to_fk(db: Session) -> None:
+    """Переносит products.brand (строку) → products.brand_id (FK на brands).
+
+    Идемпотентно: если колонки `brand` уже нет — выходим сразу.
+    Должна вызываться ДО любых миграций, которые делают db.query(Product),
+    потому что модель Product теперь ожидает колонку brand_id.
+    """
+    insp = inspect(engine)
+    try:
+        product_cols = {c["name"] for c in insp.get_columns("products")}
+    except NoSuchTableError:
+        return
+
+    if "brand" not in product_cols:
+        return
+
+    # 1. Добавляем brand_id, если её ещё нет.
+    if "brand_id" not in product_cols:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE products ADD COLUMN brand_id INTEGER "
+                "REFERENCES brands(id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_products_brand_id "
+                "ON products (brand_id)"
+            ))
+
+    # 2. Заполняем brand_id из brand, попутно создавая отсутствующие бренды.
+    brand_cache: dict[str, Brand] = {
+        b.name.lower(): b for b in db.query(Brand).all()
+    }
+
+    def get_or_create_brand(name: str) -> Brand:
+        key = name.strip().lower()
+        if key in brand_cache:
+            return brand_cache[key]
+        b = Brand(name=name.strip())
+        db.add(b)
+        db.flush()
+        brand_cache[key] = b
+        return b
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, brand FROM products "
+            "WHERE brand IS NOT NULL AND brand != ''"
+        )).fetchall()
+
+    migrated = 0
+    for pid, brand_name in rows:
+        product = db.query(Product).filter(Product.id == pid).first()
+        if not product:
+            continue
+        product.brand_id = get_or_create_brand(brand_name).id
+        migrated += 1
+
+    if migrated:
+        db.commit()
+        print(f"✅ Бренды мигрированы у {migrated} товаров")
+
+    # 3. Убираем старую строковую колонку.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products DROP COLUMN brand"))
+    except Exception as e:
+        print(
+            f"⚠️  Не удалось удалить products.brand: {e}. "
+            f"Колонка больше не используется, но осталась в схеме.",
+            file=sys.stderr,
+        )
+
+
+def _migrate_name_lower(db: Session) -> None:
+    """Добавляет колонку products.name_lower, если её ещё нет,
+    и заполняет её для всех существующих строк.
+
+    Нужна для регистронезависимого поиска по кириллице: SQLite LOWER()
+    знает только ASCII, поэтому вычисляем значение в Python.
+    """
+    insp = inspect(engine)
+    try:
+        product_cols = {c["name"] for c in insp.get_columns("products")}
+    except NoSuchTableError:
+        return
+
+    # 1. Добавить колонку, если её нет (старая БД).
+    if "name_lower" not in product_cols:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE products "
+                "ADD COLUMN name_lower VARCHAR(200) NOT NULL DEFAULT ''"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS "
+                "ix_products_name_lower ON products (name_lower)"
+            ))
+
+    # 2. Заполнить/починить значения.
+    updated = 0
+    for p in db.query(Product).all():
+        expected = (p.name or "").strip().lower()
+        if p.name_lower != expected:
+            p.name_lower = expected
+            updated += 1
+    if updated:
+        db.commit()
+
+
 def _migrate_legacy_category_column(db: Session) -> None:
     """Миграция старой колонки products.category → many-to-many.
 
@@ -59,12 +173,10 @@ def _migrate_legacy_category_column(db: Session) -> None:
         return
 
     with engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                "SELECT id, category FROM products "
-                "WHERE category IS NOT NULL AND category != ''"
-            )
-        ).fetchall()
+        rows = conn.execute(text(
+            "SELECT id, category FROM products "
+            "WHERE category IS NOT NULL AND category != ''"
+        )).fetchall()
 
     # Кеш категорий в Python — потому что SQLite LOWER() не знает кириллицу
     cat_cache: dict[str, Category] = {
@@ -114,9 +226,13 @@ def _migrate_legacy_category_column(db: Session) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- startup ---
-    db = next(get_db())
+    db = SessionLocal()
     try:
         Base.metadata.create_all(bind=engine)
+        # Порядок важен: brand-миграция добавляет колонку brand_id,
+        # без которой SQLAlchemy не сможет выбрать Product в других миграциях.
+        _migrate_brand_to_fk(db)
+        _migrate_name_lower(db)
         _migrate_legacy_category_column(db)
         seed_database(db)
     finally:
@@ -126,7 +242,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Avelea Shop", lifespan=lifespan)
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    https_only=SESSION_HTTPS_ONLY,
+    same_site=SESSION_SAME_SITE,
+    max_age=SESSION_MAX_AGE,
+)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -138,6 +260,18 @@ class NotAuthenticated(Exception):
 @app.exception_handler(NotAuthenticated)
 async def not_auth_handler(request: Request, exc: NotAuthenticated):
     return RedirectResponse(url="/admin/login", status_code=303)
+
+
+def _safe_str_compare(a: str, b: str) -> bool:
+    """Сравнение двух строк за постоянное время.
+
+    secrets.compare_digest не принимает строки с не-ASCII символами,
+    поэтому сравниваем байты в UTF-8.
+    """
+    try:
+        return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+    except (TypeError, ValueError):
+        return False
 
 
 def get_csrf_token(request: Request) -> str:
@@ -159,20 +293,10 @@ async def _check_csrf(request: Request) -> None:
     token = form.get("csrf_token")
     session_token = request.session.get("csrf_token")
 
-    ok = False
-    if token and session_token:
-        # compare_digest умеет только ASCII-строки / bytes.
-        # Кириллица в теле запроса не должна ронять обработчик —
-        # поэтому сравниваем байты в UTF-8.
-        try:
-            ok = secrets.compare_digest(
-                str(token).encode("utf-8"),
-                str(session_token).encode("utf-8"),
-            )
-        except (TypeError, ValueError):
-            ok = False
+    if not token or not session_token:
+        raise HTTPException(status_code=403, detail="CSRF token invalid")
 
-    if not ok:
+    if not _safe_str_compare(str(token), str(session_token)):
         raise HTTPException(status_code=403, detail="CSRF token invalid")
 
 
@@ -251,31 +375,41 @@ def _sniff_image_ext(head: bytes) -> str | None:
     return None
 
 
-def _save_upload(file: UploadFile | None) -> str | None:
-    """Сохраняет картинку в static/uploads и возвращает URL.
+def _save_upload(file: UploadFile | None) -> tuple[str | None, str | None]:
+    """Сохраняет картинку в static/uploads.
 
-    Возвращает None, если файл пуст, слишком большой или не является
-    картинкой поддерживаемого формата. Расширение берётся из magic bytes,
-    имя файла из запроса игнорируется — это защищает от подмены расширения.
+    Возвращает (url, error):
+      - (url, None)    — успех;
+      - (None, None)   — файла не было или он пустой (не ошибка);
+      - (None, "...")  — файл отклонён по конкретной причине.
+
+    Расширение берётся из magic bytes, имя файла из запроса игнорируется —
+    это защищает от подмены расширения.
     """
     if not file or not file.filename:
-        return None
+        return None, None
 
     content = file.file.read()
     if not content:
-        return None
+        return None, None
     if len(content) > MAX_UPLOAD_BYTES:
-        return None
+        return None, (
+            f"Файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ — "
+            "картинка не сохранена."
+        )
 
     ext = _sniff_image_ext(content[:16])
     if ext is None:
-        return None
+        return None, (
+            "Формат не поддерживается (разрешены jpg, png, gif, webp) — "
+            "картинка не сохранена."
+        )
 
     name = f"{uuid.uuid4().hex}{ext}"
     dest = Path("static/uploads") / name
     with dest.open("wb") as f:
         f.write(content)
-    return f"/static/uploads/{name}"
+    return f"/static/uploads/{name}", None
 
 
 def _delete_upload(image_url: str | None) -> None:
@@ -302,6 +436,21 @@ def _resolve_categories(db: Session, names: list[str]) -> list[Category]:
     if not names:
         return []
     return db.query(Category).filter(Category.name.in_(names)).all()
+
+
+def _resolve_brand_id(db: Session, raw: str) -> int | None:
+    """Превращает значение из формы (строку с id) в id существующего бренда.
+
+    Пустая строка / не число / несуществующий id → None.
+    Это защищает от подсунутых руками brand_id, которых нет в БД —
+    иначе связи повиснут в NULL и бренд просто «пропадёт» у товара.
+    """
+    raw = (raw or "").strip()
+    if not raw or not raw.isdigit():
+        return None
+    bid = int(raw)
+    exists = db.query(Brand).filter(Brand.id == bid).first()
+    return bid if exists else None
 
 
 # ============== ШАБЛОНЫ ==============
@@ -371,8 +520,9 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 
     query = db.query(Product)
 
+    # Регистронезависимый поиск через name_lower (см. миграцию в lifespan).
     if q:
-        query = query.filter(Product.name.ilike(f"%{q}%"))
+        query = query.filter(Product.name_lower.contains(q.lower()))
 
     if selected_categories:
         query = query.filter(
@@ -380,7 +530,9 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
         )
 
     if selected_brands:
-        query = query.filter(Product.brand.in_(selected_brands))
+        query = query.filter(
+            Product.brand_ref.has(Brand.name.in_(selected_brands))
+        )
 
     if price_min:
         try:
@@ -412,7 +564,17 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     products = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
 
     all_categories = [c.name for c in db.query(Category).order_by(Category.name).all()]
-    all_brands = [b[0] for b in db.query(Product.brand).distinct().all() if b[0]]
+
+    # Список имён брендов, у которых есть хотя бы один товар.
+    all_brands = [
+        row[0] for row in (
+            db.query(Brand.name)
+              .join(Product, Product.brand_id == Brand.id)
+              .distinct()
+              .order_by(Brand.name)
+              .all()
+        )
+    ]
 
     active_filters = []
     if q:
@@ -483,7 +645,7 @@ async def admin_login_form(request: Request):
 
 @app.post("/admin/login", dependencies=[Depends(_check_csrf)])
 async def admin_login_submit(request: Request, password: str = Form(...)):
-    if secrets.compare_digest(password, ADMIN_PASSWORD):
+    if _safe_str_compare(password, ADMIN_PASSWORD):
         request.session["admin"] = True
         return RedirectResponse(url="/admin/products", status_code=303)
     return admin_templates.TemplateResponse(
@@ -524,7 +686,7 @@ async def admin_products(
 
     query = db.query(Product)
     if q:
-        query = query.filter(Product.name.ilike(f"%{q}%"))
+        query = query.filter(Product.name_lower.contains(q.lower()))
     query = query.order_by(Product.id.desc())
 
     total_count = query.count()
@@ -545,6 +707,10 @@ async def admin_products(
     start_idx = (page - 1) * ADMIN_PRODUCTS_PER_PAGE + 1 if total_count else 0
     end_idx = min(page * ADMIN_PRODUCTS_PER_PAGE, total_count)
 
+    # Забираем flash-сообщение (например, об отклонённой картинке) и
+    # сразу удаляем — показывается один раз.
+    flash_error = request.session.pop("flash_error", None)
+
     return admin_templates.TemplateResponse(request, "products.html", {
         "products": products,
         "all_categories": db.query(Category).order_by(Category.name).all(),
@@ -562,6 +728,7 @@ async def admin_products(
         "next_url": (
             build_page_url(params, page + 1, "/admin/products") if page < total_pages else None
         ),
+        "flash_error": flash_error,
     })
 
 
@@ -586,18 +753,20 @@ async def admin_product_create(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    brand: str = Form(""),
+    brand_id: str = Form(""),
     price: int = Form(...),
     volume: str = Form(""),
     description: str = Form(""),
     popular: str = Form(None),
     image: UploadFile = File(None),
 ):
-    image_url = _save_upload(image)
+    image_url, img_err = _save_upload(image)
+    if img_err:
+        request.session["flash_error"] = img_err
 
     product = Product(
         name=name.strip(),
-        brand=brand.strip() or None,
+        brand_id=_resolve_brand_id(db, brand_id),
         price=price,
         volume=volume.strip() or None,
         description=description.strip() or None,
@@ -633,7 +802,7 @@ async def admin_product_update(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    brand: str = Form(""),
+    brand_id: str = Form(""),
     price: int = Form(...),
     volume: str = Form(""),
     description: str = Form(""),
@@ -646,7 +815,7 @@ async def admin_product_update(
         raise HTTPException(status_code=404)
 
     product.name = name.strip()
-    product.brand = brand.strip() or None
+    product.brand_id = _resolve_brand_id(db, brand_id)
     product.price = price
     product.volume = volume.strip() or None
     product.description = description.strip() or None
@@ -656,11 +825,13 @@ async def admin_product_update(
     product.categories = _resolve_categories(db, categories)
 
     # Логика с картинкой:
-    #   новый файл        → берём его, старый удаляем;
+    #   новый файл        → берём его, старый удаляем ПОСЛЕ commit;
     #   remove_image      → стираем старую, ставим None;
     #   ни то, ни другое  → оставляем как было.
     old_image = product.image
-    new_image = _save_upload(image)
+    new_image, img_err = _save_upload(image)
+    if img_err:
+        request.session["flash_error"] = img_err
 
     if new_image:
         final_image = new_image
@@ -669,12 +840,14 @@ async def admin_product_update(
     else:
         final_image = old_image
 
+    product.image = final_image
+    db.commit()
+
+    # Файл удаляем только после успешного коммита: если commit упадёт,
+    # в БД останется ссылка на существующий файл.
     if old_image and old_image != final_image:
         _delete_upload(old_image)
 
-    product.image = final_image
-
-    db.commit()
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
@@ -687,9 +860,11 @@ async def admin_product_delete(
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if product:
-        _delete_upload(product.image)
+        old_image = product.image
         db.delete(product)
         db.commit()
+        # Удаление файла — после успешного коммита.
+        _delete_upload(old_image)
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
@@ -746,10 +921,14 @@ async def admin_category_delete(
 async def admin_brands(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
     brands = db.query(Brand).order_by(Brand.name).all()
 
-    counts = {}
-    for (b,) in db.query(Product.brand).all():
-        if b:
-            counts[b] = counts.get(b, 0) + 1
+    # Один SQL с GROUP BY вместо полного скана products.brand + Python-цикла.
+    # Ключ словаря — brand_id (int), см. brands.html.
+    counts = dict(
+        db.query(Product.brand_id, func.count(Product.id))
+          .filter(Product.brand_id.isnot(None))
+          .group_by(Product.brand_id)
+          .all()
+    )
 
     return admin_templates.TemplateResponse(request, "brands.html", {
         "brands": brands,
@@ -782,8 +961,9 @@ async def admin_brand_delete(
 ):
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if brand:
-        for p in db.query(Product).filter(Product.brand == brand.name).all():
-            p.brand = None
+        # Отвязываем товары, потом удаляем сам бренд.
+        for p in db.query(Product).filter(Product.brand_id == brand.id).all():
+            p.brand_id = None
         db.delete(brand)
         db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)
