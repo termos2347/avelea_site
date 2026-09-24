@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_macros.html" import product_card %}
+
 {% block content %}
 
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -153,23 +155,7 @@
                         md:grid-cols-4
                         lg:grid-cols-6">
                 {% for product in products %}
-                <a href="/product/{{ product.id }}"
-                   class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-3 block">
-                    <div class="aspect-square w-full rounded-lg mb-3 overflow-hidden flex items-center justify-center
-                                bg-gradient-to-br from-amber-100 to-amber-200 text-2xl font-bold text-white">
-                        {% if product.image %}
-                        <img src="{{ product.image }}" alt="{{ product.name }}"
-                             class="w-full h-full object-cover">
-                        {% else %}
-                        {{ product.name[:2].upper() }}
-                        {% endif %}
-                    </div>
-                    <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
-                    <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                        {{ product.categories|map(attribute='name')|join(', ') }}
-                    </p>
-                    <p class="text-base font-semibold mt-1">{{ product.price|int }} ₽</p>
-                </a>
+                    {{ product_card(product) }}
                 {% endfor %}
             </div>
 
@@ -215,7 +201,7 @@
                 <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
                 <p class="text-gray-500">Ничего не найдено</p>
                 <a href="{{ reset_url }}"
-                class="inline-block mt-3 text-sm text-black underline hover:no-underline">
+                   class="inline-block mt-3 text-sm text-black underline hover:no-underline">
                     Сбросить фильтры
                 </a>
             </div>

@@ -1,36 +1,179 @@
 {% extends "base.html" %}
+{% from "_macros.html" import product_card %}
+
 {% block content %}
-<div class="text-center py-12 bg-gray-100 rounded-xl mb-8">
-    <h1 class="text-3xl md:text-4xl font-semibold">Натуральная косметика для вашей кожи</h1>
-    <p class="text-gray-600 mt-2">Подобранные средства из чистых ингредиентов.</p>
-</div>
 
-<h2 class="text-xl font-semibold mb-4">Популярное</h2>
+{# ================= HERO: текстовые слайды + прогресс-бар ================= #}
+<section class="relative mb-14">
+    {# «Приколюшка сзади» — плавающие размытые блобы #}
+    <div aria-hidden="true" class="pointer-events-none absolute -inset-6 md:-inset-10">
+        <div class="absolute -top-4 -left-4 w-56 h-56 md:w-72 md:h-72 rounded-full bg-pink-300/50 blur-3xl animate-blob"></div>
+        <div class="absolute -bottom-6 -right-4 w-64 h-64 md:w-80 md:h-80 rounded-full bg-fuchsia-300/50 blur-3xl animate-blob" style="animation-delay:-4s"></div>
+        <div class="absolute top-1/3 left-1/2 w-56 h-56 md:w-72 md:h-72 rounded-full bg-rose-200/60 blur-3xl animate-blob" style="animation-delay:-8s"></div>
+    </div>
 
-{# Та же сетка, что и в каталоге: ровно 6 колонок на десктопе #}
-<div class="grid gap-3 sm:gap-4
-            grid-cols-2
-            sm:grid-cols-3
-            md:grid-cols-4
-            lg:grid-cols-6">
-    {% for product in popular %}
-    <a href="/product/{{ product.id }}"
-       class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition bg-white p-3 block">
-        <div class="aspect-square w-full rounded-lg mb-3 overflow-hidden flex items-center justify-center
-                    bg-gradient-to-br from-amber-100 to-amber-200 text-2xl font-bold text-white">
-            {% if product.image %}
-            <img src="{{ product.image }}" alt="{{ product.name }}"
-                 class="w-full h-full object-cover">
-            {% else %}
-            {{ product.name[:2].upper() }}
-            {% endif %}
+    <div class="relative rounded-3xl overflow-hidden border border-pink-200/70 shadow-xl shadow-pink-200/50
+                bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100"
+         data-carousel>
+
+        {# ---------- Прогресс-бар: тикает и по концу переключает слайд ---------- #}
+        <div class="absolute top-0 left-0 right-0 h-1 bg-pink-200/40 z-10">
+            <div data-progress class="h-full bg-gradient-to-r from-pink-500 to-fuchsia-500"></div>
         </div>
-        <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
-        <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
-            {{ product.categories|map(attribute='name')|join(', ') }}
-        </p>
-        <p class="text-base font-semibold mt-1">{{ product.price|int }} ₽</p>
-    </a>
-    {% endfor %}
-</div>
+
+        <div class="relative overflow-hidden">
+            <div class="flex transition-transform duration-700 ease-out" data-track>
+
+                {# Слайд 1 #}
+                <div class="w-full flex-shrink-0 px-6 py-10 md:px-14 md:py-16" data-slide>
+                    <span class="inline-block text-[11px] font-semibold tracking-[0.2em] uppercase text-pink-600 mb-3">
+                        Avelea · новая коллекция
+                    </span>
+                    <h1 class="text-3xl md:text-5xl font-semibold leading-tight text-gray-900 max-w-2xl">
+                        Натуральная косметика<br>
+                        <span class="text-pink-600">для вашей кожи</span>
+                    </h1>
+                    <p class="text-gray-600 mt-4 max-w-lg text-sm md:text-base">
+                        Подобранные средства из чистых ингредиентов. Без парабенов, без жестокости, с любовью.
+                    </p>
+                    <a href="/catalog"
+                       class="inline-flex items-center gap-2 mt-6 bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-full font-medium transition shadow-lg shadow-pink-500/40">
+                        Смотреть каталог
+                        <i class="fas fa-arrow-right text-xs"></i>
+                    </a>
+                </div>
+
+                {# Слайд 2 #}
+                <div class="w-full flex-shrink-0 px-6 py-10 md:px-14 md:py-16" data-slide>
+                    <span class="inline-block text-[11px] font-semibold tracking-[0.2em] uppercase text-fuchsia-600 mb-3">
+                        Специальное предложение
+                    </span>
+                    <h1 class="text-3xl md:text-5xl font-semibold leading-tight text-gray-900 max-w-2xl">
+                        −20% на первый<br>
+                        <span class="text-fuchsia-600">заказ</span>
+                    </h1>
+                    <p class="text-gray-600 mt-4 max-w-lg text-sm md:text-base">
+                        Подберите уход и получите скидку на всё. Доставка по России — бесплатно от 3000 ₽.
+                    </p>
+                    <a href="/catalog"
+                       class="inline-flex items-center gap-2 mt-6 bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-6 py-3 rounded-full font-medium transition shadow-lg shadow-fuchsia-500/40">
+                        За покупками
+                        <i class="fas fa-arrow-right text-xs"></i>
+                    </a>
+                </div>
+
+                {# Слайд 3 #}
+                <div class="w-full flex-shrink-0 px-6 py-10 md:px-14 md:py-16" data-slide>
+                    <span class="inline-block text-[11px] font-semibold tracking-[0.2em] uppercase text-rose-600 mb-3">
+                        Новинки сезона
+                    </span>
+                    <h1 class="text-3xl md:text-5xl font-semibold leading-tight text-gray-900 max-w-2xl">
+                        Уход, который<br>
+                        <span class="text-rose-600">влюбляет</span>
+                    </h1>
+                    <p class="text-gray-600 mt-4 max-w-lg text-sm md:text-base">
+                        Свежие формулы с витаминами и растительными маслами. Уже в каталоге.
+                    </p>
+                    <a href="/catalog?sort=popular"
+                       class="inline-flex items-center gap-2 mt-6 bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-full font-medium transition shadow-lg shadow-rose-500/40">
+                        Узнать больше
+                        <i class="fas fa-arrow-right text-xs"></i>
+                    </a>
+                </div>
+
+            </div>
+        </div>
+
+        {# Точки и стрелки #}
+        <div class="absolute bottom-4 left-6 md:left-14 flex items-center gap-3">
+            <button type="button" data-prev aria-label="Предыдущий слайд"
+                    class="w-9 h-9 rounded-full bg-white/70 hover:bg-white shadow-md shadow-pink-300/40 flex items-center justify-center text-pink-600 transition">
+                <i class="fas fa-chevron-left text-xs"></i>
+            </button>
+            <div class="flex gap-2" data-dots></div>
+            <button type="button" data-next aria-label="Следующий слайд"
+                    class="w-9 h-9 rounded-full bg-white/70 hover:bg-white shadow-md shadow-pink-300/40 flex items-center justify-center text-pink-600 transition">
+                <i class="fas fa-chevron-right text-xs"></i>
+            </button>
+        </div>
+    </div>
+</section>
+
+{# ================= КАТЕГОРИИ ================= #}
+{% if categories %}
+<section class="mb-14">
+    <div class="flex items-end justify-between mb-5">
+        <div>
+            <h2 class="text-2xl font-semibold">Категории</h2>
+            <p class="text-sm text-gray-500 mt-1">Найди уход под свою кожу</p>
+        </div>
+        <a href="/catalog" class="text-sm text-pink-600 hover:text-pink-700 font-medium">
+            Все товары <i class="fas fa-arrow-right text-[10px]"></i>
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {% set emojis = {'Очищение': '💧', 'Уход': '🌸', 'Макияж': '💄'} %}
+        {% for c in categories %}
+        <a href="/catalog?category={{ c.name }}"
+           class="group relative rounded-2xl overflow-hidden bg-gradient-to-br from-pink-50 to-fuchsia-50 border border-pink-100 p-6 hover:shadow-xl hover:shadow-pink-200/60 hover:-translate-y-0.5 transition-all">
+            <div class="text-3xl mb-3">{{ emojis.get(c.name, '✨') }}</div>
+            <h3 class="text-lg font-semibold text-gray-900 group-hover:text-pink-600 transition">
+                {{ c.name }}
+            </h3>
+            <p class="text-sm text-gray-500 mt-1">Смотреть товары</p>
+            <i class="fas fa-arrow-right absolute top-6 right-6 text-pink-300 group-hover:text-pink-600 group-hover:translate-x-1 transition-all"></i>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# ================= ПОПУЛЯРНОЕ ================= #}
+<section class="mb-14">
+    <div class="flex items-end justify-between mb-5">
+        <div>
+            <h2 class="text-2xl font-semibold">Популярное</h2>
+            <p class="text-sm text-gray-500 mt-1">Что чаще всего берут наши покупатели</p>
+        </div>
+        <a href="/catalog?sort=popular" class="text-sm text-pink-600 hover:text-pink-700 font-medium">
+            Всё популярное <i class="fas fa-arrow-right text-[10px]"></i>
+        </a>
+    </div>
+
+    {% if popular %}
+    <div class="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {% for product in popular %}
+            {{ product_card(product) }}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 bg-pink-50/50 rounded-2xl border border-pink-100">
+        <p class="text-gray-500">Популярных товаров пока нет</p>
+        <a href="/catalog" class="inline-block mt-3 text-sm text-pink-600 underline">Открыть каталог</a>
+    </div>
+    {% endif %}
+</section>
+
+{# ================= ПРЕИМУЩЕСТВА ================= #}
+<section class="mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="rounded-2xl bg-gradient-to-br from-pink-50 to-white border border-pink-100 p-6">
+            <div class="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center text-2xl mb-3">🌿</div>
+            <h3 class="font-semibold text-gray-900 mb-1">Честный состав</h3>
+            <p class="text-sm text-gray-600">Все ингредиенты указаны и проверены дерматологами.</p>
+        </div>
+        <div class="rounded-2xl bg-gradient-to-br from-fuchsia-50 to-white border border-pink-100 p-6">
+            <div class="w-12 h-12 rounded-full bg-fuchsia-100 flex items-center justify-center text-2xl mb-3">♻️</div>
+            <h3 class="font-semibold text-gray-900 mb-1">Экологичность</h3>
+            <p class="text-sm text-gray-600">Перерабатываемая упаковка и минимум пластика.</p>
+        </div>
+        <div class="rounded-2xl bg-gradient-to-br from-rose-50 to-white border border-pink-100 p-6">
+            <div class="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-2xl mb-3">🐰</div>
+            <h3 class="font-semibold text-gray-900 mb-1">Без жестокости</h3>
+            <p class="text-sm text-gray-600">Не тестируем на животных. Только на добровольцах.</p>
+        </div>
+    </div>
+</section>
+
 {% endblock %}

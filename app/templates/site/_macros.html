@@ -1,0 +1,26 @@
+{#
+    Переиспользуемые Jinja-макросы для сайта.
+    Подключается через:
+        {% from "_macros.html" import product_card %}
+    Путь относительный — от корня templates/site/.
+#}
+
+{% macro product_card(product) %}
+<a href="/product/{{ product.id }}"
+   class="group border border-pink-100 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-pink-200/60 hover:border-pink-300 transition-all bg-white p-3 block">
+    <div class="aspect-square w-full rounded-xl mb-3 overflow-hidden flex items-center justify-center
+                bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
+        {% if product.image %}
+        <img src="{{ product.image }}" alt="{{ product.name }}"
+             class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+        {% else %}
+        {{ product.name[:2].upper() }}
+        {% endif %}
+    </div>
+    <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
+    <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
+        {{ product.categories|map(attribute='name')|join(', ') }}
+    </p>
+    <p class="text-base font-semibold mt-1 text-pink-600">{{ product.price|int }} ₽</p>
+</a>
+{% endmacro %}

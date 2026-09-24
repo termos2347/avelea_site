@@ -602,8 +602,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
     popular = db.query(Product).filter(Product.popular == True).limit(6).all()
+    categories = db.query(Category).order_by(Category.name).all()
     return site_templates.TemplateResponse(request, "index.html", {
         "popular": popular,
+        "categories": categories,
     })
 
 
