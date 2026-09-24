@@ -6,16 +6,21 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import PlainTextResponse
 from sqlalchemy import inspect, text, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoSuchTableError
 from urllib.parse import urlencode
 from pathlib import Path
+import io
 import os
 import sys
 import secrets
 import uuid
+
+from PIL import Image, UnidentifiedImageError
 
 from app.database import engine, get_db, Base, SessionLocal
 from app.models import Product, Brand, Category, product_categories
@@ -47,6 +52,38 @@ _MAGIC = (
     (b"GIF87a",                ".gif"),
     (b"GIF89a",                ".gif"),
 )
+
+# Форматы, которые Pillow разрешено пропускать. Должны соответствовать _MAGIC.
+_ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
+
+# Размер порции при чтении загружаемого файла. 64 КБ — компромисс
+# между числом системных вызовов и пиковым потреблением памяти.
+_READ_CHUNK = 64 * 1024
+
+
+# ============== MIDDLEWARE ==============
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Отклоняет запросы, у которых Content-Length больше лимита.
+
+    Защита от заливки огромных тел: без неё Starlette сначала примет
+    всё тело в SpooledTemporaryFile, и только потом эндпоинт скажет «нет».
+    Лимит проверяется по заголовку, до чтения тела.
+    """
+
+    def __init__(self, app, max_bytes: int):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request, call_next):
+        if request.method in ("POST", "PUT", "PATCH"):
+            cl = request.headers.get("content-length")
+            if cl and cl.isdigit() and int(cl) > self.max_bytes:
+                return PlainTextResponse(
+                    f"Файл слишком большой "
+                    f"(лимит {self.max_bytes // (1024 * 1024)} МБ)",
+                    status_code=413,
+                )
+        return await call_next(request)
 
 
 # ============== LIFESPAN ==============
@@ -250,6 +287,12 @@ app.add_middleware(
     same_site=SESSION_SAME_SITE,
     max_age=SESSION_MAX_AGE,
 )
+app.add_middleware(
+    BodySizeLimitMiddleware,
+    # +1 МБ запаса: в том же multipart-запросе едут текстовые поля формы
+    # (имя, цена, описание, категории), а не только картинка.
+    max_bytes=MAX_UPLOAD_BYTES + 1024 * 1024,
+)
 app.mount(
     "/static",
     StaticFiles(directory=BASE_DIR / "static"),
@@ -379,6 +422,51 @@ def _sniff_image_ext(head: bytes) -> str | None:
     return None
 
 
+def _read_limited(file: UploadFile, limit: int) -> tuple[bytes, bool]:
+    """Читает тело UploadFile порциями, не более limit байт.
+
+    Возвращает (content, too_large):
+      - (bytes, False) — файл целиком прочитан и укладывается в лимит;
+      - (b"",   True)  — файл больше лимита, чтение прервано.
+
+    Ключевой момент: как только суммарный размер превысил limit,
+    мы прекращаем читать — в память больше ничего не попадает.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = file.file.read(_READ_CHUNK)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            return b"", True
+        chunks.append(chunk)
+    return b"".join(chunks), False
+
+
+def _verify_image(content: bytes) -> str | None:
+    """Проверяет, что content — валидное изображение одного из разрешённых
+    форматов. Возвращает текст ошибки или None, если всё ок.
+
+    Image.open() ленив — он не декодирует пиксели сразу, а только читает
+    заголовок. .verify() после этого проверяет целостность структуры.
+    После verify() объект использовать нельзя — это его документированное
+    поведение, но нам это и не нужно: мы работаем с исходными bytes.
+    """
+    try:
+        img = Image.open(io.BytesIO(content))
+        if img.format not in _ALLOWED_IMAGE_FORMATS:
+            return (
+                f"Формат {img.format or '?'} не поддерживается "
+                "(разрешены jpg, png, gif, webp) — картинка не сохранена."
+            )
+        img.verify()
+    except (UnidentifiedImageError, OSError, ValueError):
+        return "Файл повреждён или не является изображением — картинка не сохранена."
+    return None
+
+
 def _save_upload(file: UploadFile | None) -> tuple[str | None, str | None]:
     """Сохраняет картинку в static/uploads.
 
@@ -388,19 +476,20 @@ def _save_upload(file: UploadFile | None) -> tuple[str | None, str | None]:
       - (None, "...")  — файл отклонён по конкретной причине.
 
     Расширение берётся из magic bytes, имя файла из запроса игнорируется —
-    это защищает от подмены расширения.
+    это защищает от подмены расширения. Тело читается порциями и обрывается
+    на лимите, чтобы большой файл не съел память.
     """
     if not file or not file.filename:
         return None, None
 
-    content = file.file.read()
-    if not content:
-        return None, None
-    if len(content) > MAX_UPLOAD_BYTES:
+    content, too_large = _read_limited(file, MAX_UPLOAD_BYTES)
+    if too_large:
         return None, (
             f"Файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ — "
             "картинка не сохранена."
         )
+    if not content:
+        return None, None
 
     ext = _sniff_image_ext(content[:16])
     if ext is None:
@@ -408,6 +497,9 @@ def _save_upload(file: UploadFile | None) -> tuple[str | None, str | None]:
             "Формат не поддерживается (разрешены jpg, png, gif, webp) — "
             "картинка не сохранена."
         )
+
+    if (err := _verify_image(content)) is not None:
+        return None, err
 
     name = f"{uuid.uuid4().hex}{ext}"
     dest = BASE_DIR / "static" / "uploads" / name
@@ -456,6 +548,18 @@ def _resolve_brand_id(db: Session, raw: str) -> int | None:
     exists = db.query(Brand).filter(Brand.id == bid).first()
     return bid if exists else None
 
+def _validate_price(price: int) -> str | None:
+    """Проверяет цену. Возвращает текст ошибки или None, если всё ок.
+
+    HTML-атрибут min="0" — не защита: его легко обойти через curl или
+    Postman. Отсекаем отрицательные значения на сервере.
+    """
+    if price < 0:
+        return (
+            "Цена не может быть отрицательной — "
+            "изменения не сохранены."
+        )
+    return None
 
 # ============== ШАБЛОНЫ ==============
 site_templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates" / "site")
@@ -764,6 +868,12 @@ async def admin_product_create(
     popular: str = Form(None),
     image: UploadFile = File(None),
 ):
+    # Дешёвая валидация первой: если цена битая, файл даже не читаем,
+    # товар не создаём — просто уходим обратно с сообщением.
+    if (err := _validate_price(price)) is not None:
+        request.session["flash_error"] = err
+        return RedirectResponse(url="/admin/products", status_code=303)
+
     image_url, img_err = _save_upload(image)
     if img_err:
         request.session["flash_error"] = img_err
@@ -817,6 +927,10 @@ async def admin_product_update(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404)
+
+    if (err := _validate_price(price)) is not None:
+        request.session["flash_error"] = err
+        return RedirectResponse(url="/admin/products", status_code=303)
 
     product.name = name.strip()
     product.brand_id = _resolve_brand_id(db, brand_id)

@@ -57,7 +57,7 @@ UVICORN_PORT   = _int("UVICORN_PORT", 8000)
 UVICORN_RELOAD = _bool("UVICORN_RELOAD", default=False)
 
 # --- Сессия ---
-SESSION_HTTPS_ONLY = _bool("SESSION_HTTPS_ONLY", default=True)
+SESSION_HTTPS_ONLY = _bool("SESSION_HTTPS_ONLY", default=False)
 SESSION_SAME_SITE  = _str("SESSION_SAME_SITE", "lax")
 SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
 

@@ -38,7 +38,13 @@ def test_catalog_search_no_results(client):
 
 
 def test_product_page(client):
-    r = client.get("/product/1")
+    from app.database import SessionLocal
+    from app.models import Product
+
+    with SessionLocal() as db:
+        pid = db.query(Product).first().id
+
+    r = client.get(f"/product/{pid}")
     assert r.status_code == 200
 
 
