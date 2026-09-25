@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/site.css">
 </head>
-<body class="bg-gray-50 overflow-x-hidden" hx-boost="true">
+<body class="bg-gray-50 overflow-x-hidden flex flex-col min-h-screen" hx-boost="true">
 
     <!-- Прогресс-полоска сверху -->
     <div id="htmx-progress"
@@ -21,49 +21,132 @@
 
     {# Контейнер: на широких экранах занимает ~80% ширины окна,
        но не больше 1536px (screen-2xl). На мобилке — вся ширина. #}
-    <div class="mx-auto px-4 md:px-6 max-w-screen-2xl">
-        <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-4 border-b border-gray-200 mb-6">
+    <div class="mx-auto px-4 md:px-6 max-w-screen-2xl w-full flex flex-col flex-1">
+        <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-4 border-b border-pink-200">
 
             {# Слева — подпись студии #}
             <div class="text-[9px] md:text-[10px] uppercase tracking-[0.15em] font-medium whitespace-nowrap">
-                <span class="hidden sm:inline text-gray-400">prod by </span>
+                <span class="hidden sm:inline text-pink-400">prod by </span>
                 <span class="text-pink-500 font-semibold">96 team</span>
             </div>
 
             {# Центр — название бренда #}
-            <a href="/" class="text-xl md:text-2xl font-semibold tracking-tight hover:opacity-80 text-center whitespace-nowrap">
+            <a href="/" class="text-xl md:text-2xl font-semibold tracking-tight hover:opacity-80 text-center whitespace-nowrap text-gray-900">
                 avelea
             </a>
 
-            {# Справа — навигация #}
-            <div class="flex gap-1 sm:gap-2 flex-wrap items-center justify-end">
-                <a href="/" class="px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Главная</a>
-                <a href="/catalog" class="px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">Каталог</a>
-                <a href="/about" class="px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base">О нас</a>
+            {# Справа — навигация иконками #}
+            <div class="flex gap-1 items-center justify-end">
+
+                <a href="/"
+                   title="Главная"
+                   aria-label="Главная"
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-pink-700 hover:bg-pink-100 hover:text-pink-600 transition">
+                    <i class="fas fa-house text-base md:text-lg"></i>
+                </a>
+
+                <a href="/catalog"
+                   title="Каталог"
+                   aria-label="Каталог"
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-pink-700 hover:bg-pink-100 hover:text-pink-600 transition">
+                    <i class="fas fa-bag-shopping text-base md:text-lg"></i>
+                </a>
+
+                <a href="/about"
+                   title="О нас"
+                   aria-label="О нас"
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-pink-700 hover:bg-pink-100 hover:text-pink-600 transition">
+                    <i class="fas fa-circle-info text-base md:text-lg"></i>
+                </a>
+
             </div>
         </nav>
 
-        <main class="py-6 min-h-[60vh]">
+        <main class="{% block main_class %}pt-4 pb-6{% endblock %} flex-1">
             {% block content %}{% endblock %}
         </main>
-
-        <footer class="mt-12 py-8 border-t border-gray-200 text-sm text-gray-600">
-            <div class="flex flex-wrap justify-between gap-6">
-                <div>
-                    <h4 class="font-semibold text-gray-900">avelea</h4>
-                    <p>Натуральная косметика для бережного ухода</p>
-                </div>
-                <div>
-                    <h4 class="font-semibold text-gray-900">Контакты</h4>
-                    <p><i class="fas fa-phone"></i> +7 (000) 000-96-96</p>
-                    <p><i class="fas fa-envelope"></i> info@avelea.ru</p>
-                </div>
-            </div>
-            <div class="mt-4 text-center text-gray-400 text-xs">
-                © 2026 avelea · prod by 96 team
-            </div>
-        </footer>
     </div>
+
+    {# ================= ФУТЕР ================= #}
+    <footer class="mt-12 bg-gradient-to-br from-pink-50 via-pink-100 to-fuchsia-50 border-t border-pink-200">
+        <div class="mx-auto px-4 md:px-6 max-w-screen-2xl py-10 md:py-14">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 mb-10">
+
+                {# Бренд #}
+                <div class="sm:col-span-2 lg:col-span-1">
+                    <a href="/" class="text-2xl font-semibold tracking-tight text-gray-900 hover:opacity-80">
+                        avelea
+                    </a>
+                    <p class="text-sm text-gray-600 mt-3 leading-relaxed max-w-xs">
+                        Натуральная косметика для бережного ухода. Без парабенов, без сульфатов, без жестокости.
+                    </p>
+
+                    <div class="flex gap-2 mt-5">
+                        <a href="#" aria-label="Telegram"
+                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                            <i class="fab fa-telegram-plane"></i>
+                        </a>
+                        <a href="#" aria-label="Instagram"
+                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="#" aria-label="VK"
+                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                            <i class="fab fa-vk"></i>
+                        </a>
+                        <a href="#" aria-label="WhatsApp"
+                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                            <i class="fab fa-whatsapp"></i>
+                        </a>
+                    </div>
+                </div>
+
+                {# Навигация #}
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wider">Навигация</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="/" class="text-gray-600 hover:text-pink-600 transition">Главная</a></li>
+                        <li><a href="/catalog" class="text-gray-600 hover:text-pink-600 transition">Каталог</a></li>
+                        <li><a href="/about" class="text-gray-600 hover:text-pink-600 transition">О нас</a></li>
+                    </ul>
+                </div>
+
+                {# Контакты #}
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wider">Контакты</h4>
+                    <ul class="space-y-3 text-sm">
+                        <li class="flex items-start gap-2 text-gray-600">
+                            <i class="fas fa-phone text-pink-500 mt-0.5"></i>
+                            <a href="tel:+70000009696" class="hover:text-pink-600 transition">+7 (000) 000-96-96</a>
+                        </li>
+                        <li class="flex items-start gap-2 text-gray-600">
+                            <i class="fas fa-envelope text-pink-500 mt-0.5"></i>
+                            <a href="mailto:info@avelea.ru" class="hover:text-pink-600 transition">info@avelea.ru</a>
+                        </li>
+                        <li class="flex items-start gap-2 text-gray-600">
+                            <i class="fas fa-location-dot text-pink-500 mt-0.5"></i>
+                            <span>Москва, ул. Примерная, 1</span>
+                        </li>
+                        <li class="flex items-start gap-2 text-gray-600">
+                            <i class="fas fa-clock text-pink-500 mt-0.5"></i>
+                            <span>Пн–Пт, 10:00–19:00</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="pt-6 border-t border-pink-200 flex flex-col md:flex-row items-center justify-between gap-3">
+                <p class="text-xs text-gray-500">
+                    © 2026 avelea. Все права защищены.
+                </p>
+                <p class="text-xs text-gray-400">
+                    prod by <span class="text-pink-500 font-medium">96 team</span>
+                </p>
+            </div>
+
+        </div>
+    </footer>
 
     <script src="/static/js/site.js"></script>
 </body>

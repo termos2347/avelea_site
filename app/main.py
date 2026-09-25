@@ -728,9 +728,23 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         return site_templates.TemplateResponse(request, "404.html", status_code=404)
+
+    # Похожие: из тех же категорий, кроме самого товара, до 6 штук.
+    cat_ids = [c.id for c in product.categories]
+    similar = []
+    if cat_ids:
+        similar = (
+            db.query(Product)
+              .filter(Product.id != product.id)
+              .filter(Product.categories.any(Category.id.in_(cat_ids)))
+              .limit(6)
+              .all()
+        )
+
     return site_templates.TemplateResponse(request, "product.html", {
         "product": product,
         "product_categories": [c.name for c in product.categories],
+        "similar": similar,
     })
 
 

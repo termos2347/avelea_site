@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 from app.models import Product, Brand, Category
 
 
+# Базовые категории, которые всегда создаются при первом запуске.
+# Порядок здесь не важен — на сайте они сортируются по алфавиту.
+BASE_CATEGORIES = ("Лицо", "Макияж", "Тело", "Парфюм")
+
+
 def seed_database(db: Session) -> None:
     """Наполняет БД тестовыми товарами, если она пустая."""
     if db.query(Product).count() > 0:
@@ -53,16 +58,18 @@ def seed_database(db: Session) -> None:
     # products ниже делает db.add() прямо во время конструирования
     # Product(...) — SQLAlchemy на это ругается SAWarning.
     # ------------------------------------------------------------------
-    for cat_name in ("Очищение", "Уход", "Макияж"):
+    for cat_name in BASE_CATEGORIES:
         cat(cat_name)
 
     # ------------------------------------------------------------------
-    # Тестовые товары
+    # Тестовые товары — распределены по всем 4 категориям,
+    # чтобы при клике на любую категорию с главной что-то было.
     # ------------------------------------------------------------------
     products = [
+        # ---------- ЛИЦО ----------
         Product(
             name="Гидрофильное масло",
-            categories=[cat("Очищение"), cat("Уход")],
+            categories=[cat("Лицо")],
             brand_id=avelea_brand.id,
             price=1290,
             popular=True,
@@ -71,7 +78,7 @@ def seed_database(db: Session) -> None:
         ),
         Product(
             name="Сыворотка с витамином C",
-            categories=[cat("Уход")],
+            categories=[cat("Лицо")],
             brand_id=avelea_brand.id,
             price=2450,
             popular=True,
@@ -80,7 +87,7 @@ def seed_database(db: Session) -> None:
         ),
         Product(
             name="Увлажняющий крем",
-            categories=[cat("Уход")],
+            categories=[cat("Лицо")],
             brand_id=avelea_brand.id,
             price=1890,
             popular=True,
@@ -88,8 +95,19 @@ def seed_database(db: Session) -> None:
             volume="50 мл",
         ),
         Product(
+            name="Мицеллярная вода",
+            categories=[cat("Лицо")],
+            brand_id=avelea_brand.id,
+            price=890,
+            popular=False,
+            description="Мягкая мицеллярная вода для бережного очищения.",
+            volume="250 мл",
+        ),
+
+        # ---------- МАКИЯЖ ----------
+        Product(
             name="SPF 50+ тональный",
-            categories=[cat("Макияж"), cat("Уход")],
+            categories=[cat("Макияж")],
             brand_id=avelea_brand.id,
             price=1680,
             popular=False,
@@ -97,22 +115,62 @@ def seed_database(db: Session) -> None:
             volume="40 мл",
         ),
         Product(
-            name="Мицеллярная вода",
-            categories=[cat("Очищение")],
+            name="Тушь для ресниц",
+            categories=[cat("Макияж")],
             brand_id=avelea_brand.id,
-            price=890,
+            price=790,
+            popular=True,
+            description="Объёмная тушь с эффектом накладных ресниц. Не осыпается в течение дня.",
+            volume="10 мл",
+        ),
+
+        # ---------- ТЕЛО ----------
+        Product(
+            name="Питательный лосьон для тела",
+            categories=[cat("Тело")],
+            brand_id=avelea_brand.id,
+            price=1190,
             popular=False,
-            description="Мягкая мицеллярная вода для бережного очищения.",
+            description="Лосьон с маслом ши и витамином E для сухой кожи тела.",
+            volume="200 мл",
+        ),
+        Product(
+            name="Скраб для тела",
+            categories=[cat("Тело")],
+            brand_id=avelea_brand.id,
+            price=990,
+            popular=False,
+            description="Сахарный скраб с кокосовым маслом. Мягко отшелушивает и питает.",
             volume="250 мл",
         ),
         Product(
             name="Бальзам для губ",
-            categories=[cat("Уход")],
+            categories=[cat("Тело")],
             brand_id=avelea_brand.id,
             price=450,
             popular=True,
             description="Питательный бальзам для губ с маслом ши и витамином E.",
             volume="4.5 г",
+        ),
+
+        # ---------- ПАРФЮМ ----------
+        Product(
+            name="Цветочный парфюм Fleur",
+            categories=[cat("Парфюм")],
+            brand_id=avelea_brand.id,
+            price=3450,
+            popular=True,
+            description="Лёгкий цветочный аромат с нотами пиона, жасмина и белого мускуса.",
+            volume="50 мл",
+        ),
+        Product(
+            name="Древесный парфюм Bois",
+            categories=[cat("Парфюм")],
+            brand_id=avelea_brand.id,
+            price=3890,
+            popular=False,
+            description="Тёплый древесный аромат с сандалом, ванилью и амброй.",
+            volume="50 мл",
         ),
     ]
 

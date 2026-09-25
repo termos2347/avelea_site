@@ -1,58 +1,122 @@
 {% extends "base.html" %}
+{% block title %}О нас — Avelea{% endblock %}
+
 {% block content %}
-<div class="max-w-4xl mx-auto">
-    <div class="text-center py-12 bg-gray-900 text-white rounded-xl mb-8">
-        <h1 class="text-4xl font-bold">Мы — avelea</h1>
-        <p class="text-gray-300 mt-2">Создаём косметику, в которую влюбляются с первого использования.</p>
-    </div>
 
-    <div class="bg-amber-50 p-8 rounded-xl mb-8">
-        <h2 class="text-2xl font-semibold text-center">Наша миссия</h2>
-        <p class="text-gray-700 mt-3 text-center max-w-2xl mx-auto">
-            Сделать уход за собой понятным, доступным и безопасным для каждого.
-            Мы верим, что красивая кожа — это не привилегия, а право.
-        </p>
-        <blockquote class="text-center italic border-t-2 border-b-2 border-gray-800 py-3 mt-4 text-lg">
-            «Красота начинается с уважения к себе и природе»
-        </blockquote>
-    </div>
+{# ================= HERO ================= #}
+<section class="relative mb-10 md:mb-14 overflow-hidden">
+    <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
 
-    <div class="grid md:grid-cols-2 gap-8 items-center mb-8">
-        <div>
-            <h2 class="text-2xl font-semibold mb-3">Наша история</h2>
-            <p class="text-gray-700">
+        {# Фото на фоне hero #}
+        <div class="absolute inset-0">
+            <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80&auto=format&fit=crop"
+                 alt="" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-r from-white/95 via-pink-50/90 to-pink-100/80"></div>
+        </div>
+
+        <div class="relative px-6 py-16 md:px-14 md:py-24 text-center">
+            <span class="inline-block text-[10px] md:text-[11px] font-semibold tracking-[0.2em] uppercase text-pink-600 mb-3">
+                О нас
+            </span>
+            <h1 class="text-3xl md:text-5xl font-semibold leading-tight text-gray-900 max-w-3xl mx-auto">
+                Мы — <span class="text-pink-600">avelea</span>
+            </h1>
+            <p class="text-gray-700 mt-4 max-w-xl mx-auto text-sm md:text-base">
+                Создаём косметику, в которую влюбляются с первого использования.
+            </p>
+        </div>
+    </div>
+</section>
+
+{# ================= МИССИЯ ================= #}
+<section class="mb-10 md:mb-14">
+    <div class="grid md:grid-cols-2 gap-0 rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200">
+
+        {# Фото слева #}
+        <div class="relative h-64 md:h-auto">
+            <img src="https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&q=80&auto=format&fit=crop"
+                 alt="Натуральная косметика"
+                 class="absolute inset-0 w-full h-full object-cover">
+        </div>
+
+        {# Текст справа #}
+        <div class="bg-gradient-to-br from-pink-50 to-fuchsia-50 p-6 md:p-10 flex flex-col justify-center">
+            <div class="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mb-4">
+                <i class="fas fa-seedling text-pink-600 text-xl"></i>
+            </div>
+            <h2 class="text-2xl md:text-3xl font-semibold text-gray-900 mb-4">Наша миссия</h2>
+            <p class="text-gray-700 text-sm md:text-base leading-relaxed">
+                Сделать уход за собой понятным, доступным и безопасным для каждого.
+                Мы верим, что красивая кожа — это не привилегия, а право.
+            </p>
+            <blockquote class="mt-6 text-base md:text-lg italic text-pink-700 font-medium border-l-4 border-pink-400 pl-4">
+                «Красота начинается с уважения к себе и природе»
+            </blockquote>
+        </div>
+
+    </div>
+</section>
+
+{# ================= ИСТОРИЯ ================= #}
+<section class="mb-10 md:mb-14">
+    <div class="grid md:grid-cols-2 gap-6 md:gap-10 items-center">
+
+        <div class="order-2 md:order-1">
+            <span class="inline-block text-[10px] md:text-[11px] font-semibold tracking-[0.2em] uppercase text-pink-600 mb-3">
+                Наша история
+            </span>
+            <h2 class="text-2xl md:text-3xl font-semibold text-gray-900 mb-4">
+                Начали с простой идеи
+            </h2>
+            <p class="text-gray-700 text-sm md:text-base leading-relaxed">
                 Всё началось с простой идеи: косметика должна быть эффективной, безопасной
                 и приносить удовольствие. Мы объединили знания химиков-косметологов
                 и любовь к природе, чтобы создавать формулы, которые реально работают.
             </p>
-            <p class="text-gray-700 mt-3">
+            <p class="text-gray-700 text-sm md:text-base leading-relaxed mt-3">
                 Сегодня avelea — это команда единомышленников, которые каждый день
                 доказывают, что натуральное может быть по-настоящему роскошным.
             </p>
-        </div>
-        <div class="flex justify-center">
-            <div class="w-48 h-48 bg-gradient-to-br from-amber-100 to-amber-200 rounded-full flex items-center justify-center text-6xl shadow-lg">
-                ✨
+
+            <div class="flex gap-6 mt-6">
+                <div class="flex items-center gap-2 text-sm text-pink-700">
+                    <i class="fas fa-check-circle text-pink-500"></i>
+                    Без парабенов
+                </div>
+                <div class="flex items-center gap-2 text-sm text-pink-700">
+                    <i class="fas fa-check-circle text-pink-500"></i>
+                    Без сульфатов
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div class="border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition">
-            <div class="text-4xl mb-2">🌿</div>
-            <h3 class="font-semibold">Честный состав</h3>
-            <p class="text-sm text-gray-600">Все ингредиенты указаны и проверены</p>
+        <div class="order-1 md:order-2">
+            <div class="relative rounded-2xl md:rounded-3xl overflow-hidden aspect-[4/5] md:aspect-[3/4]">
+                <img src="https://images.unsplash.com/photo-1571875257727-256c39da42af?w=800&q=80&auto=format&fit=crop"
+                     alt="Текстура крема"
+                     class="absolute inset-0 w-full h-full object-cover">
+            </div>
         </div>
-        <div class="border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition">
-            <div class="text-4xl mb-2">♻️</div>
-            <h3 class="font-semibold">Экологичность</h3>
-            <p class="text-sm text-gray-600">Перерабатываемая упаковка</p>
-        </div>
-        <div class="border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition">
-            <div class="text-4xl mb-2">🐰</div>
-            <h3 class="font-semibold">Без жестокости</h3>
-            <p class="text-sm text-gray-600">Не тестируем на животных</p>
-        </div>
+
     </div>
-</div>
+</section>
+
+{# ================= CTA ================= #}
+<section class="mb-6 md:mb-8">
+    <div class="rounded-2xl md:rounded-3xl bg-gradient-to-br from-pink-50 to-fuchsia-50 border border-pink-200 p-8 md:p-12 text-center">
+        <div class="w-14 h-14 mx-auto rounded-full bg-pink-100 flex items-center justify-center mb-4">
+            <i class="fas fa-heart text-pink-600 text-2xl"></i>
+        </div>
+        <h2 class="text-2xl md:text-3xl font-semibold text-gray-900 mb-3">Готовы попробовать?</h2>
+        <p class="text-sm md:text-base text-gray-600 max-w-lg mx-auto mb-6">
+            Откройте каталог и найдите уход, который полюбит ваша кожа.
+        </p>
+        <a href="/catalog"
+           class="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-full font-medium transition shadow-lg shadow-pink-500/40">
+            Смотреть каталог
+            <i class="fas fa-arrow-right text-xs"></i>
+        </a>
+    </div>
+</section>
+
 {% endblock %}

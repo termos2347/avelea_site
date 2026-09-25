@@ -3,76 +3,127 @@
 
 {% block content %}
 
-<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <div class="flex items-center gap-3">
-        <h2 class="text-2xl font-semibold">Каталог</h2>
-
-        <button type="button" id="filters-toggle-desktop"
-                aria-expanded="true" aria-controls="filters-panel"
-                title="Свернуть / развернуть фильтры"
-                class="hidden md:inline-flex items-center gap-2 border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black">
-            <span>Фильтры</span>
-            <i class="fas fa-chevron-left text-xs opacity-60"
-               id="filters-toggle-icon" aria-hidden="true"></i>
-        </button>
+{# ================= БАННЕР КАТАЛОГА ================= #}
+<section class="relative mb-6 md:mb-8 rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
+    <div class="absolute inset-0">
+        <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80&auto=format&fit=crop"
+             alt="" class="w-full h-full object-cover">
+        <div class="absolute inset-0 bg-gradient-to-r from-pink-100/95 via-pink-50/90 to-fuchsia-100/70"></div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
-        <span class="text-sm text-gray-500">
-            {% if total_count %}
-                {{ start_idx }}–{{ end_idx }} из {{ total_count }}
-            {% else %}
-                Ничего не найдено
-            {% endif %}
+    <div class="relative px-5 py-8 md:px-12 md:py-12">
+        <span class="inline-block text-[10px] md:text-[11px] font-semibold tracking-[0.2em] uppercase text-pink-600 mb-2">
+            Avelea
         </span>
-
-        <button type="button" id="open-filters-mobile"
-                class="md:hidden inline-flex items-center gap-2 border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-            <i class="fas fa-sliders-h" aria-hidden="true"></i>
-            Фильтры
-            {% if active_filters %}
-            <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-black text-white rounded-full">
-                {{ active_filters|length }}
-            </span>
+        <h1 class="text-3xl md:text-4xl font-semibold text-gray-900">
+            Каталог
+        </h1>
+        <p class="text-sm md:text-base text-gray-600 mt-2 max-w-lg">
+            {% if total_count %}
+                {{ total_count }}
+                {{ "товар" if total_count % 10 == 1 and total_count % 100 != 11
+                   else ("товара" if 2 <= total_count % 10 <= 4 and not (12 <= total_count % 100 <= 14)
+                   else "товаров") }}
+                в наличии
+            {% else %}
+                Пока ничего не найдено
             {% endif %}
-        </button>
+        </p>
     </div>
-</div>
+</section>
 
 <form method="get" action="/catalog" id="filters-form" autocomplete="off">
+
+    {# ================= ВЕРХНЯЯ СТРОКА: ФИЛЬТРЫ + СОРТИРОВКА ================= #}
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+
+        {# Левая часть: кнопка "Фильтры" + счётчик #}
+        <div class="flex items-center gap-3 flex-wrap">
+            {# Desktop toggle #}
+            <button type="button" id="filters-toggle-desktop"
+                    aria-expanded="true" aria-controls="filters-panel"
+                    title="Свернуть / развернуть фильтры"
+                    class="hidden md:inline-flex items-center gap-2 border border-pink-200 rounded-full px-4 py-1.5 text-sm font-medium text-pink-700 bg-white hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400">
+                <i class="fas fa-sliders-h text-xs"></i>
+                <span>Фильтры</span>
+                <i class="fas fa-chevron-left text-xs opacity-60"
+                   id="filters-toggle-icon" aria-hidden="true"></i>
+            </button>
+
+            {# Mobile toggle #}
+            <button type="button" id="open-filters-mobile"
+                    class="md:hidden inline-flex items-center gap-2 border border-pink-200 rounded-full px-4 py-1.5 text-sm text-pink-700 bg-white hover:bg-pink-50">
+                <i class="fas fa-sliders-h" aria-hidden="true"></i>
+                Фильтры
+                {% if active_filters %}
+                <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-medium bg-pink-600 text-white rounded-full">
+                    {{ active_filters|length }}
+                </span>
+                {% endif %}
+            </button>
+
+            <span class="text-sm text-pink-500">
+                {% if total_count %}{{ start_idx }}–{{ end_idx }} из {{ total_count }}{% endif %}
+            </span>
+        </div>
+
+        {# Правая часть: сортировка #}
+        <div class="flex items-center gap-2">
+            <label for="sort-select" class="hidden sm:block text-xs text-pink-500 whitespace-nowrap">Сортировка:</label>
+            <select name="sort" id="sort-select" autocomplete="off"
+                    class="border border-pink-200 rounded-full px-3 py-1.5 text-sm text-pink-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-400 cursor-pointer">
+                <option value=""           {% if not sort %}selected{% endif %}>По умолчанию</option>
+                <option value="popular"    {% if sort == 'popular' %}selected{% endif %}>Популярные</option>
+                <option value="price_asc"  {% if sort == 'price_asc' %}selected{% endif %}>Цена ↑</option>
+                <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Цена ↓</option>
+                <option value="name"       {% if sort == 'name' %}selected{% endif %}>По названию</option>
+            </select>
+        </div>
+    </div>
+
+    {# ================= РАСКЛАДКА: ФИЛЬТРЫ + ТОВАРЫ ================= #}
     <div id="catalog-layout">
 
+        {# ---------- ЛЕВО: ФИЛЬТРЫ ---------- #}
         <aside id="filters-panel">
             <div class="filters-inner">
 
                 <div class="md:hidden flex items-center justify-between mb-4">
-                    <h3 class="font-semibold text-gray-900">Фильтры</h3>
+                    <h3 class="font-semibold text-pink-900">Фильтры</h3>
                     <button type="button" id="close-filters-mobile"
                             aria-label="Закрыть фильтры"
-                            class="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-500 hover:text-black hover:bg-gray-100">
+                            class="inline-flex items-center justify-center w-8 h-8 rounded-full text-pink-500 hover:text-pink-900 hover:bg-pink-100">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
-                <div class="space-y-4">
+                <div class="space-y-3">
 
-                    <div class="bg-white border border-gray-200 rounded-lg p-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Поиск</label>
+                    {# Поиск #}
+                    <div class="bg-white border border-pink-200 rounded-2xl p-4">
+                        <label class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
+                            <i class="fas fa-magnifying-glass text-pink-500 text-xs"></i>
+                            Поиск
+                        </label>
                         <input type="search" name="q" value="{{ q }}" placeholder="Название..."
                                autocomplete="off"
-                               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                               class="w-full border border-pink-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400">
                     </div>
 
+                    {# Категории #}
                     {% if categories %}
-                    <div class="bg-white border border-gray-200 rounded-lg p-4">
-                        <h3 class="font-medium text-sm text-gray-900 mb-2">Категория</h3>
+                    <div class="bg-white border border-pink-200 rounded-2xl p-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
+                            <i class="fas fa-folder text-pink-500 text-xs"></i>
+                            Категория
+                        </h3>
                         <div class="space-y-1.5">
                             {% for cat in categories %}
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-black">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer text-pink-800 hover:text-pink-600 transition">
                                 <input type="checkbox" name="category" value="{{ cat }}"
                                        {% if cat in selected_categories %}checked{% endif %}
                                        autocomplete="off"
-                                       class="rounded border-gray-300 text-black focus:ring-black">
+                                       class="rounded-full border-pink-300 text-pink-600 focus:ring-pink-400">
                                 {{ cat }}
                             </label>
                             {% endfor %}
@@ -80,16 +131,20 @@
                     </div>
                     {% endif %}
 
+                    {# Бренды #}
                     {% if brands %}
-                    <div class="bg-white border border-gray-200 rounded-lg p-4">
-                        <h3 class="font-medium text-sm text-gray-900 mb-2">Бренд</h3>
+                    <div class="bg-white border border-pink-200 rounded-2xl p-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
+                            <i class="fas fa-tag text-pink-500 text-xs"></i>
+                            Бренд
+                        </h3>
                         <div class="space-y-1.5">
                             {% for brand in brands %}
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-black">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer text-pink-800 hover:text-pink-600 transition">
                                 <input type="checkbox" name="brand" value="{{ brand }}"
                                        {% if brand in selected_brands %}checked{% endif %}
                                        autocomplete="off"
-                                       class="rounded border-gray-300 text-black focus:ring-black">
+                                       class="rounded-full border-pink-300 text-pink-600 focus:ring-pink-400">
                                 {{ brand }}
                             </label>
                             {% endfor %}
@@ -97,99 +152,97 @@
                     </div>
                     {% endif %}
 
-                    <div class="bg-white border border-gray-200 rounded-lg p-4">
-                        <h3 class="font-medium text-sm text-gray-900 mb-2">Цена, ₽</h3>
+                    {# Цена #}
+                    <div class="bg-white border border-pink-200 rounded-2xl p-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
+                            <i class="fas fa-ruble-sign text-pink-500 text-xs"></i>
+                            Цена, ₽
+                        </h3>
                         <div class="flex gap-2 items-center">
                             <input type="number" name="price_min" value="{{ price_min }}" placeholder="от" min="0"
                                    autocomplete="off"
-                                   class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-                            <span class="text-gray-400">—</span>
+                                   class="w-full border border-pink-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400">
+                            <span class="text-pink-300">—</span>
                             <input type="number" name="price_max" value="{{ price_max }}" placeholder="до" min="0"
                                    autocomplete="off"
-                                   class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+                                   class="w-full border border-pink-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400">
                         </div>
                     </div>
 
                     <a href="{{ reset_url }}" id="reset-filters"
-                       class="block text-center text-sm text-gray-500 hover:text-black py-2 cursor-pointer">
-                        <i class="fas fa-times"></i> Сбросить всё
+                       class="flex items-center justify-center gap-2 text-sm text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-full py-2 cursor-pointer transition">
+                        <i class="fas fa-rotate-left text-xs"></i>
+                        Сбросить всё
                     </a>
 
                     <button type="button" id="apply-filters-mobile"
-                            class="md:hidden w-full bg-black text-white py-2.5 rounded-md hover:opacity-90 text-sm font-medium">
+                            class="md:hidden w-full bg-pink-600 text-white py-3 rounded-full hover:bg-pink-700 text-sm font-medium shadow-lg shadow-pink-500/30">
                         Применить
                     </button>
                 </div>
             </div>
         </aside>
 
+        {# ---------- ПРАВО: ТОВАРЫ ---------- #}
         <div id="catalog-content">
 
-            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
-                <div class="flex flex-wrap gap-1.5 max-w-full">
-                    {% for f in active_filters %}
-                    <a href="{{ f.remove_url }}"
-                       class="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-full text-xs transition">
-                        {{ f.label }}
-                        <i class="fas fa-times text-[10px] opacity-60"></i>
-                    </a>
-                    {% endfor %}
-                </div>
-
-                <div class="flex flex-wrap items-center gap-2">
-                    <select name="sort" autocomplete="off"
-                            class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-                        <option value=""           {% if not sort %}selected{% endif %}>По умолчанию</option>
-                        <option value="popular"    {% if sort == 'popular' %}selected{% endif %}>Популярные</option>
-                        <option value="price_asc"  {% if sort == 'price_asc' %}selected{% endif %}>Цена ↑</option>
-                        <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Цена ↓</option>
-                        <option value="name"       {% if sort == 'name' %}selected{% endif %}>По названию</option>
-                    </select>
-                </div>
+            {# Активные чипы фильтров #}
+            {% if active_filters %}
+            <div class="flex flex-wrap gap-1.5 mb-4">
+                {% for f in active_filters %}
+                <a href="{{ f.remove_url }}"
+                   class="inline-flex items-center gap-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 px-3 py-1.5 rounded-full text-xs transition">
+                    {{ f.label }}
+                    <i class="fas fa-times text-[9px] opacity-70"></i>
+                </a>
+                {% endfor %}
             </div>
+            {% endif %}
 
+            {# Сетка товаров #}
             {% if products %}
             <div class="grid gap-3 sm:gap-4
                         grid-cols-2
                         sm:grid-cols-3
-                        md:grid-cols-4
-                        lg:grid-cols-6">
+                        md:grid-cols-3
+                        lg:grid-cols-4">
                 {% for product in products %}
                     {{ product_card(product) }}
                 {% endfor %}
             </div>
 
+            {# Пагинация #}
             {% if total_pages > 1 %}
             <nav class="mt-8 flex flex-wrap items-center justify-center gap-1">
                 {% if page > 1 %}
                 <a href="{{ build_page_url(request.query_params, page - 1) }}"
-                   class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+                   class="w-10 h-10 flex items-center justify-center rounded-full border border-pink-200 bg-white hover:bg-pink-50 text-pink-700 text-sm transition">
                     <i class="fas fa-chevron-left text-xs"></i>
                 </a>
                 {% else %}
-                <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+                <span class="w-10 h-10 flex items-center justify-center rounded-full border border-pink-100 text-pink-300 text-sm">
                     <i class="fas fa-chevron-left text-xs"></i>
                 </span>
                 {% endif %}
 
                 {% for it in page_items %}
                     {% if it.ellipsis %}
-                    <span class="px-2 text-gray-400">…</span>
+                    <span class="px-2 text-pink-400">…</span>
                     {% elif it.current %}
-                    <span class="px-3 py-1.5 bg-black text-white rounded-md text-sm font-medium">{{ it.num }}</span>
+                    <span class="w-10 h-10 flex items-center justify-center rounded-full bg-pink-600 text-white text-sm font-medium shadow-lg shadow-pink-500/30">{{ it.num }}</span>
                     {% else %}
                     <a href="{{ it.url }}"
-                       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">{{ it.num }}</a>
+                       class="w-10 h-10 flex items-center justify-center rounded-full border border-pink-200 bg-white hover:bg-pink-50 text-pink-700 text-sm transition">{{ it.num }}</a>
                     {% endif %}
                 {% endfor %}
 
                 {% if page < total_pages %}
                 <a href="{{ build_page_url(request.query_params, page + 1) }}"
-                   class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
+                   class="w-10 h-10 flex items-center justify-center rounded-full border border-pink-200 bg-white hover:bg-pink-50 text-pink-700 text-sm transition">
                     <i class="fas fa-chevron-right text-xs"></i>
                 </a>
                 {% else %}
-                <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
+                <span class="w-10 h-10 flex items-center justify-center rounded-full border border-pink-100 text-pink-300 text-sm">
                     <i class="fas fa-chevron-right text-xs"></i>
                 </span>
                 {% endif %}
@@ -197,15 +250,32 @@
             {% endif %}
 
             {% else %}
-            <div class="text-center py-16 bg-white rounded-lg border border-gray-200">
-                <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
-                <p class="text-gray-500">Ничего не найдено</p>
-                <a href="{{ reset_url }}"
-                   class="inline-block mt-3 text-sm text-black underline hover:no-underline">
-                    Сбросить фильтры
-                </a>
+            {# Пустое состояние #}
+            <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200 py-16 md:py-20 text-center">
+                <div class="absolute inset-0">
+                    <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80&auto=format&fit=crop"
+                         alt="" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-b from-pink-50/95 to-pink-100/95"></div>
+                </div>
+                <div class="relative px-6">
+                    <div class="w-16 h-16 mx-auto rounded-full bg-pink-100 flex items-center justify-center mb-4">
+                        <i class="fas fa-magnifying-glass text-pink-500 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg md:text-xl font-semibold text-gray-900 mb-2">
+                        {% if q %}По запросу «{{ q }}» ничего не нашлось{% else %}Ничего не найдено{% endif %}
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-6 max-w-md mx-auto">
+                        Попробуйте изменить фильтры или сбросить их — возможно, у нас есть что-то похожее.
+                    </p>
+                    <a href="{{ reset_url }}"
+                       class="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-5 py-2.5 rounded-full text-sm font-medium transition shadow-lg shadow-pink-500/30">
+                        <i class="fas fa-rotate-left text-xs"></i>
+                        Сбросить фильтры
+                    </a>
+                </div>
             </div>
             {% endif %}
+
         </div>
     </div>
 </form>

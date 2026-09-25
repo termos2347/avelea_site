@@ -62,7 +62,7 @@
         position: fixed;
         inset: 0;
         z-index: 60;
-        background: #f9fafb;
+        background: #fdf2f8;
         padding: 1rem;
         overflow-y: auto;
     }

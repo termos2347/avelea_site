@@ -1,11 +1,43 @@
 {% extends "base.html" %}
+{% block title %}Страница не найдена — Avelea{% endblock %}
+
 {% block content %}
-<div class="text-center py-24">
-    <h1 class="text-6xl font-bold text-gray-900">404</h1>
-    <p class="text-gray-500 mt-3">Такой страницы или товара нет.</p>
-    <a href="/catalog"
-       class="inline-block mt-6 bg-black text-white px-6 py-2 rounded-md hover:opacity-90">
-        Перейти в каталог
-    </a>
-</div>
+
+<section class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
+    <div class="absolute inset-0">
+        <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80&auto=format&fit=crop"
+             alt="" class="w-full h-full object-cover">
+        <div class="absolute inset-0 bg-gradient-to-br from-pink-100/95 via-pink-50/90 to-fuchsia-100/85"></div>
+    </div>
+
+    <div class="relative px-6 py-20 md:px-14 md:py-28 text-center">
+        <div class="w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full bg-white/70 backdrop-blur flex items-center justify-center mb-6 border border-pink-200">
+            <i class="fas fa-magnifying-glass text-pink-500 text-3xl md:text-4xl"></i>
+        </div>
+
+        <h1 class="text-6xl md:text-8xl font-semibold text-pink-600 leading-none">404</h1>
+
+        <h2 class="text-xl md:text-2xl font-semibold text-gray-900 mt-4 mb-3">
+            Такой страницы нет
+        </h2>
+
+        <p class="text-sm md:text-base text-gray-600 max-w-md mx-auto mb-8">
+            Возможно, ссылка устарела или в ней опечатка. А может, товар уже раскупили.
+        </p>
+
+        <div class="flex flex-wrap justify-center gap-3">
+            <a href="/catalog"
+               class="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-full text-sm md:text-base font-medium transition shadow-lg shadow-pink-500/40">
+                <i class="fas fa-bag-shopping text-sm"></i>
+                В каталог
+            </a>
+            <a href="/"
+               class="inline-flex items-center gap-2 border border-pink-200 bg-white/70 backdrop-blur hover:bg-white text-pink-700 px-6 py-3 rounded-full text-sm md:text-base font-medium transition">
+                <i class="fas fa-house text-sm"></i>
+                На главную
+            </a>
+        </div>
+    </div>
+</section>
+
 {% endblock %}
