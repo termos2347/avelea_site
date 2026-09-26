@@ -25,11 +25,25 @@
         }, 150);
     });
 
+    // ============================================================
+    // htMX: beforeSwap — закрываем модалы на успех,
+    // пропускаем 401/403 для показа ошибок.
+    // ============================================================
     document.body.addEventListener('htmx:beforeSwap', (e) => {
         const s = e.detail.xhr.status;
+
+        // Ошибки авторизации пропускаем как обычный ответ,
+        // чтобы показать их пользователю.
         if (s === 401 || s === 403) {
             e.detail.shouldSwap = true;
             e.detail.isError = false;
+            return;
+        }
+
+        // Успешный ответ (200 или 2xx после редиректа) — свап
+        // страницы, все открытые модалы закрываем.
+        if (s >= 200 && s < 400) {
+            closeAllModals();
         }
     });
 
@@ -46,6 +60,41 @@
         if (href === window.location.pathname + window.location.search) {
             e.preventDefault();
         }
+    });
+
+    // ============================================================
+    // ПЕРЕКЛЮЧАТЕЛЬ ВИДОВ ТОВАРОВ
+    // ============================================================
+    const VIEW_KEY = 'adm_products_view';
+
+    function getSavedView() {
+        try {
+            const v = localStorage.getItem(VIEW_KEY);
+            return (v === 'cards' || v === 'table') ? v : 'table';
+        } catch (e) {
+            return 'table';
+        }
+    }
+
+    function applyView(view) {
+        document.body.dataset.productsView = view;
+        document.querySelectorAll('[data-products-view]').forEach(btn => {
+            btn.classList.toggle('is-active', btn.dataset.productsView === view);
+        });
+    }
+
+    applyView(getSavedView());
+
+    document.body.addEventListener('htmx:afterSettle', () => {
+        applyView(document.body.dataset.productsView || getSavedView());
+    });
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-products-view]');
+        if (!btn) return;
+        const view = btn.dataset.productsView;
+        try { localStorage.setItem(VIEW_KEY, view); } catch (err) {}
+        applyView(view);
     });
 
     // ============================================================
@@ -110,6 +159,14 @@
             case 'close-product-dialog':
                 closeModal(document.getElementById('create-product-dialog'));
                 break;
+            case 'close-edit-product-dialog':
+                closeModal(document.getElementById('edit-product-dialog'));
+                break;
+            case 'close-current-modal': {
+                const modal = btn.closest('.adm-modal');
+                if (modal) closeModal(modal);
+                break;
+            }
             case 'open-create-dialog':
                 openModal(document.getElementById('create-dialog'), '#create-name');
                 break;
@@ -139,7 +196,21 @@
         }
     });
 
-    // ===== Редактирование (общий диалог) =====
+    // ============================================================
+    // ПОДГРУЗКА ФОРМЫ РЕДАКТИРОВАНИЯ ТОВАРА В МОДАЛКУ
+    // ------------------------------------------------------------
+    // Кнопка «Редактировать» — это <a href=".../edit" hx-get=".../edit">.
+    // HTMX подгружает партиал _product_form.html в
+    // #edit-product-dialog-content. После подмены контента —
+    // открываем модалку.
+    // ============================================================
+    document.body.addEventListener('htmx:afterSwap', (e) => {
+        if (e.detail.target && e.detail.target.id === 'edit-product-dialog-content') {
+            openModal(document.getElementById('edit-product-dialog'), 'input[name="name"]');
+        }
+    });
+
+    // ===== Редактирование бренда/категории (общий диалог) =====
     function openEditDialog(actionUrl, name, title) {
         const dlg = document.getElementById('edit-dialog');
         if (!dlg) return;
@@ -150,11 +221,18 @@
     }
 
     // ===== Info-модалка =====
+        // ============================================================
+    // INFO-модалка с предпросмотром карточки
+    // ------------------------------------------------------------
+    // Левая колонка — метаданные (заполняется из data-info-*).
+    // Правая колонка — карточка в стиле сайта, тоже из data-атрибутов.
+    // ============================================================
     function openInfoDialog(btn) {
         const d = btn.dataset;
         const el = document.getElementById('info-dialog');
         if (!el) return;
 
+        // ---------- Левая колонка: метаданные ----------
         const imgEl = document.getElementById('info-image');
         if (d.infoImage) {
             imgEl.innerHTML = '<img src="' + d.infoImage + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">';
@@ -193,7 +271,35 @@
         addRow('Объём', d.infoVolume);
         addRow('Описание', d.infoDesc);
 
-        document.getElementById('info-edit-link').href = '/admin/products/' + d.infoId + '/edit';
+        // ---------- Правая колонка: превью карточки ----------
+        const previewImg = document.getElementById('info-preview-img');
+        const previewInitials = document.getElementById('info-preview-initials');
+
+        if (d.infoImage) {
+            previewImg.src = d.infoImage;
+            previewImg.style.display = 'block';
+            previewInitials.style.display = 'none';
+        } else {
+            previewImg.src = '';
+            previewImg.style.display = 'none';
+            previewInitials.style.display = '';
+            previewInitials.textContent = (d.infoName || '—').slice(0, 2).toUpperCase();
+        }
+
+        document.getElementById('info-preview-name').textContent  = d.infoName || '—';
+        document.getElementById('info-preview-cats').textContent  = d.infoCats || '—';
+        document.getElementById('info-preview-price').textContent = (d.infoPrice || '0') + ' ₽';
+
+        // Превью-карточка теперь не ссылка — открытие сайта только кнопкой в футере.
+        document.getElementById('info-site-link').href = '/product/' + d.infoId;
+
+        // ---------- Кнопка «Редактировать» ----------
+        // hx-get на форму редактирования — она подгрузится в edit-модалку.
+        const editBtn = document.getElementById('info-edit-btn');
+        editBtn.href = '/admin/products/' + d.infoId + '/edit';
+        editBtn.setAttribute('hx-get', '/admin/products/' + d.infoId + '/edit');
+        // Пересобираем htmx-атрибут, чтобы htmx «увидел» новый URL.
+        if (window.htmx) htmx.process(editBtn);
 
         openModal(el);
     }
@@ -201,6 +307,11 @@
     document.addEventListener('click', (e) => {
         if (e.target.closest('#info-close'))  { closeModal(document.getElementById('info-dialog')); return; }
         if (e.target.closest('#info-cancel')) { closeModal(document.getElementById('info-dialog')); return; }
+
+        if (e.target.closest('#info-edit-btn')) {
+            closeModal(document.getElementById('info-dialog'));
+            // Не preventDefault — пусть htmx сделает hx-get
+        }
     });
 
     // ============================================================
@@ -259,21 +370,7 @@
     }, true);
 
     // ============================================================
-    // ЖИВОЙ ФИЛЬТР СТРОК
-    // ------------------------------------------------------------
-    // Работает одинаково для Товаров, Брендов и Категорий.
-    //
-    // Логика подбора для одной строки:
-    //   1) если запрос — целое число, И у строки есть data-id,
-    //      совпадающий с этим числом → строка подходит (поиск по ID);
-    //   2) иначе проверяем, что data-name содержит запрос (подстрока).
-    //
-    // То есть ввод «1» найдёт:
-    //   - товар с id=1 (точное совпадение),
-    //   - все товары, у которых «1» встречается в названии.
-    // Ввод «крем» найдёт все товары со словом «крем» в названии.
-    //
-    // На каждый ввод символа, без Enter. Показ кнопки очистки — CSS.
+    // ЖИВОЙ ФИЛЬТР
     // ============================================================
     function runRowFilter(input) {
         const q = input.value.trim().toLowerCase();
@@ -281,19 +378,15 @@
 
         const rows = document.querySelectorAll('.row-item');
         let visible = 0;
-
         rows.forEach(r => {
             const name = r.dataset.name || '';
             const id   = r.dataset.id   || '';
-
             const match = !q
-                || (isNumeric && id === q)   // «1» → id=1
-                || name.includes(q);          // подстрока по имени
-
+                || (isNumeric && id === q)
+                || name.includes(q);
             r.style.display = match ? '' : 'none';
             if (match) visible++;
         });
-
         const no = document.getElementById('no-results');
         if (no) no.style.display = visible > 0 ? 'none' : 'block';
     }
@@ -304,7 +397,6 @@
         runRowFilter(input);
     });
 
-    // ===== Кнопка очистки =====
     document.addEventListener('click', (e) => {
         const clearBtn = e.target.closest('[data-search-clear]');
         if (!clearBtn) return;

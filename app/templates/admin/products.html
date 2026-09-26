@@ -1,20 +1,16 @@
 {% extends "base.html" %}
 
-{% block page_title %}Товары{% endblock %}
-
-{% block page_sub %}
-    {% if total_count %}
-    <div class="adm-topbar-sub">{{ start_idx }}–{{ end_idx }} из {{ total_count }}</div>
-    {% endif %}
-{% endblock %}
-
 {% block admin_action %}
 <button type="button" data-action="open-product-dialog" class="adm-btn adm-btn-primary">
-    <i class="fas fa-plus"></i> Добавить
+    <i class="fas fa-plus"></i> <span>Добавить</span>
 </button>
 {% endblock %}
 
 {% block admin_content %}
+
+{% if total_pages > 1 %}
+<div class="adm-count">{{ start_idx }}–{{ end_idx }} из {{ total_count }}</div>
+{% endif %}
 
 {% if flash_error %}
 <div class="adm-alert adm-alert-warn">
@@ -26,7 +22,7 @@
 <div class="adm-search-wrap">
     <div class="adm-search">
         <i class="fas fa-search"></i>
-        <input type="search" placeholder="Поиск по названию..."
+        <input type="search" placeholder="Поиск по названию или ID..."
                autocomplete="off"
                data-action="filter-rows"
                class="adm-input">
@@ -34,80 +30,166 @@
             <i class="fas fa-times" style="font-size: 0.7rem;"></i>
         </button>
     </div>
+
+    <div class="adm-view-switch" role="group" aria-label="Режим просмотра">
+        <button type="button" data-products-view="table" title="Таблица">
+            <i class="fas fa-list"></i>
+        </button>
+        <button type="button" data-products-view="cards" title="Карточки">
+            <i class="fas fa-table-cells-large"></i>
+        </button>
+    </div>
 </div>
 
 {% if products %}
-<div class="adm-card">
-    <table class="adm-table">
-        <thead>
-            <tr>
-                <th style="width: 3.5rem;">ID</th>
-                <th style="width: 4rem;"></th>
-                <th>Название</th>
-                <th>Категории</th>
-                <th>Бренд</th>
-                <th style="text-align: right;">Цена</th>
-                <th style="width: 7rem; text-align: right;">Действия</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in products %}
-            <tr class="row-item" data-name="{{ p.name|lower }}" data-id="{{ p.id }}">
-                <td class="adm-col-id adm-table-id">{{ p.id }}</td>
-                <td class="adm-col-hide-mobile">
-                    {% if p.image %}
-                    <img src="{{ p.image }}" alt="" class="adm-table-thumb">
-                    {% else %}
-                    <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
-                    {% endif %}
-                </td>
-                <td class="adm-col-name">
-                    <div style="font-weight: 500;">{{ p.name }}</div>
-                    {% if p.popular %}
-                    <span class="adm-tag adm-tag-accent" style="margin-top: 0.25rem;">популярное</span>
-                    {% endif %}
-                </td>
-                <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">
-                    {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
-                </td>
-                <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">{{ p.brand or "—" }}</td>
-                <td class="adm-col-hide-mobile" style="text-align: right; font-weight: 500;">{{ p.price|int }} ₽</td>
-                <td class="adm-col-actions" style="text-align: right; white-space: nowrap;">
-                    <a href="/admin/products/{{ p.id }}/edit"
-                       class="adm-btn adm-btn-ghost" title="Редактировать">
-                        <i class="fas fa-pen"></i>
-                    </a>
-                    <button type="button"
-                            class="adm-btn adm-btn-ghost"
-                            title="Информация"
-                            data-action="open-info"
-                            data-info-id="{{ p.id }}"
-                            data-info-name="{{ p.name }}"
-                            data-info-price="{{ p.price }}"
-                            data-info-brand="{{ p.brand or '' }}"
-                            data-info-volume="{{ p.volume or '' }}"
-                            data-info-cats="{{ p.categories|map(attribute='name')|join(', ') }}"
-                            data-info-desc="{{ p.description or '' }}"
-                            data-info-image="{{ p.image or '' }}"
-                            data-info-popular="{{ '1' if p.popular else '0' }}">
-                        <i class="fas fa-circle-info"></i>
-                    </button>
-                    <form method="post" action="/admin/products/{{ p.id }}/delete"
-                          data-confirm="Удалить «{{ p.name }}»?"
-                          style="display: inline;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                        <button type="submit"
-                                class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
-                            <i class="fas fa-trash"></i>
+
+<div id="no-results" class="adm-empty" style="display: none;">
+    <i class="fas fa-search"></i>
+    <p>Ничего не найдено</p>
+</div>
+
+{# ================= РЕЖИМ «ТАБЛИЦА» ================= #}
+<div class="adm-products-view" data-view="table">
+    <div class="adm-card">
+        <table class="adm-table">
+            <thead>
+                <tr>
+                    <th style="width: 3.5rem;">ID</th>
+                    <th style="width: 4rem;"></th>
+                    <th>Название</th>
+                    <th>Категории</th>
+                    <th>Бренд</th>
+                    <th style="text-align: right;">Цена</th>
+                    <th style="width: 7rem; text-align: right;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products %}
+                <tr class="row-item" data-name="{{ p.name|lower }}" data-id="{{ p.id }}">
+                    <td class="adm-col-id adm-table-id">{{ p.id }}</td>
+                    <td class="adm-col-hide-mobile">
+                        {% if p.image %}
+                        <img src="{{ p.image }}" alt="" class="adm-table-thumb">
+                        {% else %}
+                        <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="adm-col-name">
+                        <div style="font-weight: 500;">{{ p.name }}</div>
+                        {% if p.popular %}
+                        <span class="adm-tag adm-tag-accent" style="margin-top: 0.25rem;">популярное</span>
+                        {% endif %}
+                    </td>
+                    <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">
+                        {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
+                    </td>
+                    <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">{{ p.brand or "—" }}</td>
+                    <td class="adm-col-hide-mobile" style="text-align: right; font-weight: 500;">{{ p.price|int }} ₽</td>
+                    <td class="adm-col-actions" style="text-align: right; white-space: nowrap;">
+                        <a href="/admin/products/{{ p.id }}/edit"
+                           hx-get="/admin/products/{{ p.id }}/edit"
+                           hx-target="#edit-product-dialog-content"
+                           hx-swap="innerHTML"
+                           class="adm-btn adm-btn-ghost" title="Редактировать">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                        <button type="button"
+                                class="adm-btn adm-btn-ghost"
+                                title="Информация"
+                                data-action="open-info"
+                                data-info-id="{{ p.id }}"
+                                data-info-name="{{ p.name }}"
+                                data-info-price="{{ p.price }}"
+                                data-info-brand="{{ p.brand or '' }}"
+                                data-info-volume="{{ p.volume or '' }}"
+                                data-info-cats="{{ p.categories|map(attribute='name')|join(', ') }}"
+                                data-info-desc="{{ p.description or '' }}"
+                                data-info-image="{{ p.image or '' }}"
+                                data-info-popular="{{ '1' if p.popular else '0' }}">
+                            <i class="fas fa-circle-info"></i>
                         </button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <div id="no-results" class="adm-empty" style="display: none; border: 0;">
-        <p>Ничего не найдено</p>
+                        <form method="post" action="/admin/products/{{ p.id }}/delete"
+                              data-confirm="Удалить «{{ p.name }}»?"
+                              style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                            <button type="submit"
+                                    class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ================= РЕЖИМ «КАРТОЧКИ» ================= #}
+<div class="adm-products-view" data-view="cards">
+    <div class="adm-product-grid">
+        {% for p in products %}
+        <div class="adm-product-card row-item"
+             data-name="{{ p.name|lower }}"
+             data-id="{{ p.id }}">
+
+            <div class="adm-product-actions">
+                <a href="/admin/products/{{ p.id }}/edit"
+                   hx-get="/admin/products/{{ p.id }}/edit"
+                   hx-target="#edit-product-dialog-content"
+                   hx-swap="innerHTML"
+                   class="act-edit" title="Редактировать">
+                    <i class="fas fa-pen"></i>
+                </a>
+                <button type="button"
+                        class="act-info" title="Информация"
+                        data-action="open-info"
+                        data-info-id="{{ p.id }}"
+                        data-info-name="{{ p.name }}"
+                        data-info-price="{{ p.price }}"
+                        data-info-brand="{{ p.brand or '' }}"
+                        data-info-volume="{{ p.volume or '' }}"
+                        data-info-cats="{{ p.categories|map(attribute='name')|join(', ') }}"
+                        data-info-desc="{{ p.description or '' }}"
+                        data-info-image="{{ p.image or '' }}"
+                        data-info-popular="{{ '1' if p.popular else '0' }}">
+                    <i class="fas fa-circle-info"></i>
+                </button>
+                <form method="post" action="/admin/products/{{ p.id }}/delete"
+                      data-confirm="Удалить «{{ p.name }}»?"
+                      style="display: contents;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <button type="submit" class="act-del" title="Удалить">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+
+            <div class="adm-product-thumb">
+                {% if p.popular %}
+                <span class="adm-product-badge">популярное</span>
+                {% endif %}
+                {% if p.image %}
+                <img src="{{ p.image }}" alt="{{ p.name }}">
+                {% else %}
+                {{ p.name[:2].upper() }}
+                {% endif %}
+            </div>
+
+            <div class="adm-product-body">
+                <h3 class="adm-product-name">{{ p.name }}</h3>
+                <div class="adm-product-cats">
+                    {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
+                </div>
+                <div class="adm-product-footer">
+                    <span class="adm-product-price">{{ p.price|int }} ₽</span>
+                    {% if p.brand %}
+                    <span class="adm-product-brand">{{ p.brand }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
@@ -142,11 +224,12 @@
     <i class="fas fa-box"></i>
     <p>Товаров пока нет</p>
     <button type="button" data-action="open-product-dialog" class="adm-btn adm-btn-primary">
-        <i class="fas fa-plus"></i> Добавить первый
+        <i class="fas fa-plus"></i> <span>Добавить первый</span>
     </button>
 </div>
 {% endif %}
 
+{# ================= МОДАЛ СОЗДАНИЯ ================= #}
 <div class="adm-modal" id="create-product-dialog" role="dialog" aria-modal="true">
     <div class="adm-modal-backdrop" data-modal-close="create-product-dialog"></div>
     <div class="adm-dialog-card adm-dialog-card-wide">
@@ -161,6 +244,26 @@
             {% with product=None, product_categories=[], in_dialog=True %}
                 {% include "_product_form.html" %}
             {% endwith %}
+        </div>
+    </div>
+</div>
+
+{# ================= МОДАЛ РЕДАКТИРОВАНИЯ =================
+   Содержимое #edit-product-dialog-content подгружается HTMX-ом
+   с роута /admin/products/{id}/edit.
+   ========================================================= #}
+<div class="adm-modal" id="edit-product-dialog" role="dialog" aria-modal="true">
+    <div class="adm-modal-backdrop" data-modal-close="edit-product-dialog"></div>
+    <div class="adm-dialog-card adm-dialog-card-wide">
+        <div class="adm-dialog-header">
+            <div class="adm-dialog-title">Редактирование товара</div>
+            <button type="button" data-action="close-edit-product-dialog"
+                    class="adm-btn adm-btn-ghost" aria-label="Закрыть">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="adm-dialog-body" id="edit-product-dialog-content">
+            {# HTMX вставит сюда форму #}
         </div>
     </div>
 </div>

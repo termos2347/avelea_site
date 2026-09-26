@@ -17,53 +17,68 @@
 
     {% set path = request.url.path %}
 
-    <div class="adm-layout">
-        <aside class="adm-sidebar">
-            <div class="adm-sidebar-brand">
-                avelea <small>admin</small>
-            </div>
+    {# ============================================================
+       STICKY-БЛОК: строки 1 и 2
+       ============================================================ #}
+    <div class="adm-topbar-block">
 
-            <nav class="adm-nav">
-                <a href="/admin/products"
-                   class="{% if path.startswith('/admin/products') %}is-active{% endif %}">
-                    <i class="fas fa-box"></i> Товары
+        {# ---- Строка 1: бренд + действия пользователя ---- #}
+        <div class="adm-header">
+            <div class="adm-header-inner">
+                <a href="/admin/products" class="adm-brand">
+                    avelea <small>admin</small>
                 </a>
-                <a href="/admin/brands"
-                   class="{% if path.startswith('/admin/brands') %}is-active{% endif %}">
-                    <i class="fas fa-tag"></i> Бренды
-                </a>
-                <a href="/admin/categories"
-                   class="{% if path.startswith('/admin/categories') %}is-active{% endif %}">
-                    <i class="fas fa-folder"></i> Категории
-                </a>
-            </nav>
 
-            <div class="adm-sidebar-footer">
-                <a href="/" target="_blank" hx-boost="false">
-                    <i class="fas fa-external-link-alt"></i> На сайт
-                </a>
-                <a href="/admin/logout">
-                    <i class="fas fa-sign-out-alt"></i> Выйти
-                </a>
-            </div>
-        </aside>
-
-        <main class="adm-main">
-            <header class="adm-topbar">
-                <div>
-                    <h1 class="adm-topbar-title">{% block page_title %}{% endblock %}</h1>
-                    {% block page_sub %}{% endblock %}
+                <div class="adm-header-actions">
+                    <a href="/" target="_blank" hx-boost="false">
+                        <i class="fas fa-external-link-alt"></i>
+                        <span>На сайт</span>
+                    </a>
+                    <a href="/admin/logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Выйти</span>
+                    </a>
                 </div>
-                <div class="adm-topbar-actions">
+            </div>
+        </div>
+
+        {# ---- Строка 2: навигация + кнопка действия ---- #}
+        <div class="adm-nav-row">
+            <div class="adm-nav-inner">
+                <nav class="adm-nav">
+                    <a href="/admin/products"
+                       class="{% if path.startswith('/admin/products') %}is-active{% endif %}">
+                        <i class="fas fa-box"></i>
+                        <span>Товары</span>
+                    </a>
+                    <a href="/admin/brands"
+                       class="{% if path.startswith('/admin/brands') %}is-active{% endif %}">
+                        <i class="fas fa-tag"></i>
+                        <span>Бренды</span>
+                    </a>
+                    <a href="/admin/categories"
+                       class="{% if path.startswith('/admin/categories') %}is-active{% endif %}">
+                        <i class="fas fa-folder"></i>
+                        <span>Категории</span>
+                    </a>
+                </nav>
+
+                <div class="adm-nav-actions">
                     {% block admin_action %}{% endblock %}
                 </div>
-            </header>
-
-            <div class="adm-content">
-                {% block admin_content %}{% endblock %}
             </div>
-        </main>
+        </div>
+
     </div>
+
+    {# ============================================================
+       КОНТЕНТ
+       ============================================================ #}
+    <main class="adm-main">
+        <div class="adm-content">
+            {% block admin_content %}{% endblock %}
+        </div>
+    </main>
 
     {# ============================================================
        МОДАЛ ПОДТВЕРЖДЕНИЯ
@@ -92,42 +107,93 @@
     </div>
 
     {# ============================================================
-       МОДАЛ ИНФОРМАЦИИ
+       МОДАЛ ИНФОРМАЦИИ + ПРЕДПРОСМОТР
        ============================================================ #}
     <div class="adm-modal" id="info-dialog" role="dialog" aria-modal="true">
         <div class="adm-modal-backdrop" data-modal-close="info-dialog"></div>
-        <div class="adm-dialog-card">
+        <div class="adm-dialog-card adm-dialog-card-wide">
             <div class="adm-dialog-header">
-                <div class="adm-dialog-title" id="info-title">Информация</div>
+                <div class="adm-dialog-title" id="info-title">Информация о товаре</div>
                 <button type="button" id="info-close" class="adm-btn adm-btn-ghost" aria-label="Закрыть">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+
             <div class="adm-info-body">
-                <div class="adm-info-top">
-                    <div id="info-image" class="adm-info-image">—</div>
-                    <div class="adm-info-meta">
-                        <h3 class="adm-info-name" id="info-name">—</h3>
-                        <div class="adm-info-price" id="info-price">—</div>
-                        <div class="adm-info-tags" id="info-tags"></div>
+                <div class="adm-info-layout">
+
+                    <div class="adm-info-meta-col">
+                        <div class="adm-info-top">
+                            <div id="info-image" class="adm-info-image">—</div>
+                            <div class="adm-info-meta">
+                                <h3 class="adm-info-name" id="info-name">—</h3>
+                                <div class="adm-info-price" id="info-price">—</div>
+                                <div class="adm-info-tags" id="info-tags"></div>
+                            </div>
+                        </div>
+                        <dl class="adm-info-rows" id="info-rows"></dl>
                     </div>
+
+                    <div class="adm-info-preview-col">
+                        <div class="adm-preview-label">
+                            <i class="fas fa-eye"></i> Предпросмотр на сайте
+                        </div>
+
+                        <div class="adm-preview-stage">
+                            <div class="group border border-pink-100 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-pink-200/60 hover:border-pink-300 transition-all bg-white p-3 flex flex-col"
+                                 style="width: 220px;">
+
+                                <div class="aspect-square w-full rounded-xl mb-3 overflow-hidden flex items-center justify-center
+                                            bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
+                                    <img id="info-preview-img" src="" alt=""
+                                         class="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                                         style="display: none;">
+                                    <span id="info-preview-initials">—</span>
+                                </div>
+
+                                <h3 class="font-medium text-gray-900 text-sm leading-snug"
+                                    id="info-preview-name"
+                                    style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                    —
+                                </h3>
+
+                                <p class="text-xs text-gray-500 mt-0.5"
+                                   id="info-preview-cats"
+                                   style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    —
+                                </p>
+
+                                <p class="text-base font-semibold mt-auto pt-1 text-pink-600"
+                                   id="info-preview-price">—</p>
+                            </div>
+                        </div>
+
+                        <div class="adm-preview-hint">
+                            Так товар будет выглядеть в каталоге на сайте.
+                        </div>
+                    </div>
+
                 </div>
-                <dl class="adm-info-rows" id="info-rows"></dl>
             </div>
+
             <div class="adm-dialog-footer">
-                <a href="#" id="info-edit-link" class="adm-btn adm-btn-primary">
+                <a href="#" target="_blank" id="info-site-link"
+                   class="adm-btn adm-btn-secondary">
+                    <i class="fas fa-external-link-alt"></i> Открыть на сайте
+                </a>
+                <a href="#" id="info-edit-btn"
+                   hx-get=""
+                   hx-target="#edit-product-dialog-content"
+                   hx-swap="innerHTML"
+                   class="adm-btn adm-btn-primary">
                     <i class="fas fa-pen"></i> Редактировать
                 </a>
-                <button type="button" id="info-cancel" class="adm-btn adm-btn-secondary">
-                    Закрыть
-                </button>
             </div>
         </div>
     </div>
 
     {# ============================================================
-       МОДАЛ РЕДАКТИРОВАНИЯ (общий для брендов и категорий)
-       URL формы и заголовок задаются из JS.
+       МОДАЛ РЕДАКТИРОВАНИЯ (бренды/категории)
        ============================================================ #}
     <div class="adm-modal" id="edit-dialog" role="dialog" aria-modal="true">
         <div class="adm-modal-backdrop" data-modal-close="edit-dialog"></div>

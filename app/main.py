@@ -877,12 +877,12 @@ async def admin_product_create(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    brand_id: str = Form(""),
+    brand_id: str = Form(...),
     price: int = Form(...),
-    volume: str = Form(""),
-    description: str = Form(""),
+    volume: str = Form(...),
+    description: str = Form(...),
     popular: str = Form(None),
-    image: UploadFile = File(None),
+    image: UploadFile = File(...),
 ):
     # Дешёвая валидация первой: если цена битая, файл даже не читаем,
     # товар не создаём — просто уходим обратно с сообщением.
@@ -921,6 +921,13 @@ async def admin_product_edit(
     if not product:
         raise HTTPException(status_code=404)
     ctx = _product_form_context(db, product)
+
+    # HTMX-запрос — возвращаем только форму, чтобы вставить в модалку.
+    # Обычный переход по ссылке — полную страницу (fallback без JS).
+    if request.headers.get("hx-request") == "true":
+        ctx["in_dialog"] = True
+        return admin_templates.TemplateResponse(request, "_product_form.html", ctx)
+
     return admin_templates.TemplateResponse(request, "product_form.html", ctx)
 
 
@@ -932,10 +939,10 @@ async def admin_product_update(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    brand_id: str = Form(""),
+    brand_id: str = Form(...),
     price: int = Form(...),
-    volume: str = Form(""),
-    description: str = Form(""),
+    volume: str = Form(...),
+    description: str = Form(...),
     popular: str = Form(None),
     image: UploadFile = File(None),
     remove_image: str = Form(None),

@@ -33,136 +33,155 @@
 }
 
 /* ============================================================
-   Layout
+   ВЕРХНИЙ STICKY-БЛОК (строки 1 и 2)
    ============================================================ */
-.adm-layout { display: flex; min-height: 100vh; }
-
-.adm-sidebar {
-    width: 240px;
-    flex-shrink: 0;
-    background: var(--adm-surface);
-    border-right: 1px solid var(--adm-border);
-    display: flex;
-    flex-direction: column;
+.adm-topbar-block {
     position: sticky;
     top: 0;
-    height: 100vh;
+    z-index: 30;
+    background: var(--adm-surface);
+    border-bottom: 1px solid var(--adm-border);
 }
-.adm-sidebar-brand {
-    padding: 1.25rem 1.25rem 1rem;
-    font-weight: 600;
-    font-size: 1.05rem;
-    letter-spacing: -0.01em;
-    color: var(--adm-text);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.adm-sidebar-brand small {
-    color: var(--adm-muted-soft);
-    font-weight: 400;
-    font-size: 0.75rem;
-}
-.adm-nav {
-    flex: 1;
-    padding: 0.5rem 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.adm-nav a {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.55rem 0.75rem;
-    border-radius: var(--adm-radius-sm);
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--adm-muted);
-    transition: background 120ms ease, color 120ms ease;
-}
-.adm-nav a:hover { background: var(--adm-border-soft); color: var(--adm-text); }
-.adm-nav a.is-active { background: var(--adm-primary); color: #fff; }
-.adm-nav a i { width: 1rem; text-align: center; font-size: 0.85rem; opacity: 0.85; }
 
-.adm-sidebar-footer {
-    padding: 0.75rem;
-    border-top: 1px solid var(--adm-border);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.adm-sidebar-footer a {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.55rem 0.75rem;
-    border-radius: var(--adm-radius-sm);
-    font-size: 0.875rem;
-    color: var(--adm-muted);
-    transition: background 120ms ease, color 120ms ease;
-}
-.adm-sidebar-footer a:hover { background: var(--adm-border-soft); color: var(--adm-text); }
-.adm-sidebar-footer a i { width: 1rem; text-align: center; font-size: 0.85rem; opacity: 0.85; }
-
-.adm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-
-.adm-topbar {
+/* ---- Строка 1: бренд + действия пользователя ---- */
+.adm-header-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1.25rem;
+    height: 3.25rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1.5rem 2rem;
-    border-bottom: 1px solid var(--adm-border);
-    background: var(--adm-surface);
-    position: sticky;
-    top: 0;
-    z-index: 20;
 }
-.adm-topbar-title {
-    font-size: 1.25rem;
+
+.adm-brand {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
     font-weight: 600;
-    letter-spacing: -0.015em;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
     color: var(--adm-text);
-    margin: 0;
+    text-decoration: none;
+    white-space: nowrap;
 }
-.adm-topbar-sub { font-size: 0.8rem; color: var(--adm-muted); margin-top: 0.15rem; }
-.adm-topbar-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.adm-brand small {
+    color: var(--adm-muted-soft);
+    font-weight: 400;
+    font-size: 0.7rem;
+}
+
+.adm-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.adm-header-actions a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--adm-muted);
+    text-decoration: none;
+    transition: background 120ms ease, color 120ms ease;
+    white-space: nowrap;
+}
+.adm-header-actions a:hover {
+    background: var(--adm-border-soft);
+    color: var(--adm-text);
+}
+.adm-header-actions a i { font-size: 0.78rem; }
+
+/* ---- Строка 2: навигация + кнопка действия ---- */
+.adm-nav-row {
+    border-top: 1px solid var(--adm-border-soft);
+}
+.adm-nav-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0.4rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.adm-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-width: 0;
+}
+.adm-nav::-webkit-scrollbar { display: none; }
+
+.adm-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--adm-muted);
+    text-decoration: none;
+    transition: background 120ms ease, color 120ms ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.adm-nav a:hover { background: var(--adm-border-soft); color: var(--adm-text); }
+.adm-nav a.is-active { background: var(--adm-primary); color: #fff; }
+.adm-nav a i { font-size: 0.78rem; opacity: 0.85; }
+
+/* Кнопка действия справа (Добавить) */
+.adm-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* ---- Мобильные подстройки верхнего блока ---- */
+@media (max-width: 720px) {
+    .adm-header-inner { padding: 0 0.85rem; height: 3rem; }
+    .adm-nav-inner { padding: 0.35rem 0.85rem; gap: 0.4rem; }
+
+    .adm-nav a { padding: 0.45rem 0.7rem; font-size: 0.82rem; gap: 0.35rem; }
+    .adm-header-actions a { padding: 0.4rem 0.55rem; }
+}
+
+/* На телефоне кнопка «Добавить» — только плюсик, во всех местах */
+@media (max-width: 640px) {
+    /* Кнопка в верхнем топбаре (справа от вкладок) */
+    .adm-nav-actions .adm-btn span { display: none; }
+    .adm-nav-actions .adm-btn { padding: 0.55rem 0.7rem; }
+
+    /* Кнопка в пустом состоянии («Добавить первый») */
+    .adm-empty .adm-btn span { display: none; }
+    .adm-empty .adm-btn { padding: 0.55rem 0.8rem; }
+}
+
+@media (max-width: 380px) {
+    .adm-brand small { display: none; }
+}
+
+/* ============================================================
+   ОСНОВНОЙ КОНТЕНТ
+   ============================================================ */
+.adm-main { display: block; }
 
 .adm-content {
-    flex: 1;
-    padding: 1.75rem 2rem 3rem;
-    max-width: 1200px;
-    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.75rem 1.25rem 3rem;
 }
-
-@media (max-width: 900px) {
-    .adm-layout { flex-direction: column; }
-    .adm-sidebar {
-        width: 100%;
-        height: auto;
-        position: static;
-        border-right: 0;
-        border-bottom: 1px solid var(--adm-border);
-    }
-    .adm-sidebar-brand { padding: 1rem 1rem 0.5rem; }
-    .adm-nav {
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 0.5rem 0.75rem 0.75rem;
-        scrollbar-width: none;
-    }
-    .adm-nav::-webkit-scrollbar { display: none; }
-    .adm-nav a { white-space: nowrap; }
-    .adm-sidebar-footer {
-        flex-direction: row;
-        padding: 0.5rem 0.75rem;
-        border-top: 0;
-        border-bottom: 1px solid var(--adm-border);
-        justify-content: flex-end;
-    }
-    .adm-topbar { padding: 1rem 1.25rem; position: static; }
-    .adm-content { padding: 1.25rem 1.25rem 2rem; }
+@media (max-width: 720px) {
+    .adm-content { padding: 1.1rem 0.85rem 2rem; }
 }
 
 /* ============================================================
@@ -430,7 +449,7 @@
 .adm-pagination .is-ellipsis { color: var(--adm-muted-soft); min-width: 1.5rem; }
 
 /* ============================================================
-   Модалы (position: fixed div, без <dialog>.showModal())
+   Модалы
    ============================================================ */
 .adm-modal {
     position: fixed;
@@ -477,7 +496,6 @@ body.adm-modal-open {
     padding-right: var(--adm-scrollbar-w, 0px);
 }
 
-/* ---- Общая карточка ---- */
 .adm-dialog-card {
     background: var(--adm-surface);
     border-radius: var(--adm-radius);
@@ -487,7 +505,7 @@ body.adm-modal-open {
     max-height: 90vh;
     overflow-y: auto;
 }
-.adm-dialog-card-wide { max-width: 40rem; }
+.adm-dialog-card-wide { max-width: 46rem; }
 .adm-dialog-card-sm   { max-width: 26rem; }
 
 .adm-dialog-header {
@@ -596,6 +614,76 @@ body.adm-modal-open {
 }
 .adm-info-rows dt { color: var(--adm-muted); font-weight: 400; margin: 0; }
 .adm-info-rows dd { color: var(--adm-text); margin: 0; word-break: break-word; }
+
+/* ---- Info-модалка: две колонки ---- */
+.adm-info-layout {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+}
+@media (max-width: 720px) {
+    .adm-info-layout {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+.adm-info-meta-col { min-width: 0; }
+
+.adm-info-preview-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--adm-border-soft);
+}
+@media (max-width: 720px) {
+    .adm-info-preview-col {
+        padding-left: 0;
+        padding-top: 1rem;
+        border-left: 0;
+        border-top: 1px solid var(--adm-border-soft);
+    }
+}
+
+.adm-preview-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--adm-muted-soft);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.adm-preview-label i { font-size: 0.65rem; }
+
+.adm-preview-stage {
+    background:
+        radial-gradient(circle at 30% 20%, #fce7f3 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, #fae8ff 0%, transparent 50%),
+        var(--adm-bg);
+    border-radius: var(--adm-radius);
+    padding: 1.25rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 260px;
+}
+@media (max-width: 720px) {
+    .adm-preview-stage { min-width: 0; width: 100%; }
+}
+
+.adm-preview-hint {
+    font-size: 0.72rem;
+    color: var(--adm-muted-soft);
+    text-align: center;
+    max-width: 220px;
+    line-height: 1.35;
+}
+
+.adm-preview-stage a { pointer-events: auto; }
 
 /* ============================================================
    Прогресс-бар HTMX
@@ -722,13 +810,6 @@ body.adm-modal-open {
 
 /* ============================================================
    Поиск
-   ------------------------------------------------------------
-   Нативный крестик у <input type="search"> скрыт — он бы
-   дублировал нашу кнопку очистки.
-
-   Кнопка очистки показывается/скрывается чистым CSS через
-   :not(:placeholder-shown): как только в поле есть текст,
-   плейсхолдер исчезает, и кнопка появляется. JS не нужен.
    ============================================================ */
 .adm-search-wrap {
     display: flex;
@@ -759,14 +840,12 @@ body.adm-modal-open {
     padding-right: 2.25rem;
 }
 
-/* Скрываем нативный крестик поиска — у нас свой */
 .adm-search input[type="search"]::-webkit-search-cancel-button,
 .adm-search input[type="search"]::-webkit-search-decoration {
     -webkit-appearance: none;
     appearance: none;
 }
 
-/* Кнопка очистки — появляется, когда в поле есть текст */
 .adm-search-clear {
     position: absolute;
     right: 0.4rem;
@@ -784,7 +863,6 @@ body.adm-modal-open {
     cursor: pointer;
     padding: 0;
 
-    /* По умолчанию скрыта; покажется при наличии текста */
     opacity: 0;
     pointer-events: none;
     transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
@@ -794,16 +872,17 @@ body.adm-modal-open {
     color: var(--adm-text);
 }
 
-/* Магия: пока в поле есть текст, плейсхолдер не показывается,
-   и селектор :not(:placeholder-shown) делает кнопку видимой.
-   Плейсхолдер у input обязателен — без него эффект не сработает. */
 .adm-search input:not(:placeholder-shown) ~ .adm-search-clear {
     opacity: 1;
     pointer-events: auto;
 }
 
-/* ---- Тумблер «Название / ID» ---- */
-.adm-search-mode {
+.adm-search-wrap .adm-view-switch { margin-left: auto; }
+
+/* ============================================================
+   Переключатель видов Товаров
+   ============================================================ */
+.adm-view-switch {
     display: inline-flex;
     background: var(--adm-border-soft);
     border-radius: var(--adm-radius-sm);
@@ -811,21 +890,192 @@ body.adm-modal-open {
     gap: 2px;
     flex-shrink: 0;
 }
-.adm-search-mode button {
+.adm-view-switch button {
     border: 0;
     background: transparent;
-    padding: 0.4rem 0.75rem;
+    padding: 0.45rem 0.7rem;
     border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.85rem;
     color: var(--adm-muted);
     cursor: pointer;
     transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
     font-family: inherit;
+    line-height: 1;
 }
-.adm-search-mode button:hover { color: var(--adm-text); }
-.adm-search-mode button.is-active {
+.adm-view-switch button:hover { color: var(--adm-text); }
+.adm-view-switch button.is-active {
     background: var(--adm-surface);
     color: var(--adm-text);
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+.adm-products-view { display: none; }
+body[data-products-view="table"] .adm-products-view[data-view="table"] { display: block; }
+body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display: block; }
+
+/* ============================================================
+   Сетка карточек товаров
+   ============================================================ */
+.adm-product-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+    .adm-product-grid { gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .adm-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1400px) {
+    .adm-product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+.adm-product-card {
+    position: relative;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    padding: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.adm-product-card:hover {
+    border-color: #fbcfe8;
+    box-shadow: 0 4px 16px rgb(236 72 153 / 0.10);
+}
+
+.adm-product-thumb {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--adm-radius-sm);
+    overflow: hidden;
+    background: linear-gradient(135deg, #fce7f3, #fae8ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.6rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #ec4899;
+}
+.adm-product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 400ms ease;
+}
+.adm-product-card:hover .adm-product-thumb img {
+    transform: scale(1.05);
+}
+
+.adm-product-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 2;
+    background: #ec4899;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    letter-spacing: 0.02em;
+}
+
+.adm-product-actions {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    z-index: 3;
+    display: flex;
+    gap: 0.2rem;
+    opacity: 0.4;
+    transition: opacity 150ms ease;
+}
+.adm-product-card:hover .adm-product-actions { opacity: 1; }
+
+.adm-product-actions a,
+.adm-product-actions button {
+    width: 1.85rem;
+    height: 1.85rem;
+    border-radius: 9999px;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    color: var(--adm-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.adm-product-actions a:hover,
+.adm-product-actions button:hover {
+    transform: translateY(-1px);
+    border-color: transparent;
+}
+.adm-product-actions .act-edit:hover { background: var(--adm-primary); color: #fff; }
+.adm-product-actions .act-info:hover { background: #0891b2; color: #fff; }
+.adm-product-actions .act-del:hover  { background: var(--adm-danger); color: #fff; }
+
+.adm-product-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+.adm-product-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--adm-text);
+    line-height: 1.3;
+    margin: 0 0 0.25rem;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+.adm-product-cats {
+    font-size: 0.72rem;
+    color: var(--adm-muted);
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.adm-product-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    margin-top: auto;
+    padding-top: 0.35rem;
+}
+.adm-product-price {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #ec4899;
+    white-space: nowrap;
+}
+.adm-product-brand {
+    font-size: 0.7rem;
+    color: var(--adm-muted-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 50%;
+}
+.adm-count {
+    font-size: 0.8rem;
+    color: var(--adm-muted);
+    margin-bottom: 0.75rem;
+}
+
+@media (hover: none) {
+    .adm-product-actions { opacity: 1; }
 }
