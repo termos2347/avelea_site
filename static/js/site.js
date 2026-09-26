@@ -56,7 +56,6 @@
         if (!track || slides.length < 2) return;
 
         const INTERVAL = 5500;
-        // Ширина зон по краям, реагирующих на клик (в долях ширины)
         const EDGE = 0.3;
         let current = 0;
         let timer   = null;
@@ -104,9 +103,6 @@
             startTimer();
         }
 
-        // ===== Клик по левой / правой зоне =====
-        // Игнорируем клики по ссылкам, кнопкам, полоскам-индикаторам
-        // и любому интерактиву — они обрабатываются сами.
         root.addEventListener('click', (e) => {
             if (e.target.closest('a, button, input, select, textarea')) return;
 
@@ -120,7 +116,6 @@
             }
         });
 
-        // Курсор-подсказка над краями
         root.addEventListener('mousemove', (e) => {
             const rect = root.getBoundingClientRect();
             const pct = (e.clientX - rect.left) / rect.width;
@@ -129,7 +124,6 @@
             root.style.cursor = (overEdge && !overInteractive) ? 'pointer' : '';
         });
 
-        // Свайп на мобиле
         let x0 = null;
         root.addEventListener('touchstart', (e) => {
             x0 = e.touches[0].clientX;
@@ -157,4 +151,39 @@
     }
 
     document.body.addEventListener('htmx:afterSettle', scanCarousels);
+
+    // ===== Горизонтальные рейлы карточек (Популярное и т.д.) =====
+    function initRails() {
+        document.querySelectorAll('.product-rail-wrap').forEach((wrap) => {
+            if (wrap.hasAttribute('data-ready')) return;
+            wrap.setAttribute('data-ready', '1');
+
+            const rail = wrap.querySelector('.product-rail');
+            const prev = wrap.querySelector('[data-rail-prev]');
+            const next = wrap.querySelector('[data-rail-next]');
+            if (!rail || !prev || !next) return;
+
+            function update() {
+                const max = rail.scrollWidth - rail.clientWidth;
+                prev.disabled = rail.scrollLeft <= 1;
+                next.disabled = rail.scrollLeft >= max - 1;
+            }
+
+            function step(dir) {
+                const card = rail.querySelector(':scope > a');
+                const w = card ? card.getBoundingClientRect().width : rail.clientWidth;
+                const gap = parseFloat(getComputedStyle(rail).gap) || 0;
+                rail.scrollBy({ left: dir * (w + gap), behavior: 'smooth' });
+            }
+
+            prev.addEventListener('click', () => step(-1));
+            next.addEventListener('click', () => step(1));
+            rail.addEventListener('scroll', update, { passive: true });
+            window.addEventListener('resize', update);
+            update();
+        });
+    }
+
+    initRails();
+    document.body.addEventListener('htmx:afterSettle', initRails);
 })();

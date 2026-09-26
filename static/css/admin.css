@@ -1,7 +1,28 @@
-/* Стили админки. Пока пусто — всё оформление на Tailwind-утилитах. */
+/* ============================================================
+   Дизайн-система админки
+   ============================================================ */
+:root {
+    --adm-bg: #fafafa;
+    --adm-surface: #ffffff;
+    --adm-border: #e5e7eb;
+    --adm-border-soft: #f3f4f6;
+    --adm-text: #111827;
+    --adm-muted: #6b7280;
+    --adm-muted-soft: #9ca3af;
+    --adm-primary: #111827;
+    --adm-primary-hover: #1f2937;
+    --adm-danger: #dc2626;
+    --adm-danger-hover: #b91c1c;
+    --adm-danger-soft: #fef2f2;
+    --adm-accent: #ec4899;
+    --adm-radius: 12px;
+    --adm-radius-sm: 8px;
+    --adm-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.02);
+    --adm-shadow-md: 0 4px 12px rgb(0 0 0 / 0.06);
+}
 
 /* ============================================================
-   View Transitions — плавный кроссфейд между страницами админки
+   View Transitions
    ============================================================ */
 @view-transition {
     navigation: auto;
@@ -9,4 +30,802 @@
 ::view-transition-old(root),
 ::view-transition-new(root) {
     animation-duration: 180ms;
+}
+
+/* ============================================================
+   Layout
+   ============================================================ */
+.adm-layout { display: flex; min-height: 100vh; }
+
+.adm-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--adm-surface);
+    border-right: 1px solid var(--adm-border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+.adm-sidebar-brand {
+    padding: 1.25rem 1.25rem 1rem;
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+    color: var(--adm-text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.adm-sidebar-brand small {
+    color: var(--adm-muted-soft);
+    font-weight: 400;
+    font-size: 0.75rem;
+}
+.adm-nav {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.adm-nav a {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--adm-muted);
+    transition: background 120ms ease, color 120ms ease;
+}
+.adm-nav a:hover { background: var(--adm-border-soft); color: var(--adm-text); }
+.adm-nav a.is-active { background: var(--adm-primary); color: #fff; }
+.adm-nav a i { width: 1rem; text-align: center; font-size: 0.85rem; opacity: 0.85; }
+
+.adm-sidebar-footer {
+    padding: 0.75rem;
+    border-top: 1px solid var(--adm-border);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.adm-sidebar-footer a {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.875rem;
+    color: var(--adm-muted);
+    transition: background 120ms ease, color 120ms ease;
+}
+.adm-sidebar-footer a:hover { background: var(--adm-border-soft); color: var(--adm-text); }
+.adm-sidebar-footer a i { width: 1rem; text-align: center; font-size: 0.85rem; opacity: 0.85; }
+
+.adm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.adm-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--adm-border);
+    background: var(--adm-surface);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+.adm-topbar-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--adm-text);
+    margin: 0;
+}
+.adm-topbar-sub { font-size: 0.8rem; color: var(--adm-muted); margin-top: 0.15rem; }
+.adm-topbar-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+
+.adm-content {
+    flex: 1;
+    padding: 1.75rem 2rem 3rem;
+    max-width: 1200px;
+    width: 100%;
+}
+
+@media (max-width: 900px) {
+    .adm-layout { flex-direction: column; }
+    .adm-sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: 0;
+        border-bottom: 1px solid var(--adm-border);
+    }
+    .adm-sidebar-brand { padding: 1rem 1rem 0.5rem; }
+    .adm-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 0.5rem 0.75rem 0.75rem;
+        scrollbar-width: none;
+    }
+    .adm-nav::-webkit-scrollbar { display: none; }
+    .adm-nav a { white-space: nowrap; }
+    .adm-sidebar-footer {
+        flex-direction: row;
+        padding: 0.5rem 0.75rem;
+        border-top: 0;
+        border-bottom: 1px solid var(--adm-border);
+        justify-content: flex-end;
+    }
+    .adm-topbar { padding: 1rem 1.25rem; position: static; }
+    .adm-content { padding: 1.25rem 1.25rem 2rem; }
+}
+
+/* ============================================================
+   Кнопки
+   ============================================================ */
+.adm-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1rem;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+    white-space: nowrap;
+    text-decoration: none;
+    font-family: inherit;
+}
+.adm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.adm-btn i { font-size: 0.8rem; }
+
+.adm-btn-primary { background: var(--adm-primary); color: #fff; }
+.adm-btn-primary:hover { background: var(--adm-primary-hover); }
+
+.adm-btn-secondary {
+    background: var(--adm-surface);
+    color: var(--adm-text);
+    border-color: var(--adm-border);
+}
+.adm-btn-secondary:hover { background: var(--adm-border-soft); }
+
+.adm-btn-ghost {
+    background: transparent;
+    color: var(--adm-muted);
+    padding: 0.35rem 0.5rem;
+}
+.adm-btn-ghost:hover { background: var(--adm-border-soft); color: var(--adm-text); }
+.adm-btn-ghost.adm-btn-danger:hover { background: var(--adm-danger-soft); color: var(--adm-danger); }
+
+.adm-btn-danger-solid { background: var(--adm-danger); color: #fff; }
+.adm-btn-danger-solid:hover { background: var(--adm-danger-hover); }
+
+/* ============================================================
+   Инпуты
+   ============================================================ */
+.adm-input,
+.adm-select,
+.adm-textarea {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: var(--adm-surface);
+    color: var(--adm-text);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+    font-family: inherit;
+}
+.adm-input:focus,
+.adm-select:focus,
+.adm-textarea:focus {
+    outline: none;
+    border-color: var(--adm-primary);
+    box-shadow: 0 0 0 3px rgb(17 24 39 / 0.08);
+}
+.adm-input::placeholder { color: var(--adm-muted-soft); }
+
+.adm-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--adm-text);
+    margin-bottom: 0.4rem;
+}
+.adm-hint { font-size: 0.75rem; color: var(--adm-muted); margin-top: 0.35rem; }
+
+/* ============================================================
+   Карточки
+   ============================================================ */
+.adm-card {
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    box-shadow: var(--adm-shadow);
+    overflow: hidden;
+}
+.adm-card-flat {
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    padding: 1.25rem;
+}
+
+/* ============================================================
+   Таблица
+   ============================================================ */
+.adm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.adm-table thead th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--adm-muted);
+    background: #fbfbfb;
+    border-bottom: 1px solid var(--adm-border);
+}
+.adm-table tbody td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--adm-border-soft);
+    vertical-align: middle;
+    color: var(--adm-text);
+}
+.adm-table tbody tr:last-child td { border-bottom: 0; }
+.adm-table tbody tr { transition: background 100ms ease; }
+.adm-table tbody tr:hover { background: #fafafa; }
+
+.adm-table-thumb {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--adm-radius-sm);
+    object-fit: cover;
+    background: var(--adm-border-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--adm-muted);
+}
+
+.adm-table-id {
+    font-size: 0.8rem;
+    color: var(--adm-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.adm-tag {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    background: var(--adm-border-soft);
+    color: var(--adm-muted);
+}
+.adm-tag-accent { background: #fce7f3; color: #9d174d; }
+
+/* ============================================================
+   Мобильная адаптация таблиц
+   ============================================================ */
+@media (max-width: 767px) {
+    .adm-table thead { display: none; }
+    .adm-table,
+    .adm-table tbody { display: block; }
+
+    .adm-table tr {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.8rem 1rem;
+        border-bottom: 1px solid var(--adm-border-soft);
+    }
+    .adm-table tr:last-child { border-bottom: 0; }
+
+    .adm-table td {
+        display: block;
+        padding: 0;
+        border: 0;
+    }
+
+    .adm-col-hide-mobile { display: none !important; }
+
+    .adm-col-id {
+        order: 0;
+        min-width: 2rem;
+        font-size: 0.75rem;
+        color: var(--adm-muted);
+    }
+
+    .adm-col-name {
+        order: 1;
+        flex: 1;
+        min-width: 0;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .adm-col-actions {
+        order: 2;
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 0.15rem;
+        flex-shrink: 0;
+    }
+    .adm-col-actions .adm-btn-ghost { padding: 0.4rem 0.5rem; }
+
+    .adm-card { border-radius: var(--adm-radius); }
+}
+
+/* ============================================================
+   Сообщения
+   ============================================================ */
+.adm-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.85rem;
+    border: 1px solid;
+    margin-bottom: 1rem;
+}
+.adm-alert-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.adm-alert-warn  { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.adm-alert i { margin-top: 0.15rem; flex-shrink: 0; }
+
+/* ============================================================
+   Пустые состояния
+   ============================================================ */
+.adm-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+}
+.adm-empty i { font-size: 2rem; color: var(--adm-muted-soft); margin-bottom: 0.75rem; display: block; }
+.adm-empty p { color: var(--adm-muted); font-size: 0.9rem; margin-bottom: 0.75rem; }
+.adm-empty a { color: var(--adm-text); font-size: 0.875rem; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ============================================================
+   Пагинация
+   ============================================================ */
+.adm-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 1.5rem;
+}
+.adm-pagination a,
+.adm-pagination span {
+    min-width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--adm-radius-sm);
+    font-size: 0.85rem;
+    border: 1px solid transparent;
+}
+.adm-pagination a { color: var(--adm-text); border-color: var(--adm-border); background: var(--adm-surface); }
+.adm-pagination a:hover { background: var(--adm-border-soft); }
+.adm-pagination .is-current { background: var(--adm-primary); color: #fff; }
+.adm-pagination .is-disabled { color: var(--adm-muted-soft); border-color: var(--adm-border-soft); }
+.adm-pagination .is-ellipsis { color: var(--adm-muted-soft); min-width: 1.5rem; }
+
+/* ============================================================
+   Модалы (position: fixed div, без <dialog>.showModal())
+   ============================================================ */
+.adm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease-out;
+}
+.adm-modal.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.adm-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 0.4);
+    cursor: pointer;
+}
+
+.adm-modal .adm-dialog-card {
+    position: relative;
+    z-index: 1;
+    transform: scale(0.96) translateY(8px);
+    opacity: 0;
+    transition:
+        transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 220ms ease-out;
+    will-change: transform, opacity;
+}
+.adm-modal.is-open .adm-dialog-card {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+body.adm-modal-open {
+    overflow: hidden;
+    padding-right: var(--adm-scrollbar-w, 0px);
+}
+
+/* ---- Общая карточка ---- */
+.adm-dialog-card {
+    background: var(--adm-surface);
+    border-radius: var(--adm-radius);
+    box-shadow: 0 20px 40px rgb(0 0 0 / 0.15);
+    width: 100%;
+    max-width: 32rem;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.adm-dialog-card-wide { max-width: 40rem; }
+.adm-dialog-card-sm   { max-width: 26rem; }
+
+.adm-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid var(--adm-border);
+}
+.adm-dialog-title { font-size: 1rem; font-weight: 600; color: var(--adm-text); }
+.adm-dialog-body { padding: 1.25rem; }
+.adm-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--adm-border);
+    background: #fbfbfb;
+    border-radius: 0 0 var(--adm-radius) var(--adm-radius);
+}
+
+/* ---- Диалог подтверждения ---- */
+.adm-confirm-body {
+    display: flex;
+    gap: 1rem;
+    padding: 1.5rem 1.25rem 1.25rem;
+}
+.adm-confirm-icon {
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    background: var(--adm-danger-soft);
+    color: var(--adm-danger);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+.adm-confirm-content { min-width: 0; padding-top: 0.15rem; }
+.adm-confirm-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--adm-text);
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+}
+.adm-confirm-text {
+    font-size: 0.875rem;
+    color: var(--adm-muted);
+    line-height: 1.5;
+    margin: 0;
+    word-break: break-word;
+}
+.adm-confirm-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.85rem 1.25rem 1.1rem;
+    background: #fbfbfb;
+    border-top: 1px solid var(--adm-border);
+    border-radius: 0 0 var(--adm-radius) var(--adm-radius);
+}
+
+/* ---- Диалог информации ---- */
+.adm-info-body { padding: 1.25rem; }
+.adm-info-top { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+.adm-info-image {
+    width: 5rem;
+    height: 5rem;
+    border-radius: var(--adm-radius-sm);
+    object-fit: cover;
+    background: var(--adm-border-soft);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--adm-muted);
+    overflow: hidden;
+}
+.adm-info-meta { min-width: 0; }
+.adm-info-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--adm-text);
+    letter-spacing: -0.01em;
+    margin: 0 0 0.35rem;
+    word-break: break-word;
+}
+.adm-info-price {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--adm-text);
+    margin-bottom: 0.5rem;
+}
+.adm-info-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.adm-info-rows {
+    display: grid;
+    grid-template-columns: 8rem 1fr;
+    gap: 0.5rem 1rem;
+    font-size: 0.875rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--adm-border-soft);
+}
+.adm-info-rows dt { color: var(--adm-muted); font-weight: 400; margin: 0; }
+.adm-info-rows dd { color: var(--adm-text); margin: 0; word-break: break-word; }
+
+/* ============================================================
+   Прогресс-бар HTMX
+   ============================================================ */
+#htmx-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 0;
+    background: var(--adm-primary);
+    z-index: 100;
+    opacity: 0;
+    transition: width 200ms ease, opacity 200ms ease;
+}
+#htmx-progress.is-active { opacity: 1; }
+
+/* ============================================================
+   Логин
+   ============================================================ */
+.adm-login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background:
+        radial-gradient(1000px 500px at 50% -10%, #fce7f3 0%, transparent 60%),
+        radial-gradient(800px 400px at 100% 100%, #ede9fe 0%, transparent 50%),
+        var(--adm-bg);
+}
+.adm-login-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    box-shadow: var(--adm-shadow-md);
+    padding: 2rem;
+}
+.adm-login-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+    color: var(--adm-text);
+    margin-bottom: 0.25rem;
+}
+.adm-login-brand small {
+    color: var(--adm-muted-soft);
+    font-weight: 400;
+    font-size: 0.75rem;
+}
+.adm-login-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--adm-text);
+    letter-spacing: -0.015em;
+    margin: 0.75rem 0 0.25rem;
+}
+.adm-login-sub { font-size: 0.85rem; color: var(--adm-muted); margin-bottom: 1.5rem; }
+
+/* ============================================================
+   Форма товара
+   ============================================================ */
+.adm-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 640px) { .adm-form-grid { grid-template-columns: 1fr; } }
+.adm-form-grid .adm-col-full { grid-column: 1 / -1; }
+
+.adm-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    color: var(--adm-text);
+}
+.adm-checkbox-row input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 4px;
+    border: 1px solid var(--adm-border);
+    accent-color: var(--adm-primary);
+}
+
+.adm-chip-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.adm-chip { cursor: pointer; }
+.adm-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.adm-chip span {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    border: 1px solid var(--adm-border);
+    color: var(--adm-muted);
+    background: var(--adm-surface);
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.adm-chip input:checked + span {
+    background: var(--adm-primary);
+    color: #fff;
+    border-color: var(--adm-primary);
+}
+.adm-chip:hover span { border-color: var(--adm-muted-soft); }
+
+.adm-current-image {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: #fbfbfb;
+    margin-bottom: 0.75rem;
+}
+.adm-current-image img {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: var(--adm-radius-sm);
+    object-fit: cover;
+}
+
+/* ============================================================
+   Поиск
+   ------------------------------------------------------------
+   Нативный крестик у <input type="search"> скрыт — он бы
+   дублировал нашу кнопку очистки.
+
+   Кнопка очистки показывается/скрывается чистым CSS через
+   :not(:placeholder-shown): как только в поле есть текст,
+   плейсхолдер исчезает, и кнопка появляется. JS не нужен.
+   ============================================================ */
+.adm-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.adm-search {
+    position: relative;
+    max-width: 24rem;
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+.adm-search > i.fas {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--adm-muted-soft);
+    font-size: 0.8rem;
+    pointer-events: none;
+    z-index: 1;
+}
+.adm-search input {
+    padding-left: 2.25rem;
+    padding-right: 2.25rem;
+}
+
+/* Скрываем нативный крестик поиска — у нас свой */
+.adm-search input[type="search"]::-webkit-search-cancel-button,
+.adm-search input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Кнопка очистки — появляется, когда в поле есть текст */
+.adm-search-clear {
+    position: absolute;
+    right: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--adm-muted-soft);
+    width: 1.6rem;
+    height: 1.6rem;
+    border: 0;
+    background: transparent;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+
+    /* По умолчанию скрыта; покажется при наличии текста */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.adm-search-clear:hover {
+    background: var(--adm-border-soft);
+    color: var(--adm-text);
+}
+
+/* Магия: пока в поле есть текст, плейсхолдер не показывается,
+   и селектор :not(:placeholder-shown) делает кнопку видимой.
+   Плейсхолдер у input обязателен — без него эффект не сработает. */
+.adm-search input:not(:placeholder-shown) ~ .adm-search-clear {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ---- Тумблер «Название / ID» ---- */
+.adm-search-mode {
+    display: inline-flex;
+    background: var(--adm-border-soft);
+    border-radius: var(--adm-radius-sm);
+    padding: 2px;
+    gap: 2px;
+    flex-shrink: 0;
+}
+.adm-search-mode button {
+    border: 0;
+    background: transparent;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--adm-muted);
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    font-family: inherit;
+}
+.adm-search-mode button:hover { color: var(--adm-text); }
+.adm-search-mode button.is-active {
+    background: var(--adm-surface);
+    color: var(--adm-text);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
 }

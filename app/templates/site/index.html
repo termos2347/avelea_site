@@ -163,7 +163,7 @@
 </section>
 {% endif %}
 
-{# ================= ПОПУЛЯРНОЕ ================= #}
+{# ================= ПОПУЛЯРНОЕ — горизонтальный рейл ================= #}
 <section class="mb-6 md:mb-8">
     <div class="flex items-end justify-between mb-4 md:mb-5">
         <div>
@@ -176,10 +176,22 @@
     </div>
 
     {% if popular %}
-    <div class="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {% for product in popular %}
-            {{ product_card(product) }}
-        {% endfor %}
+    <div class="product-rail-wrap">
+        <button type="button" class="product-rail-btn product-rail-btn-prev"
+                data-rail-prev aria-label="Прокрутить влево">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+
+        <div class="product-rail">
+            {% for product in popular %}
+                {{ product_card(product) }}
+            {% endfor %}
+        </div>
+
+        <button type="button" class="product-rail-btn product-rail-btn-next"
+                data-rail-next aria-label="Прокрутить вправо">
+            <i class="fas fa-chevron-right"></i>
+        </button>
     </div>
     {% else %}
     <div class="text-center py-12 md:py-16 bg-pink-50/50 rounded-2xl border border-pink-100">

@@ -3,82 +3,82 @@
     if (window.__avelea_catalog_init) return;
     window.__avelea_catalog_init = true;
 
-    const KEY = 'catalog_filters_collapsed';
-    const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
+    const body = document.body;
+    const toggleBtn = () => document.getElementById('filters-toggle');
+    const panel     = () => document.getElementById('filters-panel');
+    const backdrop  = () => document.getElementById('filters-backdrop');
 
-    // ===== Ранняя синхронизация свёрнутого состояния (desktop) =====
-    // Выполняется один раз при первой загрузке. При HTMX-переходах класс
-    // на <body> сохраняется (htmx не пересоздаёт body целиком).
-    try {
-        if (localStorage.getItem(KEY) === '1') {
-            document.body.classList.add('catalog-filters-collapsed');
-        }
-    } catch (e) {}
-
-    function syncToggle() {
-        const collapsed = document.body.classList.contains('catalog-filters-collapsed');
-        const btn  = document.getElementById('filters-toggle-desktop');
-        const icon = document.getElementById('filters-toggle-icon');
-        if (btn)  btn.setAttribute('aria-expanded', String(!collapsed));
-        if (icon) {
-            icon.classList.toggle('fa-chevron-left', !collapsed);
-            icon.classList.toggle('fa-chevron-right', collapsed);
-        }
+    // Ширина вертикального скроллбара. На мобиле / macOS-оверлейных
+    // скроллбарах будет 0 — тогда компенсация не нужна.
+    function getScrollbarWidth() {
+        return window.innerWidth - document.documentElement.clientWidth;
     }
 
-    function setCollapsed(collapsed) {
-        document.body.classList.toggle('catalog-filters-collapsed', collapsed);
-        syncToggle();
-        try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) {}
+    function open()  {
+        // Компенсация исчезающего скроллбара — иначе весь контент
+        // прыгает вправо на его ширину. Считаем ДО того, как выставим
+        // overflow: hidden (класс filters-open).
+        const sbw = getScrollbarWidth();
+        if (sbw > 0) {
+            body.style.paddingRight = sbw + 'px';
+        }
+
+        body.classList.add('filters-open');
+
+        const btn = toggleBtn();
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+
+        setTimeout(() => {
+            const first = panel() && panel().querySelector('input, select, button');
+            if (first) first.focus({ preventScroll: true });
+        }, 80);
     }
 
-    // ===== Делегирование кликов =====
+    function close() {
+        body.classList.remove('filters-open');
+        // Снимаем компенсацию — возвращаем layout как был.
+        body.style.paddingRight = '';
+
+        const btn = toggleBtn();
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggle() {
+        if (body.classList.contains('filters-open')) close();
+        else open();
+    }
+
+    // ===== Клики =====
     document.addEventListener('click', (e) => {
-        if (e.target.closest('#filters-toggle-desktop')) {
-            setCollapsed(!document.body.classList.contains('catalog-filters-collapsed'));
-            return;
-        }
-        if (e.target.closest('#open-filters-mobile')) {
-            document.body.classList.add('mobile-filters-open');
-            return;
-        }
-        if (e.target.closest('#close-filters-mobile')) {
-            document.body.classList.remove('mobile-filters-open');
-            return;
-        }
-        if (e.target.closest('#apply-filters-mobile')) {
-            document.body.classList.remove('mobile-filters-open');
-            const form = document.getElementById('filters-form');
-            if (form) form.submit();
-            return;
+        if (e.target.closest('#filters-toggle')) { toggle(); return; }
+        if (e.target.closest('#filters-close'))  { close();  return; }
+        if (e.target.closest('#filters-cancel')) { close();  return; }
+        // Клик по затемнению (вне окна) — закрыть
+        if (e.target === backdrop()) { close(); return; }
+    });
+
+    // ===== Escape =====
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && body.classList.contains('filters-open')) {
+            close();
         }
     });
 
-    // ===== Делегирование change на форме фильтров =====
+    // ===== Автосабмит только для сортировки =====
     document.addEventListener('change', (e) => {
         const form = document.getElementById('filters-form');
         if (!form || !form.contains(e.target)) return;
-
-        const t = e.target;
-        if (t.matches('select[name="sort"]')) {
-            form.submit();
-            return;
-        }
-        if (t.matches('input[name="category"], input[name="brand"], input[name="price_min"], input[name="price_max"]')) {
-            if (isMobile()) return;
+        if (e.target.matches('select[name="sort"]')) {
             form.submit();
         }
     });
 
-    // ===== Escape закрывает мобильные фильтры =====
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') document.body.classList.remove('mobile-filters-open');
+    // ===== Закрыть оверлей перед отправкой формы =====
+    document.addEventListener('submit', (e) => {
+        if (e.target && e.target.id === 'filters-form') close();
+    }, true);
+
+    document.body.addEventListener('htmx:beforeSwap', () => {
+        if (body.classList.contains('filters-open')) close();
     });
-
-    // ===== Синхронизация иконок после HTMX-свапа =====
-    // Единственный afterSettle-хук. Он идемпотентен — можно вызывать сколько угодно раз.
-    document.body.addEventListener('htmx:afterSettle', syncToggle);
-
-    // И один раз при первой загрузке — если перешли прямой ссылкой.
-    syncToggle();
 })();

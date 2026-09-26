@@ -1,91 +1,103 @@
 {% extends "base.html" %}
 
+{% block page_title %}Товары{% endblock %}
+
+{% block page_sub %}
+    {% if total_count %}
+    <div class="adm-topbar-sub">{{ start_idx }}–{{ end_idx }} из {{ total_count }}</div>
+    {% endif %}
+{% endblock %}
+
 {% block admin_action %}
-<button type="button" data-action="open-product-dialog"
-        class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
+<button type="button" data-action="open-product-dialog" class="adm-btn adm-btn-primary">
     <i class="fas fa-plus"></i> Добавить
 </button>
 {% endblock %}
 
 {% block admin_content %}
-<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <h1 class="text-2xl font-semibold">Товары</h1>
-    {% if total_count %}
-    <span class="text-sm text-gray-500">
-        {{ start_idx }}–{{ end_idx }} из {{ total_count }}
-    </span>
-    {% endif %}
-</div>
 
 {% if flash_error %}
-<div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-md">
-    <i class="fas fa-exclamation-triangle"></i> {{ flash_error }}
+<div class="adm-alert adm-alert-warn">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>{{ flash_error }}</span>
 </div>
 {% endif %}
 
-<form method="get" action="/admin/products" autocomplete="off" class="mb-4 max-w-md">
-    <div class="relative">
-        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-        <input type="search" name="q" value="{{ q }}"
-               placeholder="Поиск по названию..."
-               class="w-full border border-gray-300 rounded-md pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
-        {% if q %}
-        <a href="/admin/products"
-           class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
-           title="Сбросить">
-            <i class="fas fa-times text-xs"></i>
-        </a>
-        {% endif %}
+<div class="adm-search-wrap">
+    <div class="adm-search">
+        <i class="fas fa-search"></i>
+        <input type="search" placeholder="Поиск по названию..."
+               autocomplete="off"
+               data-action="filter-rows"
+               class="adm-input">
+        <button type="button" class="adm-search-clear" data-search-clear aria-label="Очистить">
+            <i class="fas fa-times" style="font-size: 0.7rem;"></i>
+        </button>
     </div>
-</form>
+</div>
 
 {% if products %}
-<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-    <table class="w-full text-sm">
-        <thead class="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
+<div class="adm-card">
+    <table class="adm-table">
+        <thead>
             <tr>
-                <th class="px-4 py-3 w-16"></th>
-                <th class="px-4 py-3">Название</th>
-                <th class="px-4 py-3">Категории</th>
-                <th class="px-4 py-3">Бренд</th>
-                <th class="px-4 py-3 text-right">Цена</th>
-                <th class="px-4 py-3 w-32 text-right">Действия</th>
+                <th style="width: 3.5rem;">ID</th>
+                <th style="width: 4rem;"></th>
+                <th>Название</th>
+                <th>Категории</th>
+                <th>Бренд</th>
+                <th style="text-align: right;">Цена</th>
+                <th style="width: 7rem; text-align: right;">Действия</th>
             </tr>
         </thead>
         <tbody>
             {% for p in products %}
-            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                <td class="px-4 py-2">
+            <tr class="row-item" data-name="{{ p.name|lower }}" data-id="{{ p.id }}">
+                <td class="adm-col-id adm-table-id">{{ p.id }}</td>
+                <td class="adm-col-hide-mobile">
                     {% if p.image %}
-                    <img src="{{ p.image }}" alt="" class="w-10 h-10 rounded object-cover">
+                    <img src="{{ p.image }}" alt="" class="adm-table-thumb">
                     {% else %}
-                    <div class="w-10 h-10 rounded bg-amber-100 flex items-center justify-center text-xs font-bold text-white">
-                        {{ p.name[:2].upper() }}
-                    </div>
+                    <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2">
-                    {{ p.name }}
+                <td class="adm-col-name">
+                    <div style="font-weight: 500;">{{ p.name }}</div>
                     {% if p.popular %}
-                    <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">популярное</span>
+                    <span class="adm-tag adm-tag-accent" style="margin-top: 0.25rem;">популярное</span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-gray-600">
+                <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">
                     {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
                 </td>
-                <td class="px-4 py-2 text-gray-600">{{ p.brand or "—" }}</td>
-                <td class="px-4 py-2 text-right font-medium">{{ p.price|int }} ₽</td>
-                <td class="px-4 py-2 text-right whitespace-nowrap">
+                <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">{{ p.brand or "—" }}</td>
+                <td class="adm-col-hide-mobile" style="text-align: right; font-weight: 500;">{{ p.price|int }} ₽</td>
+                <td class="adm-col-actions" style="text-align: right; white-space: nowrap;">
                     <a href="/admin/products/{{ p.id }}/edit"
-                       class="text-gray-500 hover:text-black p-1" title="Редактировать">
+                       class="adm-btn adm-btn-ghost" title="Редактировать">
                         <i class="fas fa-pen"></i>
                     </a>
+                    <button type="button"
+                            class="adm-btn adm-btn-ghost"
+                            title="Информация"
+                            data-action="open-info"
+                            data-info-id="{{ p.id }}"
+                            data-info-name="{{ p.name }}"
+                            data-info-price="{{ p.price }}"
+                            data-info-brand="{{ p.brand or '' }}"
+                            data-info-volume="{{ p.volume or '' }}"
+                            data-info-cats="{{ p.categories|map(attribute='name')|join(', ') }}"
+                            data-info-desc="{{ p.description or '' }}"
+                            data-info-image="{{ p.image or '' }}"
+                            data-info-popular="{{ '1' if p.popular else '0' }}">
+                        <i class="fas fa-circle-info"></i>
+                    </button>
                     <form method="post" action="/admin/products/{{ p.id }}/delete"
                           data-confirm="Удалить «{{ p.name }}»?"
-                          class="inline">
+                          style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit"
-                                class="text-gray-400 hover:text-red-500 p-1" title="Удалить">
+                                class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
                             <i class="fas fa-trash"></i>
                         </button>
                     </form>
@@ -94,76 +106,63 @@
             {% endfor %}
         </tbody>
     </table>
+    <div id="no-results" class="adm-empty" style="display: none; border: 0;">
+        <p>Ничего не найдено</p>
+    </div>
 </div>
 
 {% if total_pages > 1 %}
-<nav class="mt-6 flex flex-wrap items-center justify-center gap-1">
+<nav class="adm-pagination">
     {% if prev_url %}
-    <a href="{{ prev_url }}"
-       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
-        <i class="fas fa-chevron-left text-xs"></i>
-    </a>
+    <a href="{{ prev_url }}"><i class="fas fa-chevron-left" style="font-size: 0.7rem;"></i></a>
     {% else %}
-    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
-        <i class="fas fa-chevron-left text-xs"></i>
-    </span>
+    <span class="is-disabled"><i class="fas fa-chevron-left" style="font-size: 0.7rem;"></i></span>
     {% endif %}
 
     {% for it in page_items %}
         {% if it.ellipsis %}
-        <span class="px-2 text-gray-400">…</span>
+        <span class="is-ellipsis">…</span>
         {% elif it.current %}
-        <span class="px-3 py-1.5 bg-black text-white rounded-md text-sm font-medium">{{ it.num }}</span>
+        <span class="is-current">{{ it.num }}</span>
         {% else %}
-        <a href="{{ it.url }}"
-           class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">{{ it.num }}</a>
+        <a href="{{ it.url }}">{{ it.num }}</a>
         {% endif %}
     {% endfor %}
 
     {% if next_url %}
-    <a href="{{ next_url }}"
-       class="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-100 text-sm">
-        <i class="fas fa-chevron-right text-xs"></i>
-    </a>
+    <a href="{{ next_url }}"><i class="fas fa-chevron-right" style="font-size: 0.7rem;"></i></a>
     {% else %}
-    <span class="px-3 py-1.5 border border-gray-200 rounded-md text-gray-300 text-sm">
-        <i class="fas fa-chevron-right text-xs"></i>
-    </span>
+    <span class="is-disabled"><i class="fas fa-chevron-right" style="font-size: 0.7rem;"></i></span>
     {% endif %}
 </nav>
 {% endif %}
 
-{% elif q %}
-<div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
-    <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
-    <p class="text-gray-500">По запросу «{{ q }}» ничего не найдено</p>
-    <a href="/admin/products"
-       class="inline-block mt-3 text-sm text-black underline">Сбросить поиск</a>
-</div>
-
 {% else %}
-<div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
-    <p class="text-gray-500">Товаров пока нет</p>
-    <button type="button" data-action="open-product-dialog"
-            class="inline-block mt-3 text-sm text-black underline">Добавить первый</button>
+<div class="adm-empty">
+    <i class="fas fa-box"></i>
+    <p>Товаров пока нет</p>
+    <button type="button" data-action="open-product-dialog" class="adm-btn adm-btn-primary">
+        <i class="fas fa-plus"></i> Добавить первый
+    </button>
 </div>
 {% endif %}
 
-<dialog id="create-product-dialog"
-        class="rounded-xl p-0 w-full max-w-2xl backdrop:bg-black/40">
-    <div class="bg-white rounded-xl max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 z-10 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold">Новый товар</h2>
+<div class="adm-modal" id="create-product-dialog" role="dialog" aria-modal="true">
+    <div class="adm-modal-backdrop" data-modal-close="create-product-dialog"></div>
+    <div class="adm-dialog-card adm-dialog-card-wide">
+        <div class="adm-dialog-header">
+            <div class="adm-dialog-title">Новый товар</div>
             <button type="button" data-action="close-product-dialog"
-                    class="text-gray-400 hover:text-black w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                    class="adm-btn adm-btn-ghost" aria-label="Закрыть">
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="p-6">
+        <div class="adm-dialog-body">
             {% with product=None, product_categories=[], in_dialog=True %}
                 {% include "_product_form.html" %}
             {% endwith %}
         </div>
     </div>
-</dialog>
+</div>
+
 {% endblock %}

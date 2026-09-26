@@ -1,74 +1,67 @@
 <form method="post"
       enctype="multipart/form-data"
       action="{% if product %}/admin/products/{{ product.id }}/edit{% else %}/admin/products/new{% endif %}"
-      autocomplete="off"
-      class="space-y-4">
+      autocomplete="off">
 
     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div class="sm:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Название *</label>
+    <div class="adm-form-grid">
+
+        <div class="adm-col-full">
+            <label class="adm-label">Название *</label>
             <input type="text" name="name" required value="{{ product.name if product else '' }}"
-                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
+                   class="adm-input" placeholder="Например: Увлажняющий крем">
         </div>
 
-        <div class="sm:col-span-2">
-            <div class="flex items-center justify-between mb-2">
-                <label class="block text-sm font-medium text-gray-700">Категории</label>
-                <a href="/admin/categories" class="text-xs text-gray-500 hover:text-black underline">
-                    Управление категориями →
+        <div class="adm-col-full">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                <label class="adm-label" style="margin: 0;">Категории</label>
+                <a href="/admin/categories" style="font-size: 0.75rem; color: var(--adm-muted); text-decoration: underline;">
+                    Управление →
                 </a>
             </div>
 
             {% if all_categories %}
-            <div class="flex flex-wrap gap-1.5">
+            <div class="adm-chip-group">
                 {% for c in all_categories %}
-                <label class="cursor-pointer">
+                <label class="adm-chip">
                     <input type="checkbox" name="categories" value="{{ c.name }}"
-                           {% if c.name in product_categories %}checked{% endif %}
-                           class="peer sr-only">
-                    <span class="inline-block px-3 py-1 rounded-full text-sm border transition
-                                 border-gray-300 hover:border-gray-400
-                                 peer-checked:bg-black peer-checked:text-white peer-checked:border-black">
-                        {{ c.name }}
-                    </span>
+                           {% if c.name in product_categories %}checked{% endif %}>
+                    <span>{{ c.name }}</span>
                 </label>
                 {% endfor %}
             </div>
-            <p class="text-xs text-gray-500 mt-2">У товара может быть несколько категорий.</p>
+            <div class="adm-hint">У товара может быть несколько категорий.</div>
             {% else %}
-            <div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                Категорий пока нет.
-                <a href="/admin/categories" class="underline text-black">Создать категории →</a>
+            <div class="adm-hint">
+                Категорий пока нет. <a href="/admin/categories" style="color: var(--adm-text); text-decoration: underline;">Создать</a>
             </div>
             {% endif %}
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Цена, ₽ *</label>
-            <input type="number" name="price" required min="0" value="{{ product.price if product else '' }}"
-                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
+            <label class="adm-label">Цена, ₽ *</label>
+            <input type="number" name="price" required min="0"
+                   value="{{ product.price if product else '' }}"
+                   class="adm-input" placeholder="0">
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Объём</label>
+            <label class="adm-label">Объём</label>
             <input type="text" name="volume" value="{{ product.volume or '' if product else '' }}"
-                   placeholder="50 мл"
-                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">
+                   class="adm-input" placeholder="50 мл">
         </div>
 
-        <div class="sm:col-span-2">
-            <div class="flex items-center justify-between mb-2">
-                <label class="block text-sm font-medium text-gray-700">Бренд</label>
-                <a href="/admin/brands" class="text-xs text-gray-500 hover:text-black underline">
-                    Управление брендами →
+        <div class="adm-col-full">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                <label class="adm-label" style="margin: 0;">Бренд</label>
+                <a href="/admin/brands" style="font-size: 0.75rem; color: var(--adm-muted); text-decoration: underline;">
+                    Управление →
                 </a>
             </div>
 
             {% if all_brands %}
-            <select name="brand_id"
-                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+            <select name="brand_id" class="adm-select">
                 <option value="">— не указан —</option>
                 {% for b in all_brands %}
                 <option value="{{ b.id }}" {% if product and product.brand_id == b.id %}selected{% endif %}>
@@ -77,60 +70,52 @@
                 {% endfor %}
             </select>
             {% else %}
-            <div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                Брендов пока нет.
-                <a href="/admin/brands" class="underline text-black">Создать бренды →</a>
+            <div class="adm-hint">
+                Брендов пока нет. <a href="/admin/brands" style="color: var(--adm-text); text-decoration: underline;">Создать</a>
             </div>
             {% endif %}
         </div>
 
-        <div class="sm:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Описание</label>
-            <textarea name="description" rows="4"
-                      class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black">{{ product.description or '' if product else '' }}</textarea>
+        <div class="adm-col-full">
+            <label class="adm-label">Описание</label>
+            <textarea name="description" rows="4" class="adm-textarea"
+                      placeholder="Короткое описание товара...">{{ product.description or '' if product else '' }}</textarea>
         </div>
 
-        <div class="sm:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Картинка</label>
+        <div class="adm-col-full">
+            <label class="adm-label">Картинка</label>
             {% if product and product.image %}
-            <div class="mb-2 flex items-center gap-3">
-                <img src="{{ product.image }}" alt="" class="w-20 h-20 rounded object-cover border border-gray-200">
-                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <div class="adm-current-image">
+                <img src="{{ product.image }}" alt="">
+                <label class="adm-checkbox-row">
                     <input type="checkbox" name="remove_image" value="1">
                     Удалить текущую
                 </label>
             </div>
             {% endif %}
-            <input type="file" name="image" accept="image/*"
-                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-            <p class="text-xs text-gray-500 mt-1">jpg, png, webp, gif</p>
+            <input type="file" name="image" accept="image/*" class="adm-input">
+            <div class="adm-hint">jpg, png, webp, gif</div>
         </div>
 
-        <div class="sm:col-span-2">
-            <label class="flex items-center gap-2 text-sm cursor-pointer">
+        <div class="adm-col-full">
+            <label class="adm-checkbox-row">
                 <input type="checkbox" name="popular" value="1"
-                       {% if product and product.popular %}checked{% endif %}
-                       class="rounded border-gray-300 text-black focus:ring-black">
+                       {% if product and product.popular %}checked{% endif %}>
                 Показывать на главной как популярное
             </label>
         </div>
     </div>
 
-    <div class="flex gap-3 pt-2">
-        <button type="submit"
-                class="bg-black text-white px-6 py-2 rounded-md hover:opacity-90">
+    <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+        <button type="submit" class="adm-btn adm-btn-primary">
             {% if product %}Сохранить{% else %}Создать{% endif %}
         </button>
         {% if in_dialog %}
-        <button type="button" data-action="close-product-dialog"
-                class="border border-gray-300 px-6 py-2 rounded-md hover:bg-gray-50">
+        <button type="button" data-action="close-product-dialog" class="adm-btn adm-btn-secondary">
             Отмена
         </button>
         {% else %}
-        <a href="/admin/products"
-           class="border border-gray-300 px-6 py-2 rounded-md hover:bg-gray-50">
-            Отмена
-        </a>
+        <a href="/admin/products" class="adm-btn adm-btn-secondary">Отмена</a>
         {% endif %}
     </div>
 </form>

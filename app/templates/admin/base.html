@@ -11,49 +11,151 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/admin.css">
 </head>
-<body class="bg-gray-50" hx-boost="true">
-    <div id="htmx-progress"
-         class="fixed top-0 left-0 h-0.5 bg-black w-0 transition-all duration-200 z-50 opacity-0"></div>
+<body style="background: var(--adm-bg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;" hx-boost="true">
 
-    <div class="container mx-auto px-4 max-w-6xl py-6">
+    <div id="htmx-progress"></div>
 
-        {% set path = request.url.path %}
-        <nav class="mb-6 border-b border-gray-200">
-            <div class="flex flex-wrap items-center justify-between gap-3 pb-3">
+    {% set path = request.url.path %}
 
-                <div class="flex flex-wrap items-center gap-1">
-                    <a href="/admin/products"
-                       class="px-4 py-2 rounded-md text-sm font-medium transition
-                              {% if path.startswith('/admin/products') %}bg-black text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
-                        <i class="fas fa-box"></i> Товары
-                    </a>
-                    <a href="/admin/brands"
-                       class="px-4 py-2 rounded-md text-sm font-medium transition
-                              {% if path.startswith('/admin/brands') %}bg-black text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
-                        <i class="fas fa-tag"></i> Бренды
-                    </a>
-                    <a href="/admin/categories"
-                       class="px-4 py-2 rounded-md text-sm font-medium transition
-                              {% if path.startswith('/admin/categories') %}bg-black text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
-                        <i class="fas fa-folder"></i> Категории
-                    </a>
+    <div class="adm-layout">
+        <aside class="adm-sidebar">
+            <div class="adm-sidebar-brand">
+                avelea <small>admin</small>
+            </div>
+
+            <nav class="adm-nav">
+                <a href="/admin/products"
+                   class="{% if path.startswith('/admin/products') %}is-active{% endif %}">
+                    <i class="fas fa-box"></i> Товары
+                </a>
+                <a href="/admin/brands"
+                   class="{% if path.startswith('/admin/brands') %}is-active{% endif %}">
+                    <i class="fas fa-tag"></i> Бренды
+                </a>
+                <a href="/admin/categories"
+                   class="{% if path.startswith('/admin/categories') %}is-active{% endif %}">
+                    <i class="fas fa-folder"></i> Категории
+                </a>
+            </nav>
+
+            <div class="adm-sidebar-footer">
+                <a href="/" target="_blank" hx-boost="false">
+                    <i class="fas fa-external-link-alt"></i> На сайт
+                </a>
+                <a href="/admin/logout">
+                    <i class="fas fa-sign-out-alt"></i> Выйти
+                </a>
+            </div>
+        </aside>
+
+        <main class="adm-main">
+            <header class="adm-topbar">
+                <div>
+                    <h1 class="adm-topbar-title">{% block page_title %}{% endblock %}</h1>
+                    {% block page_sub %}{% endblock %}
                 </div>
-
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="adm-topbar-actions">
                     {% block admin_action %}{% endblock %}
-                    <a href="/" target="_blank" hx-boost="false"
-                       class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm text-gray-700">
-                        <i class="fas fa-external-link-alt"></i> На сайт
-                    </a>
-                    <a href="/admin/logout"
-                       class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm text-gray-700">
-                        <i class="fas fa-sign-out-alt"></i> Выйти
-                    </a>
+                </div>
+            </header>
+
+            <div class="adm-content">
+                {% block admin_content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    {# ============================================================
+       МОДАЛ ПОДТВЕРЖДЕНИЯ
+       ============================================================ #}
+    <div class="adm-modal" id="confirm-dialog" role="dialog" aria-modal="true">
+        <div class="adm-modal-backdrop" data-modal-close="confirm-dialog"></div>
+        <div class="adm-dialog-card adm-dialog-card-sm">
+            <div class="adm-confirm-body">
+                <div class="adm-confirm-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="adm-confirm-content">
+                    <h3 class="adm-confirm-title" id="confirm-title">Подтвердите действие</h3>
+                    <p class="adm-confirm-text" id="confirm-text"></p>
                 </div>
             </div>
-        </nav>
+            <div class="adm-confirm-footer">
+                <button type="button" id="confirm-cancel" class="adm-btn adm-btn-secondary">
+                    Отмена
+                </button>
+                <button type="button" id="confirm-ok" class="adm-btn adm-btn-danger-solid">
+                    Удалить
+                </button>
+            </div>
+        </div>
+    </div>
 
-        {% block admin_content %}{% endblock %}
+    {# ============================================================
+       МОДАЛ ИНФОРМАЦИИ
+       ============================================================ #}
+    <div class="adm-modal" id="info-dialog" role="dialog" aria-modal="true">
+        <div class="adm-modal-backdrop" data-modal-close="info-dialog"></div>
+        <div class="adm-dialog-card">
+            <div class="adm-dialog-header">
+                <div class="adm-dialog-title" id="info-title">Информация</div>
+                <button type="button" id="info-close" class="adm-btn adm-btn-ghost" aria-label="Закрыть">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="adm-info-body">
+                <div class="adm-info-top">
+                    <div id="info-image" class="adm-info-image">—</div>
+                    <div class="adm-info-meta">
+                        <h3 class="adm-info-name" id="info-name">—</h3>
+                        <div class="adm-info-price" id="info-price">—</div>
+                        <div class="adm-info-tags" id="info-tags"></div>
+                    </div>
+                </div>
+                <dl class="adm-info-rows" id="info-rows"></dl>
+            </div>
+            <div class="adm-dialog-footer">
+                <a href="#" id="info-edit-link" class="adm-btn adm-btn-primary">
+                    <i class="fas fa-pen"></i> Редактировать
+                </a>
+                <button type="button" id="info-cancel" class="adm-btn adm-btn-secondary">
+                    Закрыть
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ============================================================
+       МОДАЛ РЕДАКТИРОВАНИЯ (общий для брендов и категорий)
+       URL формы и заголовок задаются из JS.
+       ============================================================ #}
+    <div class="adm-modal" id="edit-dialog" role="dialog" aria-modal="true">
+        <div class="adm-modal-backdrop" data-modal-close="edit-dialog"></div>
+        <div class="adm-dialog-card">
+            <div class="adm-dialog-header">
+                <div class="adm-dialog-title" id="edit-title">Редактировать</div>
+                <button type="button" data-action="close-edit-dialog"
+                        class="adm-btn adm-btn-ghost" aria-label="Закрыть">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form method="post" id="edit-form" autocomplete="off">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <div class="adm-dialog-body">
+                    <label class="adm-label">Название</label>
+                    <input type="text" name="name" id="edit-name" required
+                           autocomplete="off" class="adm-input">
+                </div>
+                <div class="adm-dialog-footer">
+                    <button type="button" data-action="close-edit-dialog" class="adm-btn adm-btn-secondary">
+                        Отмена
+                    </button>
+                    <button type="submit" class="adm-btn adm-btn-primary">
+                        Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="/static/js/admin.js"></script>

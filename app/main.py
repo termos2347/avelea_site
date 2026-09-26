@@ -1046,6 +1046,30 @@ async def admin_category_create(
             db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
 
+@app.post("/admin/categories/{category_id}/edit")
+async def admin_category_edit(
+    request: Request,
+    category_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    name: str = Form(...),
+):
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404)
+
+    name = name.strip()
+    if name and name != category.name:
+        # Проверяем, что новое имя не занято другой категорией
+        exists = (
+            db.query(Category)
+              .filter(Category.name == name, Category.id != category_id)
+              .first()
+        )
+        if not exists:
+            category.name = name
+            db.commit()
+    return RedirectResponse(url="/admin/categories", status_code=303)
 
 @app.post("/admin/categories/{category_id}/delete")
 async def admin_category_delete(
@@ -1099,6 +1123,29 @@ async def admin_brand_create(
             db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)
 
+@app.post("/admin/brands/{brand_id}/edit")
+async def admin_brand_edit(
+    request: Request,
+    brand_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    name: str = Form(...),
+):
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand:
+        raise HTTPException(status_code=404)
+
+    name = name.strip()
+    if name and name != brand.name:
+        exists = (
+            db.query(Brand)
+              .filter(Brand.name == name, Brand.id != brand_id)
+              .first()
+        )
+        if not exists:
+            brand.name = name
+            db.commit()
+    return RedirectResponse(url="/admin/brands", status_code=303)
 
 @app.post("/admin/brands/{brand_id}/delete")
 async def admin_brand_delete(

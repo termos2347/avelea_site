@@ -1,55 +1,68 @@
 {% extends "base.html" %}
 
+{% block page_title %}Категории{% endblock %}
+
 {% block admin_action %}
-<button type="button" data-action="open-create-dialog"
-        class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
+<button type="button" data-action="open-create-dialog" class="adm-btn adm-btn-primary">
     <i class="fas fa-plus"></i> Добавить
 </button>
 {% endblock %}
 
 {% block admin_content %}
-<h1 class="text-2xl font-semibold mb-4">Категории</h1>
 
-<div class="relative mb-4 max-w-md">
-    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-    <input type="search" id="search-input" placeholder="Поиск по категориям..."
-           autocomplete="off"
-           data-action="filter-rows"
-           class="w-full border border-gray-300 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black">
+<div class="adm-search-wrap">
+    <div class="adm-search">
+        <i class="fas fa-search"></i>
+        <input type="search" placeholder="Поиск по названию..."
+               autocomplete="off"
+               data-action="filter-rows"
+               class="adm-input">
+        <button type="button" class="adm-search-clear" data-search-clear aria-label="Очистить">
+            <i class="fas fa-times" style="font-size: 0.7rem;"></i>
+        </button>
+    </div>
 </div>
 
 {% if categories %}
-<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-    <table class="w-full text-sm">
-        <thead class="bg-gray-50 border-b border-gray-200 text-left text-gray-600">
+<div class="adm-card">
+    <table class="adm-table">
+        <thead>
             <tr>
-                <th class="px-4 py-3">Категория</th>
-                <th class="px-4 py-3 w-40">Используется</th>
-                <th class="px-4 py-3 w-24 text-right">Действия</th>
+                <th style="width: 3.5rem;">ID</th>
+                <th>Категория</th>
+                <th style="width: 12rem;">Используется</th>
+                <th style="width: 7rem; text-align: right;">Действия</th>
             </tr>
         </thead>
         <tbody>
             {% for c in categories %}
-            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 row-item"
-                data-name="{{ c.name|lower }}">
-                <td class="px-4 py-2">
-                    <span class="inline-block px-3 py-1 bg-gray-100 rounded-full text-xs">{{ c.name }}</span>
+            <tr class="row-item" data-name="{{ c.name|lower }}" data-id="{{ c.id }}">
+                <td class="adm-col-id adm-table-id">{{ c.id }}</td>
+                <td class="adm-col-name">
+                    <span class="adm-tag">{{ c.name }}</span>
                 </td>
-                <td class="px-4 py-2 text-gray-600">
+                <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">
                     {% set n = counts.get(c.id, 0) %}
                     {% if n %}
                         {{ n }} {{ "товар" if n == 1 else ("товара" if n < 5 else "товаров") }}
                     {% else %}
-                        <span class="text-gray-400">не используется</span>
+                        <span style="color: var(--adm-muted-soft);">не используется</span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-right">
+                <td class="adm-col-actions" style="text-align: right; white-space: nowrap;">
+                    <button type="button"
+                            class="adm-btn adm-btn-ghost"
+                            title="Редактировать"
+                            data-action="open-edit-category"
+                            data-edit-id="{{ c.id }}"
+                            data-edit-name="{{ c.name }}">
+                        <i class="fas fa-pen"></i>
+                    </button>
                     <form method="post" action="/admin/categories/{{ c.id }}/delete"
                           data-confirm="Удалить категорию «{{ c.name }}»? Она будет убрана из всех товаров."
-                          class="inline">
+                          style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                        <button type="submit"
-                                class="text-gray-400 hover:text-red-500 p-1" title="Удалить">
+                        <button type="submit" class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
                             <i class="fas fa-trash"></i>
                         </button>
                     </form>
@@ -58,37 +71,47 @@
             {% endfor %}
         </tbody>
     </table>
-    <div id="no-results" class="hidden text-center py-8 text-gray-500 text-sm">
-        Ничего не найдено
+    <div id="no-results" class="adm-empty" style="display: none; border: 0;">
+        <p>Ничего не найдено</p>
     </div>
 </div>
 {% else %}
-<div class="text-center py-16 bg-white border border-gray-200 rounded-lg">
-    <i class="fas fa-folder text-4xl text-gray-300 mb-3"></i>
-    <p class="text-gray-500">Категорий пока нет</p>
-    <button type="button" data-action="open-create-dialog"
-            class="inline-block mt-3 text-sm text-black underline">Создать первую</button>
+<div class="adm-empty">
+    <i class="fas fa-folder"></i>
+    <p>Категорий пока нет</p>
+    <button type="button" data-action="open-create-dialog" class="adm-btn adm-btn-primary">
+        <i class="fas fa-plus"></i> Создать первую
+    </button>
 </div>
 {% endif %}
 
-<dialog id="create-dialog" class="rounded-xl p-0 w-full max-w-sm backdrop:bg-black/40">
-    <form method="post" action="/admin/categories/new"
-          class="p-6 bg-white rounded-xl" autocomplete="off">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-        <h2 class="text-lg font-semibold mb-4">Новая категория</h2>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Название</label>
-        <input type="text" name="name" id="create-name" required autocomplete="off"
-               class="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-black">
-        <div class="flex justify-end gap-2">
+<div class="adm-modal" id="create-dialog" role="dialog" aria-modal="true">
+    <div class="adm-modal-backdrop" data-modal-close="create-dialog"></div>
+    <div class="adm-dialog-card">
+        <div class="adm-dialog-header">
+            <div class="adm-dialog-title">Новая категория</div>
             <button type="button" data-action="close-create-dialog"
-                    class="border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 text-sm">
-                Отмена
-            </button>
-            <button type="submit"
-                    class="bg-black text-white px-4 py-2 rounded-md hover:opacity-90 text-sm">
-                Создать
+                    class="adm-btn adm-btn-ghost" aria-label="Закрыть">
+                <i class="fas fa-times"></i>
             </button>
         </div>
-    </form>
-</dialog>
+        <form method="post" action="/admin/categories/new" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <div class="adm-dialog-body">
+                <label class="adm-label">Название</label>
+                <input type="text" name="name" id="create-name" required autocomplete="off"
+                       class="adm-input" placeholder="Например: Лицо">
+            </div>
+            <div class="adm-dialog-footer">
+                <button type="button" data-action="close-create-dialog" class="adm-btn adm-btn-secondary">
+                    Отмена
+                </button>
+                <button type="submit" class="adm-btn adm-btn-primary">
+                    Создать
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}

@@ -7,7 +7,7 @@
 
 {% macro product_card(product) %}
 <a href="/product/{{ product.id }}"
-   class="group border border-pink-100 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-pink-200/60 hover:border-pink-300 transition-all bg-white p-3 block">
+   class="group border border-pink-100 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-pink-200/60 hover:border-pink-300 transition-all bg-white p-3 flex flex-col">
     <div class="aspect-square w-full rounded-xl mb-3 overflow-hidden flex items-center justify-center
                 bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
         {% if product.image %}
@@ -21,6 +21,6 @@
     <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
         {{ product.categories|map(attribute='name')|join(', ') }}
     </p>
-    <p class="text-base font-semibold mt-1 text-pink-600">{{ product.price|int }} ₽</p>
+    <p class="text-base font-semibold mt-auto pt-1 text-pink-600">{{ product.price|int }} ₽</p>
 </a>
 {% endmacro %}
