@@ -890,6 +890,13 @@ async def admin_product_create(
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
+    # Категории обязательны: без них товар не найдётся по фильтрам.
+    if not categories:
+        request.session["flash_error"] = (
+            "Выберите хотя бы одну категорию — товар не создан."
+        )
+        return RedirectResponse(url="/admin/products", status_code=303)
+    
     image_url, img_err = _save_upload(image)
     if img_err:
         request.session["flash_error"] = img_err
@@ -955,6 +962,12 @@ async def admin_product_update(
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
+    if not categories:
+        request.session["flash_error"] = (
+            "Выберите хотя бы одну категорию — изменения не сохранены."
+        )
+        return RedirectResponse(url="/admin/products", status_code=303)
+    
     product.name = name.strip()
     product.brand_id = _resolve_brand_id(db, brand_id)
     product.price = price
@@ -1067,7 +1080,6 @@ async def admin_category_edit(
 
     name = name.strip()
     if name and name != category.name:
-        # Проверяем, что новое имя не занято другой категорией
         exists = (
             db.query(Category)
               .filter(Category.name == name, Category.id != category_id)

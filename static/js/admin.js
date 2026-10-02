@@ -215,7 +215,11 @@
         const dlg = document.getElementById('edit-dialog');
         if (!dlg) return;
         document.getElementById('edit-title').textContent = title;
-        document.getElementById('edit-form').action = actionUrl;
+
+        const form = document.getElementById('edit-form');
+        form.action = actionUrl;
+        form.setAttribute('action', actionUrl);
+
         document.getElementById('edit-name').value = name;
         openModal(dlg, '#edit-name');
     }
@@ -408,4 +412,41 @@
             input.focus();
         }
     });
+
+    // ============================================================
+    // ОБЯЗАТЕЛЬНЫЙ ВЫБОР КАТЕГОРИИ
+    // ------------------------------------------------------------
+    // HTML5 required не работает для группы чекбоксов «хотя бы
+    // один». Проверяем вручную на submit. Плюс сбрасываем ошибку
+    // при первом же клике по любому чекбоксу.
+    // ============================================================
+    document.addEventListener('change', (e) => {
+        if (!e.target.matches('input[name="categories"]')) return;
+        const form = e.target.closest('form');
+        if (!form) return;
+        const group = form.querySelector('[data-categories-group]');
+        const error = form.querySelector('[data-categories-error]');
+        if (group) group.classList.remove('is-error');
+        if (error) error.classList.remove('is-visible');
+    });
+
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        // Обрабатываем только формы товара (у них есть чекбоксы категорий)
+        const boxes = form.querySelectorAll('input[name="categories"]');
+        if (boxes.length === 0) return;
+
+        const anyChecked = form.querySelectorAll('input[name="categories"]:checked').length > 0;
+        if (anyChecked) return;
+
+        // Отменяем отправку и показываем ошибку
+        e.preventDefault();
+        e.stopPropagation();
+
+        const group = form.querySelector('[data-categories-group]');
+        const error = form.querySelector('[data-categories-error]');
+        if (group) group.classList.add('is-error');
+        if (error) error.classList.add('is-visible');
+        if (group) group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, true);
 })();

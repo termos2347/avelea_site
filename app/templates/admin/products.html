@@ -157,7 +157,7 @@
                 </button>
                 <form method="post" action="/admin/products/{{ p.id }}/delete"
                       data-confirm="Удалить «{{ p.name }}»?"
-                      style="display: contents;">
+                      style="margin: 0;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <button type="submit" class="act-del" title="Удалить">
                         <i class="fas fa-trash"></i>

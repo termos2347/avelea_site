@@ -10,6 +10,8 @@
 # Перейти в папку проекта
 cd ~/avelea_site
 
+npx localtunnel --port 8000 --subdomain avelea-test
+
 # Активировать виртуальное окружение
 ./install.sh
 

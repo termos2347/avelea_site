@@ -153,7 +153,7 @@
 
                                 <h3 class="font-medium text-gray-900 text-sm leading-snug"
                                     id="info-preview-name"
-                                    style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                    style="display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                                     —
                                 </h3>
 
@@ -205,7 +205,7 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <form method="post" id="edit-form" autocomplete="off">
+            <form method="post" id="edit-form" autocomplete="off" hx-boost="false">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div class="adm-dialog-body">
                     <label class="adm-label">Название</label>

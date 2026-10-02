@@ -14,16 +14,17 @@
                    class="adm-input" placeholder="Например: Увлажняющий крем">
         </div>
 
+        {# ============ КАТЕГОРИИ (обязательно хотя бы одна) ============ #}
         <div class="adm-col-full">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
-                <label class="adm-label" style="margin: 0;">Категории</label>
+                <label class="adm-label" style="margin: 0;">Категории *</label>
                 <a href="/admin/categories" style="font-size: 0.75rem; color: var(--adm-muted); text-decoration: underline;">
                     Управление →
                 </a>
             </div>
 
             {% if all_categories %}
-            <div class="adm-chip-group">
+            <div class="adm-chip-group" data-categories-group>
                 {% for c in all_categories %}
                 <label class="adm-chip">
                     <input type="checkbox" name="categories" value="{{ c.name }}"
@@ -32,6 +33,10 @@
                 </label>
                 {% endfor %}
             </div>
+            <p class="adm-field-error" data-categories-error>
+                <i class="fas fa-exclamation-circle"></i>
+                Выберите хотя бы одну категорию
+            </p>
             <div class="adm-hint">У товара может быть несколько категорий.</div>
             {% else %}
             <div class="adm-hint">

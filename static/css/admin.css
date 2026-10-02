@@ -1079,3 +1079,27 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
 @media (hover: none) {
     .adm-product-actions { opacity: 1; }
 }
+
+/* ============================================================
+   Ошибки валидации в форме товара
+   ============================================================ */
+.adm-chip-group.is-error {
+    outline: 2px solid var(--adm-danger);
+    outline-offset: 4px;
+    border-radius: var(--adm-radius-sm);
+    padding: 4px;
+    margin: -4px;
+}
+
+.adm-field-error {
+    display: none;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--adm-danger);
+    font-size: 0.78rem;
+    margin: 0.35rem 0 0;
+}
+.adm-field-error.is-visible {
+    display: flex;
+}
+.adm-field-error i { font-size: 0.75rem; }
