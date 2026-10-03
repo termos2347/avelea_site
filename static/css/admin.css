@@ -138,7 +138,6 @@
 .adm-nav a.is-active { background: var(--adm-primary); color: #fff; }
 .adm-nav a i { font-size: 0.78rem; opacity: 0.85; }
 
-/* Кнопка действия справа (Добавить) */
 .adm-nav-actions {
     display: flex;
     align-items: center;
@@ -155,13 +154,11 @@
     .adm-header-actions a { padding: 0.4rem 0.55rem; }
 }
 
-/* На телефоне кнопка «Добавить» — только плюсик, во всех местах */
+/* На телефоне кнопка «Добавить» — только плюсик */
 @media (max-width: 640px) {
-    /* Кнопка в верхнем топбаре (справа от вкладок) */
     .adm-nav-actions .adm-btn span { display: none; }
     .adm-nav-actions .adm-btn { padding: 0.55rem 0.7rem; }
 
-    /* Кнопка в пустом состоянии («Добавить первый») */
     .adm-empty .adm-btn span { display: none; }
     .adm-empty .adm-btn { padding: 0.55rem 0.8rem; }
 }
@@ -182,6 +179,12 @@
 }
 @media (max-width: 720px) {
     .adm-content { padding: 1.1rem 0.85rem 2rem; }
+}
+
+.adm-count {
+    font-size: 0.8rem;
+    color: var(--adm-muted);
+    margin-bottom: 0.75rem;
 }
 
 /* ============================================================
@@ -683,8 +686,6 @@ body.adm-modal-open {
     line-height: 1.35;
 }
 
-.adm-preview-stage a { pointer-events: auto; }
-
 /* ============================================================
    Прогресс-бар HTMX
    ============================================================ */
@@ -749,7 +750,7 @@ body.adm-modal-open {
 .adm-login-sub { font-size: 0.85rem; color: var(--adm-muted); margin-bottom: 1.5rem; }
 
 /* ============================================================
-   Форма товара
+   Форма товара: сетка
    ============================================================ */
 .adm-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 640px) { .adm-form-grid { grid-template-columns: 1fr; } }
@@ -771,7 +772,143 @@ body.adm-modal-open {
     accent-color: var(--adm-primary);
 }
 
-.adm-chip-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+/* ============================================================
+   Форма товара: секция (Категории / Бренд)
+   ------------------------------------------------------------
+   Структура:
+     .adm-section
+       .adm-section-bar            — всегда видна (поиск + счётчик
+                                     + управление + сворачивание)
+       .adm-collapsible            — только чипсы и подсказки
+         .adm-collapsible-inner
+           .adm-chip-group
+   ============================================================ */
+.adm-section { display: block; }
+
+.adm-section-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.adm-section-bar .adm-search-inline {
+    flex: 1;
+    margin-bottom: 0;
+    min-width: 0;
+}
+
+.adm-section-count {
+    font-size: 0.72rem;
+    color: var(--adm-muted);
+    background: var(--adm-border-soft);
+    padding: 0.05rem 0.45rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    min-width: 1.3rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+.adm-section-count:empty { display: none; }
+
+.adm-section-icon-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--adm-radius-sm);
+    color: var(--adm-muted);
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: background 120ms ease, color 120ms ease;
+}
+.adm-section-icon-link:hover {
+    background: var(--adm-border-soft);
+    color: var(--adm-text);
+}
+.adm-section-icon-link i { font-size: 0.8rem; }
+
+/* ---- Кнопка сворачивания ---- */
+.adm-collapse-btn {
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--adm-border);
+    background: var(--adm-surface);
+    border-radius: var(--adm-radius-sm);
+    color: var(--adm-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+.adm-collapse-btn:hover {
+    background: var(--adm-border-soft);
+    color: var(--adm-text);
+}
+.adm-collapse-btn i {
+    font-size: 0.7rem;
+    transition: transform 200ms ease;
+}
+.adm-collapse-btn[aria-expanded="false"] i { transform: rotate(180deg); }
+
+/* ---- Сворачиваемая область ---- */
+.adm-collapsible {
+    overflow: hidden;
+    transition: max-height 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- Инлайн-поиск ---- */
+.adm-search-inline {
+    position: relative;
+}
+.adm-search-inline > i {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--adm-muted-soft);
+    font-size: 0.72rem;
+    pointer-events: none;
+    z-index: 1;
+}
+.adm-search-inline input {
+    width: 100%;
+    padding: 0.42rem 0.6rem 0.42rem 1.9rem;
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: var(--adm-surface);
+    font-size: 0.8rem;
+    font-family: inherit;
+    color: var(--adm-text);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.adm-search-inline input:focus {
+    outline: none;
+    border-color: var(--adm-primary);
+    box-shadow: 0 0 0 3px rgb(17 24 39 / 0.08);
+}
+.adm-search-inline input::placeholder { color: var(--adm-muted-soft); }
+
+/* ---- Чип-группа ---- */
+.adm-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 2px 4px 2px 2px;
+}
+.adm-chip-group::-webkit-scrollbar { width: 8px; }
+.adm-chip-group::-webkit-scrollbar-thumb {
+    background: var(--adm-border);
+    border-radius: 4px;
+}
+.adm-chip-group::-webkit-scrollbar-thumb:hover { background: var(--adm-muted-soft); }
+
 .adm-chip { cursor: pointer; }
 .adm-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .adm-chip span {
@@ -791,6 +928,7 @@ body.adm-modal-open {
 }
 .adm-chip:hover span { border-color: var(--adm-muted-soft); }
 
+/* ---- Текущая картинка товара ---- */
 .adm-current-image {
     display: flex;
     align-items: center;
@@ -808,8 +946,74 @@ body.adm-modal-open {
     object-fit: cover;
 }
 
+/* ---- Объём: число + единица измерения ---- */
+.adm-volume-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+.adm-volume-row .adm-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.adm-unit-switch {
+    display: inline-flex;
+    background: var(--adm-border-soft);
+    border-radius: var(--adm-radius-sm);
+    padding: 2px;
+    gap: 2px;
+    flex-shrink: 0;
+    align-self: stretch;
+}
+.adm-unit-switch button {
+    border: 0;
+    background: transparent;
+    padding: 0 0.75rem;
+    min-width: 2.5rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--adm-muted);
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    font-family: inherit;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.adm-unit-switch button:hover { color: var(--adm-text); }
+.adm-unit-switch button.is-active {
+    background: var(--adm-surface);
+    color: var(--adm-text);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+/* ---- Ошибки валидации ---- */
+.adm-chip-group.is-error {
+    outline: 2px solid var(--adm-danger);
+    outline-offset: 4px;
+    border-radius: var(--adm-radius-sm);
+    padding: 4px;
+    margin: -4px;
+}
+
+.adm-field-error {
+    display: none;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--adm-danger);
+    font-size: 0.78rem;
+    margin: 0.35rem 0 0;
+}
+.adm-field-error.is-visible {
+    display: flex;
+}
+.adm-field-error i { font-size: 0.75rem; }
+
 /* ============================================================
-   Поиск
+   Поиск (списки товаров / брендов / категорий)
    ============================================================ */
 .adm-search-wrap {
     display: flex;
@@ -880,7 +1084,7 @@ body.adm-modal-open {
 .adm-search-wrap .adm-view-switch { margin-left: auto; }
 
 /* ============================================================
-   Переключатель видов Товаров
+   Переключатель видов Товаров (таблица / карточки)
    ============================================================ */
 .adm-view-switch {
     display: inline-flex;
@@ -914,7 +1118,7 @@ body[data-products-view="table"] .adm-products-view[data-view="table"] { display
 body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display: block; }
 
 /* ============================================================
-   Сетка карточек товаров
+   Сетка карточек товаров (режим «Карточки»)
    ============================================================ */
 .adm-product-grid {
     display: grid;
@@ -1070,36 +1274,7 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     text-overflow: ellipsis;
     max-width: 50%;
 }
-.adm-count {
-    font-size: 0.8rem;
-    color: var(--adm-muted);
-    margin-bottom: 0.75rem;
-}
 
 @media (hover: none) {
     .adm-product-actions { opacity: 1; }
 }
-
-/* ============================================================
-   Ошибки валидации в форме товара
-   ============================================================ */
-.adm-chip-group.is-error {
-    outline: 2px solid var(--adm-danger);
-    outline-offset: 4px;
-    border-radius: var(--adm-radius-sm);
-    padding: 4px;
-    margin: -4px;
-}
-
-.adm-field-error {
-    display: none;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--adm-danger);
-    font-size: 0.78rem;
-    margin: 0.35rem 0 0;
-}
-.adm-field-error.is-visible {
-    display: flex;
-}
-.adm-field-error i { font-size: 0.75rem; }

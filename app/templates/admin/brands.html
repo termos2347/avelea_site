@@ -8,6 +8,13 @@
 
 {% block admin_content %}
 
+{% if flash_error %}
+<div class="adm-alert adm-alert-warn">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>{{ flash_error }}</span>
+</div>
+{% endif %}
+
 <div class="adm-search-wrap">
     <div class="adm-search">
         <i class="fas fa-search"></i>
@@ -55,7 +62,7 @@
                         <i class="fas fa-pen"></i>
                     </button>
                     <form method="post" action="/admin/brands/{{ b.id }}/delete"
-                          data-confirm="Удалить бренд «{{ b.name }}»? У всех товаров бренд станет пустым."
+                          data-confirm="Удалить бренд «{{ b.name }}»?{% if counts.get(b.id) %} У {{ counts.get(b.id) }} товар(ов) очистится бренд.{% endif %}"
                           style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit" class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
@@ -76,7 +83,7 @@
     <i class="fas fa-tag"></i>
     <p>Брендов пока нет</p>
     <button type="button" data-action="open-create-dialog" class="adm-btn adm-btn-primary">
-        <i class="fas fa-plus"></i> Создать первый
+        <i class="fas fa-plus"></i> <span>Создать первый</span>
     </button>
 </div>
 {% endif %}

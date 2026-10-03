@@ -25,23 +25,13 @@
         }, 150);
     });
 
-    // ============================================================
-    // htMX: beforeSwap — закрываем модалы на успех,
-    // пропускаем 401/403 для показа ошибок.
-    // ============================================================
     document.body.addEventListener('htmx:beforeSwap', (e) => {
         const s = e.detail.xhr.status;
-
-        // Ошибки авторизации пропускаем как обычный ответ,
-        // чтобы показать их пользователю.
         if (s === 401 || s === 403) {
             e.detail.shouldSwap = true;
             e.detail.isError = false;
             return;
         }
-
-        // Успешный ответ (200 или 2xx после редиректа) — свап
-        // страницы, все открытые модалы закрываем.
         if (s >= 200 && s < 400) {
             closeAllModals();
         }
@@ -63,7 +53,7 @@
     });
 
     // ============================================================
-    // ПЕРЕКЛЮЧАТЕЛЬ ВИДОВ ТОВАРОВ
+    // ПЕРЕКЛЮЧАТЕЛЬ ВИДОВ ТОВАРОВ (таблица / карточки)
     // ============================================================
     const VIEW_KEY = 'adm_products_view';
 
@@ -198,19 +188,15 @@
 
     // ============================================================
     // ПОДГРУЗКА ФОРМЫ РЕДАКТИРОВАНИЯ ТОВАРА В МОДАЛКУ
-    // ------------------------------------------------------------
-    // Кнопка «Редактировать» — это <a href=".../edit" hx-get=".../edit">.
-    // HTMX подгружает партиал _product_form.html в
-    // #edit-product-dialog-content. После подмены контента —
-    // открываем модалку.
     // ============================================================
     document.body.addEventListener('htmx:afterSwap', (e) => {
         if (e.detail.target && e.detail.target.id === 'edit-product-dialog-content') {
             openModal(document.getElementById('edit-product-dialog'), 'input[name="name"]');
+            initFormSections();
+            updateCategoriesCount(document.getElementById('edit-product-dialog'));
         }
     });
 
-    // ===== Редактирование бренда/категории (общий диалог) =====
     function openEditDialog(actionUrl, name, title) {
         const dlg = document.getElementById('edit-dialog');
         if (!dlg) return;
@@ -224,19 +210,14 @@
         openModal(dlg, '#edit-name');
     }
 
-    // ===== Info-модалка =====
-        // ============================================================
-    // INFO-модалка с предпросмотром карточки
-    // ------------------------------------------------------------
-    // Левая колонка — метаданные (заполняется из data-info-*).
-    // Правая колонка — карточка в стиле сайта, тоже из data-атрибутов.
+    // ============================================================
+    // INFO-модалка с предпросмотром
     // ============================================================
     function openInfoDialog(btn) {
         const d = btn.dataset;
         const el = document.getElementById('info-dialog');
         if (!el) return;
 
-        // ---------- Левая колонка: метаданные ----------
         const imgEl = document.getElementById('info-image');
         if (d.infoImage) {
             imgEl.innerHTML = '<img src="' + d.infoImage + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">';
@@ -275,7 +256,6 @@
         addRow('Объём', d.infoVolume);
         addRow('Описание', d.infoDesc);
 
-        // ---------- Правая колонка: превью карточки ----------
         const previewImg = document.getElementById('info-preview-img');
         const previewInitials = document.getElementById('info-preview-initials');
 
@@ -294,15 +274,11 @@
         document.getElementById('info-preview-cats').textContent  = d.infoCats || '—';
         document.getElementById('info-preview-price').textContent = (d.infoPrice || '0') + ' ₽';
 
-        // Превью-карточка теперь не ссылка — открытие сайта только кнопкой в футере.
         document.getElementById('info-site-link').href = '/product/' + d.infoId;
 
-        // ---------- Кнопка «Редактировать» ----------
-        // hx-get на форму редактирования — она подгрузится в edit-модалку.
         const editBtn = document.getElementById('info-edit-btn');
         editBtn.href = '/admin/products/' + d.infoId + '/edit';
         editBtn.setAttribute('hx-get', '/admin/products/' + d.infoId + '/edit');
-        // Пересобираем htmx-атрибут, чтобы htmx «увидел» новый URL.
         if (window.htmx) htmx.process(editBtn);
 
         openModal(el);
@@ -311,10 +287,8 @@
     document.addEventListener('click', (e) => {
         if (e.target.closest('#info-close'))  { closeModal(document.getElementById('info-dialog')); return; }
         if (e.target.closest('#info-cancel')) { closeModal(document.getElementById('info-dialog')); return; }
-
         if (e.target.closest('#info-edit-btn')) {
             closeModal(document.getElementById('info-dialog'));
-            // Не preventDefault — пусть htmx сделает hx-get
         }
     });
 
@@ -374,7 +348,42 @@
     }, true);
 
     // ============================================================
-    // ЖИВОЙ ФИЛЬТР
+    // ОБЯЗАТЕЛЬНЫЕ ПОЛЯ ФОРМЫ ТОВАРА
+    // ============================================================
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!form.querySelector('input[name="categories"]')) return;
+
+        const anyCat = form.querySelectorAll('input[name="categories"]:checked').length > 0;
+        if (!anyCat) {
+            e.preventDefault();
+            e.stopPropagation();
+            const group = form.querySelector('[data-categories-group]');
+            const error = form.querySelector('[data-categories-error]');
+            if (group) group.classList.add('is-error');
+            if (error) error.classList.add('is-visible');
+            if (group) group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        const brandRadios = form.querySelectorAll('input[name="brand_id"]');
+        if (brandRadios.length > 0) {
+            const anyBrand = form.querySelectorAll('input[name="brand_id"]:checked').length > 0;
+            if (!anyBrand) {
+                e.preventDefault();
+                e.stopPropagation();
+                const group = form.querySelector('[data-brands-group]');
+                const error = form.querySelector('[data-brands-error]');
+                if (group) group.classList.add('is-error');
+                if (error) error.classList.add('is-visible');
+                if (group) group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+        }
+    }, true);
+
+    // ============================================================
+    // ЖИВОЙ ФИЛЬТР СПИСКОВ (Товары / Бренды / Категории)
     // ============================================================
     function runRowFilter(input) {
         const q = input.value.trim().toLowerCase();
@@ -414,39 +423,156 @@
     });
 
     // ============================================================
-    // ОБЯЗАТЕЛЬНЫЙ ВЫБОР КАТЕГОРИИ
-    // ------------------------------------------------------------
-    // HTML5 required не работает для группы чекбоксов «хотя бы
-    // один». Проверяем вручную на submit. Плюс сбрасываем ошибку
-    // при первом же клике по любому чекбоксу.
+    // ФОРМА ТОВАРА: единицы объёма, сворачивание, поиск, счётчик
     // ============================================================
-    document.addEventListener('change', (e) => {
-        if (!e.target.matches('input[name="categories"]')) return;
-        const form = e.target.closest('form');
-        if (!form) return;
-        const group = form.querySelector('[data-categories-group]');
-        const error = form.querySelector('[data-categories-error]');
-        if (group) group.classList.remove('is-error');
-        if (error) error.classList.remove('is-visible');
+
+    // ---- Переключатель мл / г ----
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.adm-unit-switch button');
+        if (!btn) return;
+        const wrap = btn.closest('.adm-unit-switch');
+        const row = wrap.closest('.adm-volume-row');
+        const input = row && row.querySelector('[data-unit-input]');
+        if (!input) return;
+        input.value = btn.dataset.unit;
+        wrap.querySelectorAll('button').forEach(b =>
+            b.classList.toggle('is-active', b === btn));
     });
 
-    document.addEventListener('submit', (e) => {
-        const form = e.target;
-        // Обрабатываем только формы товара (у них есть чекбоксы категорий)
-        const boxes = form.querySelectorAll('input[name="categories"]');
-        if (boxes.length === 0) return;
+    // ============================================================
+    // СВОРАЧИВАНИЕ СЕКЦИЙ (Категории / Бренд)
+    // ------------------------------------------------------------
+    // ВАЖНО: на странице может быть несколько форм товара
+    // (create-модалка + edit-модалка), и в каждой есть блок
+    // с id="categories-section". Поэтому ищем target ВНУТРИ
+    // той же формы, а не document.getElementById — иначе
+    // схватит первый попавшийся (не тот).
+    // ============================================================
+    function findCollapseTarget(btn) {
+        const id = btn.dataset.collapseTarget;
+        if (!id) return null;
 
-        const anyChecked = form.querySelectorAll('input[name="categories"]:checked').length > 0;
-        if (anyChecked) return;
+        const form = btn.closest('form');
+        if (form) {
+            const inForm = form.querySelector('[id="' + id + '"]');
+            if (inForm) return inForm;
+        }
+        // Fallback — на случай, если форма не найдена
+        return document.getElementById(id);
+    }
 
-        // Отменяем отправку и показываем ошибку
+    function setCollapsed(target, btn, collapsed, instant) {
+        if (!target) return;
+
+        target.classList.toggle('is-collapsed', collapsed);
+        if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+
+        // При первой инициализации (или после HTMX-свопа) — без анимации.
+        // Иначе пользователь видит, как модалка "мигает" на открытии.
+        if (instant) {
+            target.style.transition = 'none';
+            target.style.maxHeight = collapsed ? '0px' : '';
+            void target.offsetHeight; // форсируем reflow
+            target.style.transition = '';
+            return;
+        }
+
+        if (collapsed) {
+            // Сначала фиксируем текущую реальную высоту,
+            // потом ведём к нулю — только так transition сработает.
+            target.style.maxHeight = target.scrollHeight + 'px';
+            void target.offsetHeight;
+            target.style.maxHeight = '0px';
+        } else {
+            // Раскрытие: ведём к реальной высоте, а по окончании
+            // снимаем ограничение — чтобы контент мог расти свободно.
+            target.style.maxHeight = target.scrollHeight + 'px';
+
+            const done = (ev) => {
+                if (ev.propertyName !== 'max-height') return;
+                target.removeEventListener('transitionend', done);
+                if (!target.classList.contains('is-collapsed')) {
+                    target.style.maxHeight = '';
+                }
+            };
+            target.addEventListener('transitionend', done);
+        }
+    }
+
+    function applyCollapseState(btn) {
+        const target = findCollapseTarget(btn);
+        if (!target) return;
+
+        const key = btn.dataset.collapseKey;
+        let collapsed = false;
+        try { collapsed = localStorage.getItem(key) === '1'; } catch (err) {}
+
+            setCollapsed(target, btn, collapsed, true);
+    }
+
+    function initFormSections() {
+        document.querySelectorAll('.adm-collapse-btn[data-collapse-target]').forEach(applyCollapseState);
+    }
+    initFormSections();
+
+    document.body.addEventListener('htmx:afterSwap', initFormSections);
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.adm-collapse-btn');
+        if (!btn) return;
         e.preventDefault();
-        e.stopPropagation();
 
-        const group = form.querySelector('[data-categories-group]');
-        const error = form.querySelector('[data-categories-error]');
-        if (group) group.classList.add('is-error');
-        if (error) error.classList.add('is-visible');
-        if (group) group.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, true);
+        const target = findCollapseTarget(btn);
+        if (!target) return;
+
+        const nowCollapsed = !target.classList.contains('is-collapsed');
+        setCollapsed(target, btn, nowCollapsed);
+
+        try { localStorage.setItem(btn.dataset.collapseKey, nowCollapsed ? '1' : '0'); } catch (err) {}
+    });
+
+    // ---- Поиск внутри чип-групп ----
+    document.addEventListener('input', (e) => {
+        const input = e.target.closest('[data-filter-target]');
+        if (!input) return;
+        const container = input.closest('.adm-section');
+        if (!container) return;
+        const q = input.value.trim().toLowerCase();
+        container.querySelectorAll('[data-filter-item]').forEach(it => {
+            const name = it.dataset.name || '';
+            it.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+    });
+
+    // ---- Счётчик выбранных категорий ----
+    function updateCategoriesCount(scope) {
+        const root = scope || document;
+        root.querySelectorAll('form').forEach(form => {
+            const el = form.querySelector('[data-count-for="categories"]');
+            if (!el) return;
+            const n = form.querySelectorAll('input[name="categories"]:checked').length;
+            el.textContent = n > 0 ? n : '';
+        });
+    }
+    updateCategoriesCount();
+
+    // ---- Сброс ошибок и обновление счётчика при изменениях ----
+    document.addEventListener('change', (e) => {
+        const form = e.target.closest('form');
+        if (!form) return;
+
+        if (e.target.matches('input[name="categories"]')) {
+            const group = form.querySelector('[data-categories-group]');
+            const error = form.querySelector('[data-categories-error]');
+            if (group) group.classList.remove('is-error');
+            if (error) error.classList.remove('is-visible');
+            updateCategoriesCount(form);
+        }
+        if (e.target.matches('input[name="brand_id"]')) {
+            const group = form.querySelector('[data-brands-group]');
+            const error = form.querySelector('[data-brands-error]');
+            if (group) group.classList.remove('is-error');
+            if (error) error.classList.remove('is-visible');
+        }
+    });
 })();

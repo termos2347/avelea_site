@@ -19,6 +19,7 @@ import os
 import sys
 import secrets
 import uuid
+import re
 
 from PIL import Image, UnidentifiedImageError
 
@@ -561,6 +562,32 @@ def _validate_price(price: int) -> str | None:
         )
     return None
 
+import re
+
+def _parse_volume(volume: str | None) -> tuple[str, str]:
+    """Разбирает строку объёма вида «50 мл» на (число, единица).
+
+    Возвращает ("50", "мл") или ("50", "г"). Если распарсить
+    не удалось — возвращает ("", "мл") по умолчанию.
+    """
+    if not volume:
+        return "", "мл"
+
+    m = re.match(r"^\s*([\d.,]+)\s*([а-яa-z]*)\s*$", volume, re.IGNORECASE)
+    if not m:
+        return "", "мл"
+
+    amount = m.group(1).replace(",", ".")
+    unit = (m.group(2) or "").strip().lower()
+
+    # Нормализуем единицу: всё «граммовое» → "г", остальное → "мл".
+    if unit in ("г", "гр", "g", "gr", "gram"):
+        unit = "г"
+    else:
+        unit = "мл"
+
+    return amount, unit
+
 # ============== ШАБЛОНЫ ==============
 site_templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates" / "site")
 admin_templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates" / "admin")
@@ -857,11 +884,14 @@ async def admin_products(
 
 
 def _product_form_context(db: Session, product: Product | None):
+    volume_amount, volume_unit = _parse_volume(product.volume if product else None)
     return {
         "product": product,
         "product_categories": [c.name for c in product.categories] if product else [],
         "all_categories": db.query(Category).order_by(Category.name).all(),
         "all_brands": db.query(Brand).order_by(Brand.name).all(),
+        "volume_amount": volume_amount,
+        "volume_unit": volume_unit,
     }
 
 
@@ -879,33 +909,37 @@ async def admin_product_create(
     categories: list[str] = Form([]),
     brand_id: str = Form(...),
     price: int = Form(...),
-    volume: str = Form(...),
+    volume_amount: str = Form(...),
+    volume_unit: str = Form(...),
     description: str = Form(...),
     popular: str = Form(None),
     image: UploadFile = File(...),
 ):
-    # Дешёвая валидация первой: если цена битая, файл даже не читаем,
-    # товар не создаём — просто уходим обратно с сообщением.
     if (err := _validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # Категории обязательны: без них товар не найдётся по фильтрам.
     if not categories:
         request.session["flash_error"] = (
             "Выберите хотя бы одну категорию — товар не создан."
         )
         return RedirectResponse(url="/admin/products", status_code=303)
-    
+
     image_url, img_err = _save_upload(image)
     if img_err:
         request.session["flash_error"] = img_err
+
+    # Склеиваем объём в строку «50 мл» / «4.5 г»
+    volume_str = (
+        f"{volume_amount.strip()} {volume_unit.strip()}"
+        if volume_amount.strip() else None
+    )
 
     product = Product(
         name=name.strip(),
         brand_id=_resolve_brand_id(db, brand_id),
         price=price,
-        volume=volume.strip() or None,
+        volume=volume_str,
         description=description.strip() or None,
         popular=bool(popular),
         image=image_url,
@@ -948,7 +982,8 @@ async def admin_product_update(
     categories: list[str] = Form([]),
     brand_id: str = Form(...),
     price: int = Form(...),
-    volume: str = Form(...),
+    volume_amount: str = Form(...),
+    volume_unit: str = Form(...),
     description: str = Form(...),
     popular: str = Form(None),
     image: UploadFile = File(None),
@@ -967,21 +1002,19 @@ async def admin_product_update(
             "Выберите хотя бы одну категорию — изменения не сохранены."
         )
         return RedirectResponse(url="/admin/products", status_code=303)
-    
+
     product.name = name.strip()
     product.brand_id = _resolve_brand_id(db, brand_id)
     product.price = price
-    product.volume = volume.strip() or None
+    product.volume = (
+        f"{volume_amount.strip()} {volume_unit.strip()}"
+        if volume_amount.strip() else None
+    )
     product.description = description.strip() or None
     product.popular = bool(popular)
 
-    # Полностью заменяем набор категорий
     product.categories = _resolve_categories(db, categories)
 
-    # Логика с картинкой:
-    #   новый файл        → берём его, старый удаляем ПОСЛЕ commit;
-    #   remove_image      → стираем старую, ставим None;
-    #   ни то, ни другое  → оставляем как было.
     old_image = product.image
     new_image, img_err = _save_upload(image)
     if img_err:
@@ -997,13 +1030,10 @@ async def admin_product_update(
     product.image = final_image
     db.commit()
 
-    # Файл удаляем только после успешного коммита: если commit упадёт,
-    # в БД останется ссылка на существующий файл.
     if old_image and old_image != final_image:
         _delete_upload(old_image)
 
     return RedirectResponse(url="/admin/products", status_code=303)
-
 
 @app.post("/admin/products/{product_id}/delete")
 async def admin_product_delete(
@@ -1045,9 +1075,12 @@ async def admin_categories(
         .all()
     )
 
+    flash_error = request.session.pop("flash_error", None)
+
     return admin_templates.TemplateResponse(request, "categories.html", {
         "categories": categories,
         "counts": counts,
+        "flash_error": flash_error,
     })
 
 
@@ -1061,7 +1094,9 @@ async def admin_category_create(
     name = name.strip()
     if name:
         exists = db.query(Category).filter(Category.name == name).first()
-        if not exists:
+        if exists:
+            request.session["flash_error"] = f"Категория «{name}» уже существует."
+        else:
             db.add(Category(name=name))
             db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
@@ -1085,7 +1120,9 @@ async def admin_category_edit(
               .filter(Category.name == name, Category.id != category_id)
               .first()
         )
-        if not exists:
+        if exists:
+            request.session["flash_error"] = f"Категория «{name}» уже существует."
+        else:
             category.name = name
             db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
@@ -1121,9 +1158,12 @@ async def admin_brands(request: Request, db: Session = Depends(get_db), _: bool 
           .all()
     )
 
+    flash_error = request.session.pop("flash_error", None)
+
     return admin_templates.TemplateResponse(request, "brands.html", {
         "brands": brands,
         "counts": counts,
+        "flash_error": flash_error,
     })
 
 
@@ -1137,7 +1177,9 @@ async def admin_brand_create(
     name = name.strip()
     if name:
         exists = db.query(Brand).filter(Brand.name == name).first()
-        if not exists:
+        if exists:
+            request.session["flash_error"] = f"Бренд «{name}» уже существует."
+        else:
             db.add(Brand(name=name))
             db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)
@@ -1161,7 +1203,9 @@ async def admin_brand_edit(
               .filter(Brand.name == name, Brand.id != brand_id)
               .first()
         )
-        if not exists:
+        if exists:
+            request.session["flash_error"] = f"Бренд «{name}» уже существует."
+        else:
             brand.name = name
             db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)

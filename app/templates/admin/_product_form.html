@@ -14,33 +14,115 @@
                    class="adm-input" placeholder="Например: Увлажняющий крем">
         </div>
 
-        {# ============ КАТЕГОРИИ (обязательно хотя бы одна) ============ #}
+        {# ============ КАТЕГОРИИ ============ #}
         <div class="adm-col-full">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
-                <label class="adm-label" style="margin: 0;">Категории *</label>
-                <a href="/admin/categories" style="font-size: 0.75rem; color: var(--adm-muted); text-decoration: underline;">
-                    Управление →
-                </a>
-            </div>
-
             {% if all_categories %}
-            <div class="adm-chip-group" data-categories-group>
-                {% for c in all_categories %}
-                <label class="adm-chip">
-                    <input type="checkbox" name="categories" value="{{ c.name }}"
-                           {% if c.name in product_categories %}checked{% endif %}>
-                    <span>{{ c.name }}</span>
-                </label>
-                {% endfor %}
+            <div class="adm-section">
+
+                {# Верхняя строка: поиск + управление + счётчик + кнопка сворачивания.
+                   Всегда видна — не сворачивается. #}
+                <div class="adm-section-bar">
+                    <div class="adm-search-inline">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Категории — найти..."
+                               autocomplete="off"
+                               data-filter-target="categories">
+                    </div>
+                    <span class="adm-section-count" data-count-for="categories"></span>
+                    <a href="/admin/categories"
+                       class="adm-section-icon-link"
+                       title="Управление категориями">
+                        <i class="fas fa-gear"></i>
+                    </a>
+                    <button type="button" class="adm-collapse-btn"
+                            data-collapse-target="categories-section"
+                            data-collapse-key="form_categories_collapsed"
+                            aria-expanded="true"
+                            aria-controls="categories-section"
+                            title="Свернуть / развернуть">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
+                </div>
+
+                {# Сворачиваемый блок: чипсы + ошибка + подсказка #}
+                <div id="categories-section" class="adm-collapsible">
+                    <div class="adm-collapsible-inner">
+                        <div class="adm-chip-group" data-categories-group>
+                            {% for c in all_categories %}
+                            <label class="adm-chip" data-filter-item data-name="{{ c.name|lower }}">
+                                <input type="checkbox" name="categories" value="{{ c.name }}"
+                                       {% if c.name in product_categories %}checked{% endif %}>
+                                <span>{{ c.name }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <p class="adm-field-error" data-categories-error>
+                            <i class="fas fa-exclamation-circle"></i>
+                            Выберите хотя бы одну категорию
+                        </p>
+                        <div class="adm-hint">У товара может быть несколько категорий.</div>
+                    </div>
+                </div>
+
             </div>
-            <p class="adm-field-error" data-categories-error>
-                <i class="fas fa-exclamation-circle"></i>
-                Выберите хотя бы одну категорию
-            </p>
-            <div class="adm-hint">У товара может быть несколько категорий.</div>
             {% else %}
+            <label class="adm-label">Категории *</label>
             <div class="adm-hint">
                 Категорий пока нет. <a href="/admin/categories" style="color: var(--adm-text); text-decoration: underline;">Создать</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ============ БРЕНД ============ #}
+        <div class="adm-col-full">
+            {% if all_brands %}
+            <div class="adm-section">
+
+                <div class="adm-section-bar">
+                    <div class="adm-search-inline">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Бренд — найти..."
+                               autocomplete="off"
+                               data-filter-target="brands">
+                    </div>
+                    <a href="/admin/brands"
+                       class="adm-section-icon-link"
+                       title="Управление брендами">
+                        <i class="fas fa-gear"></i>
+                    </a>
+                    <button type="button" class="adm-collapse-btn"
+                            data-collapse-target="brands-section"
+                            data-collapse-key="form_brands_collapsed"
+                            aria-expanded="true"
+                            aria-controls="brands-section"
+                            title="Свернуть / развернуть">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
+                </div>
+
+                <div id="brands-section" class="adm-collapsible">
+                    <div class="adm-collapsible-inner">
+                        <div class="adm-chip-group" data-brands-group>
+                            {% for b in all_brands %}
+                            <label class="adm-chip" data-filter-item data-name="{{ b.name|lower }}">
+                                <input type="radio" name="brand_id" value="{{ b.id }}"
+                                       {% if product and product.brand_id == b.id %}checked{% endif %}>
+                                <span>{{ b.name }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <p class="adm-field-error" data-brands-error>
+                            <i class="fas fa-exclamation-circle"></i>
+                            Выберите бренд
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+            {% else %}
+            <label class="adm-label">Бренд *</label>
+            <div class="adm-hint">
+                Брендов пока нет. <a href="/admin/brands" style="color: var(--adm-text); text-decoration: underline;">Создать</a>
             </div>
             {% endif %}
         </div>
@@ -52,37 +134,21 @@
                    class="adm-input" placeholder="0">
         </div>
 
+        {# ============ ОБЪЁМ ============ #}
         <div>
             <label class="adm-label">Объём *</label>
-            <input type="text" name="volume" required
-                   value="{{ product.volume or '' if product else '' }}"
-                   class="adm-input" placeholder="50 мл">
-        </div>
-
-        <div class="adm-col-full">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
-                <label class="adm-label" style="margin: 0;">Бренд *</label>
-                <a href="/admin/brands" style="font-size: 0.75rem; color: var(--adm-muted); text-decoration: underline;">
-                    Управление →
-                </a>
+            <div class="adm-volume-row">
+                <input type="number" name="volume_amount" required min="0" step="0.1"
+                       value="{{ volume_amount }}"
+                       class="adm-input" placeholder="50">
+                <input type="hidden" name="volume_unit" value="{{ volume_unit }}" data-unit-input>
+                <div class="adm-unit-switch" role="group" aria-label="Единица измерения">
+                    <button type="button" data-unit="мл"
+                            class="{% if volume_unit == 'мл' %}is-active{% endif %}">мл</button>
+                    <button type="button" data-unit="г"
+                            class="{% if volume_unit == 'г' %}is-active{% endif %}">г</button>
+                </div>
             </div>
-
-            {% if all_brands %}
-            <select name="brand_id" required class="adm-select">
-                <option value="" disabled {% if not product or not product.brand_id %}selected{% endif %}>
-                    — выберите бренд —
-                </option>
-                {% for b in all_brands %}
-                <option value="{{ b.id }}" {% if product and product.brand_id == b.id %}selected{% endif %}>
-                    {{ b.name }}
-                </option>
-                {% endfor %}
-            </select>
-            {% else %}
-            <div class="adm-hint">
-                Брендов пока нет. <a href="/admin/brands" style="color: var(--adm-text); text-decoration: underline;">Создать</a>
-            </div>
-            {% endif %}
         </div>
 
         <div class="adm-col-full">
