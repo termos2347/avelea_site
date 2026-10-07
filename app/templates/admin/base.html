@@ -18,11 +18,10 @@
     {% set path = request.url.path %}
 
     {# ============================================================
-       STICKY-БЛОК: строки 1 и 2
+       СТРОКА 1: бренд + действия пользователя
        ============================================================ #}
     <div class="adm-topbar-block">
 
-        {# ---- Строка 1: бренд + действия пользователя ---- #}
         <div class="adm-header">
             <div class="adm-header-inner">
                 <a href="/admin/products" class="adm-brand">
@@ -42,7 +41,7 @@
             </div>
         </div>
 
-        {# ---- Строка 2: навигация + кнопка действия ---- #}
+        {# ---- СТРОКА 2: навигация + кнопка действия ---- #}
         <div class="adm-nav-row">
             <div class="adm-nav-inner">
                 <nav class="adm-nav">
@@ -221,6 +220,16 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    {# ============================================================
+       ПОЛНОЭКРАННЫЙ ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
+       ============================================================ #}
+    <div id="adm-saving-overlay" class="adm-saving-overlay" aria-hidden="true">
+        <div class="adm-saving-card">
+            <div class="adm-saving-spinner"></div>
+            <div class="adm-saving-text" id="adm-saving-text">Сохраняем…</div>
         </div>
     </div>
 

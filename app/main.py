@@ -13,12 +13,11 @@ from sqlalchemy import inspect, text, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoSuchTableError
 from urllib.parse import urlencode
-from pathlib import Path
-import os
 import sys
 import secrets
 import re
 
+from app import cache
 from app.database import engine, get_db, Base, SessionLocal
 from app.models import Product, Brand, Category, product_categories
 from app.seed import seed_database
@@ -45,12 +44,7 @@ ADMIN_PRODUCTS_PER_PAGE = 50
 
 # ============== MIDDLEWARE ==============
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Отклоняет запросы, у которых Content-Length больше лимита.
-
-    Защита от заливки огромных тел: без неё Starlette сначала примет
-    всё тело в SpooledTemporaryFile, и только потом эндпоинт скажет «нет».
-    Лимит проверяется по заголовку, до чтения тела.
-    """
+    """Отклоняет запросы, у которых Content-Length больше лимита."""
 
     def __init__(self, app, max_bytes: int):
         super().__init__(app)
@@ -70,10 +64,6 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
 # ============== LIFESPAN / MIGRATIONS ==============
 def _migrate_brand_to_fk(db: Session) -> None:
-    """Переносит products.brand (строку) → products.brand_id (FK на brands).
-
-    Идемпотентно: если колонки `brand` уже нет — выходим сразу.
-    """
     insp = inspect(engine)
     try:
         product_cols = {c["name"] for c in insp.get_columns("products")}
@@ -83,7 +73,6 @@ def _migrate_brand_to_fk(db: Session) -> None:
     if "brand" not in product_cols:
         return
 
-    # 1. Добавляем brand_id, если её ещё нет.
     if "brand_id" not in product_cols:
         with engine.begin() as conn:
             conn.execute(text(
@@ -95,7 +84,6 @@ def _migrate_brand_to_fk(db: Session) -> None:
                 "ON products (brand_id)"
             ))
 
-    # 2. Заполняем brand_id из brand, попутно создавая отсутствующие бренды.
     brand_cache: dict[str, Brand] = {
         b.name.lower(): b for b in db.query(Brand).all()
     }
@@ -128,7 +116,6 @@ def _migrate_brand_to_fk(db: Session) -> None:
         db.commit()
         print(f"✅ Бренды мигрированы у {migrated} товаров")
 
-    # 3. Убираем старую строковую колонку.
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE products DROP COLUMN brand"))
@@ -141,8 +128,6 @@ def _migrate_brand_to_fk(db: Session) -> None:
 
 
 def _migrate_name_lower(db: Session) -> None:
-    """Добавляет колонку products.name_lower, если её ещё нет,
-    и заполняет её для всех существующих строк."""
     insp = inspect(engine)
     try:
         product_cols = {c["name"] for c in insp.get_columns("products")}
@@ -171,7 +156,6 @@ def _migrate_name_lower(db: Session) -> None:
 
 
 def _migrate_legacy_category_column(db: Session) -> None:
-    """Миграция старой колонки products.category → many-to-many."""
     insp = inspect(engine)
     try:
         product_cols = {c["name"] for c in insp.get_columns("products")}
@@ -236,16 +220,18 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         Base.metadata.create_all(bind=engine)
-        # Порядок важен: brand-миграция добавляет колонку brand_id,
-        # без которой SQLAlchemy не сможет выбрать Product в других миграциях.
         _migrate_brand_to_fk(db)
         _migrate_name_lower(db)
         _migrate_legacy_category_column(db)
         seed_database(db)
     finally:
         db.close()
+
+    # Прогреваем кэш — чтобы первый публичный запрос уже был быстрым.
+    cache.reload_all()
+
     yield
-    # --- shutdown --- (пока ничего не нужно)
+    # --- shutdown ---
 
 
 # ============== APP ==============
@@ -279,11 +265,6 @@ async def not_auth_handler(request: Request, exc: NotAuthenticated):
 
 
 def _safe_str_compare(a: str, b: str) -> bool:
-    """Сравнение двух строк за постоянное время.
-
-    secrets.compare_digest не принимает строки с не-ASCII символами,
-    поэтому сравниваем байты в UTF-8.
-    """
     try:
         return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
     except (TypeError, ValueError):
@@ -291,7 +272,6 @@ def _safe_str_compare(a: str, b: str) -> bool:
 
 
 def get_csrf_token(request: Request) -> str:
-    """Возвращает CSRF-токен текущей сессии, создавая при необходимости."""
     token = request.session.get("csrf_token")
     if not token:
         token = secrets.token_urlsafe(32)
@@ -300,7 +280,6 @@ def get_csrf_token(request: Request) -> str:
 
 
 async def _check_csrf(request: Request) -> None:
-    """Проверяет csrf_token из формы против токена в сессии."""
     form = await request.form()
     token = form.get("csrf_token")
     session_token = request.session.get("csrf_token")
@@ -377,18 +356,12 @@ def make_page_items(current: int, total: int, params, base_path: str = "/catalog
 
 
 def _resolve_categories(db: Session, names: list[str]) -> list[Category]:
-    """Превращает список имён категорий в список ORM-объектов Category.
-    Имена, которых нет в БД, молча игнорируются."""
     if not names:
         return []
     return db.query(Category).filter(Category.name.in_(names)).all()
 
 
 def _resolve_brand_id(db: Session, raw: str) -> int | None:
-    """Превращает значение из формы (строку с id) в id существующего бренда.
-
-    Пустая строка / не число / несуществующий id → None.
-    """
     raw = (raw or "").strip()
     if not raw or not raw.isdigit():
         return None
@@ -398,18 +371,12 @@ def _resolve_brand_id(db: Session, raw: str) -> int | None:
 
 
 def _validate_price(price: int) -> str | None:
-    """Проверяет цену. Возвращает текст ошибки или None, если всё ок."""
     if price < 0:
         return "Цена не может быть отрицательной — изменения не сохранены."
     return None
 
 
 def _parse_volume(volume: str | None) -> tuple[str, str]:
-    """Разбирает строку объёма вида «50 мл» на (число, единица).
-
-    Возвращает ("50", "мл") или ("50", "г"). Если распарсить
-    не удалось — возвращает ("", "мл") по умолчанию.
-    """
     if not volume:
         return "", "мл"
 
@@ -433,8 +400,8 @@ def _product_form_context(db: Session, product: Product | None):
     return {
         "product": product,
         "product_categories": [c.name for c in product.categories] if product else [],
-        "all_categories": db.query(Category).order_by(Category.name).all(),
-        "all_brands": db.query(Brand).order_by(Brand.name).all(),
+        "all_categories": cache.get_categories(),
+        "all_brands": cache.get_brands(),
         "volume_amount": volume_amount,
         "volume_unit": volume_unit,
     }
@@ -475,25 +442,30 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return HTMLResponse(content="Bad request", status_code=400)
 
 
-# ============== ГЛАВНАЯ ==============
+# ==================================================
+# ==============  ПУБЛИЧНАЯ ЧАСТЬ  =================
+# ==================================================
+
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, db: Session = Depends(get_db)):
-    popular = db.query(Product).filter(Product.popular == True).limit(6).all()
-    categories = db.query(Category).order_by(Category.name).all()
+async def index(request: Request):
+    products = cache.get_products()
+    categories = cache.get_categories()
+
+    popular = [p for p in products if p.popular][:6]
+
     return site_templates.TemplateResponse(request, "index.html", {
         "popular": popular,
         "categories": categories,
     })
 
 
-# ============== КАТАЛОГ ==============
 @app.get("/catalog", response_class=HTMLResponse)
-async def catalog(request: Request, db: Session = Depends(get_db)):
+async def catalog(request: Request):
     params = request.query_params
 
-    q = (params.get("q") or "").strip()
-    selected_categories = params.getlist("category")
-    selected_brands = params.getlist("brand")
+    q = (params.get("q") or "").strip().lower()
+    selected_categories = set(params.getlist("category"))
+    selected_brands = set(params.getlist("brand"))
     price_min = params.get("price_min") or ""
     price_max = params.get("price_max") or ""
     sort = params.get("sort") or ""
@@ -505,65 +477,74 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     if page < 1:
         page = 1
 
-    query = db.query(Product)
+    all_products = cache.get_products()
+    all_categories = cache.get_categories()
+    all_brands_used = cache.get_brand_names()
 
-    if q:
-        query = query.filter(Product.name_lower.contains(q.lower()))
+    # ---------- Фильтрация ----------
+    filtered = []
+    for p in all_products:
+        if q and q not in p.name_lower:
+            continue
 
-    if selected_categories:
-        query = query.filter(
-            Product.categories.any(Category.name.in_(selected_categories))
-        )
+        if selected_categories:
+            p_cats = {c.name for c in p.categories}
+            if not (p_cats & selected_categories):
+                continue
 
-    if selected_brands:
-        query = query.filter(
-            Product.brand_ref.has(Brand.name.in_(selected_brands))
-        )
+        if selected_brands:
+            if not p.brand or p.brand not in selected_brands:
+                continue
 
-    if price_min:
-        try:
-            query = query.filter(Product.price >= int(price_min))
-        except ValueError:
-            pass
-    if price_max:
-        try:
-            query = query.filter(Product.price <= int(price_max))
-        except ValueError:
-            pass
+        if price_min:
+            try:
+                if p.price < int(price_min):
+                    continue
+            except ValueError:
+                pass
 
+        if price_max:
+            try:
+                if p.price > int(price_max):
+                    continue
+            except ValueError:
+                pass
+
+        filtered.append(p)
+
+    # ---------- Сортировка ----------
     if sort == "price_asc":
-        query = query.order_by(Product.price.asc())
+        filtered.sort(key=lambda p: p.price)
     elif sort == "price_desc":
-        query = query.order_by(Product.price.desc())
+        filtered.sort(key=lambda p: p.price, reverse=True)
     elif sort == "name":
-        query = query.order_by(Product.name.asc())
+        filtered.sort(key=lambda p: p.name.lower())
     elif sort == "popular":
-        query = query.order_by(Product.popular.desc(), Product.id.asc())
+        filtered.sort(key=lambda p: (not p.popular, p.id))
     else:
-        query = query.order_by(Product.id.asc())
+        filtered.sort(key=lambda p: p.id)
 
-    total_count = query.count()
+    # ---------- Пагинация ----------
+    total_count = len(filtered)
     total_pages = max(1, (total_count + PER_PAGE - 1) // PER_PAGE)
     if page > total_pages:
         page = total_pages
 
-    products = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
+    start = (page - 1) * PER_PAGE
+    end = start + PER_PAGE
+    products = filtered[start:end]
 
-    all_categories = [c.name for c in db.query(Category).order_by(Category.name).all()]
+    # ---------- Данные для фильтров ----------
+    # В каталоге список брендов — только те, у которых есть товары.
+    category_names = [c.name for c in all_categories]
 
-    all_brands = [
-        row[0] for row in (
-            db.query(Brand.name)
-              .join(Product, Product.brand_id == Brand.id)
-              .distinct()
-              .order_by(Brand.name)
-              .all()
-        )
-    ]
-
+    # ---------- Чипы активных фильтров ----------
     active_filters = []
     if q:
-        active_filters.append({"label": f"Поиск: {q}", "remove_url": build_filter_url(params, "q")})
+        active_filters.append({
+            "label": f"Поиск: {params.get('q')}",
+            "remove_url": build_filter_url(params, "q"),
+        })
     for c in selected_categories:
         active_filters.append({"label": c, "remove_url": build_filter_url(params, "category", c)})
     for b in selected_brands:
@@ -573,21 +554,21 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     if price_max:
         active_filters.append({"label": f"до {price_max} ₽", "remove_url": build_filter_url(params, "price_max")})
 
-    start_idx = (page - 1) * PER_PAGE + 1 if total_count else 0
-    end_idx = min(page * PER_PAGE, total_count)
+    start_idx = start + 1 if total_count else 0
+    end_idx = min(end, total_count)
 
     return site_templates.TemplateResponse(request, "catalog.html", {
         "products": products,
         "total_count": total_count,
         "start_idx": start_idx,
         "end_idx": end_idx,
-        "categories": all_categories,
-        "brands": all_brands,
-        "selected_categories": selected_categories,
-        "selected_brands": selected_brands,
+        "categories": category_names,
+        "brands": all_brands_used,
+        "selected_categories": list(selected_categories),
+        "selected_brands": list(selected_brands),
         "price_min": price_min,
         "price_max": price_max,
-        "q": q,
+        "q": params.get("q") or "",
         "sort": sort,
         "page": page,
         "total_pages": total_pages,
@@ -597,23 +578,19 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
     })
 
 
-# ============== СТРАНИЦА ТОВАРА ==============
 @app.get("/product/{product_id}", response_class=HTMLResponse)
-async def product_page(request: Request, product_id: int, db: Session = Depends(get_db)):
-    product = db.query(Product).filter(Product.id == product_id).first()
+async def product_page(request: Request, product_id: int):
+    all_products = cache.get_products()
+
+    product = next((p for p in all_products if p.id == product_id), None)
     if not product:
         return site_templates.TemplateResponse(request, "404.html", status_code=404)
 
-    cat_ids = [c.id for c in product.categories]
-    similar = []
-    if cat_ids:
-        similar = (
-            db.query(Product)
-              .filter(Product.id != product.id)
-              .filter(Product.categories.any(Category.id.in_(cat_ids)))
-              .limit(6)
-              .all()
-        )
+    cat_names = {c.name for c in product.categories}
+    similar = [
+        p for p in all_products
+        if p.id != product.id and ({c.name for c in p.categories} & cat_names)
+    ][:6]
 
     return site_templates.TemplateResponse(request, "product.html", {
         "product": product,
@@ -622,7 +599,6 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
     })
 
 
-# ============== О НАС ==============
 @app.get("/about", response_class=HTMLResponse)
 async def about(request: Request):
     return site_templates.TemplateResponse(request, "about.html")
@@ -682,6 +658,7 @@ async def admin_products(
     if page < 1:
         page = 1
 
+    # Админка работает с БД напрямую — здесь кэш не нужен, важна свежесть.
     query = db.query(Product)
     if q:
         query = query.filter(Product.name_lower.contains(q.lower()))
@@ -709,8 +686,8 @@ async def admin_products(
 
     return admin_templates.TemplateResponse(request, "products.html", {
         "products": products,
-        "all_categories": db.query(Category).order_by(Category.name).all(),
-        "all_brands": db.query(Brand).order_by(Brand.name).all(),
+        "all_categories": cache.get_categories(),
+        "all_brands": cache.get_brands(),
         "q": q,
         "page": page,
         "total_pages": total_pages,
@@ -748,7 +725,6 @@ async def admin_product_create(
     popular: str = Form(None),
     image: UploadFile = File(...),
 ):
-    # 1. Дешёвая валидация — до сохранения картинки
     if (err := _validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
@@ -763,18 +739,15 @@ async def admin_product_create(
         request.session["flash_error"] = "Выберите бренд — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # 2. Сохраняем картинку через абстракцию хранилища
     image_url, img_err = save_image(image)
     if img_err:
         request.session["flash_error"] = img_err
 
-    # 3. Склеиваем объём в строку «50 мл» / «4.5 г»
     volume_str = (
         f"{volume_amount.strip()} {volume_unit.strip()}"
         if volume_amount.strip() else None
     )
 
-    # 4. Создаём товар
     product = Product(
         name=name.strip(),
         brand_id=_resolve_brand_id(db, brand_id),
@@ -788,6 +761,10 @@ async def admin_product_create(
 
     db.add(product)
     db.commit()
+
+    # Свежие данные — сбрасываем кэш, публичная часть перечитает при следующем запросе.
+    cache.invalidate()
+
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
@@ -803,8 +780,6 @@ async def admin_product_edit(
         raise HTTPException(status_code=404)
     ctx = _product_form_context(db, product)
 
-    # HTMX-запрос — возвращаем только форму, чтобы вставить в модалку.
-    # Обычный переход по ссылке — полную страницу (fallback без JS).
     if request.headers.get("hx-request") == "true":
         ctx["in_dialog"] = True
         return admin_templates.TemplateResponse(request, "_product_form.html", ctx)
@@ -833,7 +808,6 @@ async def admin_product_update(
     if not product:
         raise HTTPException(status_code=404)
 
-    # 1. Валидация
     if (err := _validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
@@ -850,7 +824,6 @@ async def admin_product_update(
         )
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # 2. Обновляем поля
     product.name = name.strip()
     product.brand_id = _resolve_brand_id(db, brand_id)
     product.price = price
@@ -863,10 +836,6 @@ async def admin_product_update(
 
     product.categories = _resolve_categories(db, categories)
 
-    # 3. Логика с картинкой:
-    #    новый файл        → берём его, старый удаляем ПОСЛЕ commit;
-    #    remove_image      → стираем старую, ставим None;
-    #    ни то, ни другое  → оставляем как было.
     old_image = product.image
     new_image, img_err = save_image(image)
     if img_err:
@@ -882,10 +851,10 @@ async def admin_product_update(
     product.image = final_image
     db.commit()
 
-    # 4. Файл удаляем только после успешного коммита: если commit упадёт,
-    #    в БД останется ссылка на существующий файл.
     if old_image and old_image != final_image:
         delete_image(old_image)
+
+    cache.invalidate()
 
     return RedirectResponse(url="/admin/products", status_code=303)
 
@@ -902,8 +871,8 @@ async def admin_product_delete(
         old_image = product.image
         db.delete(product)
         db.commit()
-        # Удаление файла — после успешного коммита.
         delete_image(old_image)
+        cache.invalidate()
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
@@ -952,6 +921,7 @@ async def admin_category_create(
         else:
             db.add(Category(name=name))
             db.commit()
+            cache.invalidate()
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
@@ -979,6 +949,7 @@ async def admin_category_edit(
         else:
             category.name = name
             db.commit()
+            cache.invalidate()
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
@@ -993,6 +964,7 @@ async def admin_category_delete(
     if category:
         db.delete(category)
         db.commit()
+        cache.invalidate()
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
@@ -1001,7 +973,11 @@ async def admin_category_delete(
 # ==================================================
 
 @app.get("/admin/brands", response_class=HTMLResponse)
-async def admin_brands(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
+async def admin_brands(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+):
     brands = db.query(Brand).order_by(Brand.name).all()
 
     counts = dict(
@@ -1035,6 +1011,7 @@ async def admin_brand_create(
         else:
             db.add(Brand(name=name))
             db.commit()
+            cache.invalidate()
     return RedirectResponse(url="/admin/brands", status_code=303)
 
 
@@ -1062,6 +1039,7 @@ async def admin_brand_edit(
         else:
             brand.name = name
             db.commit()
+            cache.invalidate()
     return RedirectResponse(url="/admin/brands", status_code=303)
 
 
@@ -1078,4 +1056,5 @@ async def admin_brand_delete(
             p.brand_id = None
         db.delete(brand)
         db.commit()
+        cache.invalidate()
     return RedirectResponse(url="/admin/brands", status_code=303)

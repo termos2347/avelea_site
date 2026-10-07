@@ -439,15 +439,7 @@
             b.classList.toggle('is-active', b === btn));
     });
 
-    // ============================================================
-    // СВОРАЧИВАНИЕ СЕКЦИЙ (Категории / Бренд)
-    // ------------------------------------------------------------
-    // ВАЖНО: на странице может быть несколько форм товара
-    // (create-модалка + edit-модалка), и в каждой есть блок
-    // с id="categories-section". Поэтому ищем target ВНУТРИ
-    // той же формы, а не document.getElementById — иначе
-    // схватит первый попавшийся (не тот).
-    // ============================================================
+    // ---- Сворачивание секций (Категории / Бренд) ----
     function findCollapseTarget(btn) {
         const id = btn.dataset.collapseTarget;
         if (!id) return null;
@@ -457,7 +449,6 @@
             const inForm = form.querySelector('[id="' + id + '"]');
             if (inForm) return inForm;
         }
-        // Fallback — на случай, если форма не найдена
         return document.getElementById(id);
     }
 
@@ -467,25 +458,19 @@
         target.classList.toggle('is-collapsed', collapsed);
         if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
 
-        // При первой инициализации (или после HTMX-свопа) — без анимации.
-        // Иначе пользователь видит, как модалка "мигает" на открытии.
         if (instant) {
             target.style.transition = 'none';
             target.style.maxHeight = collapsed ? '0px' : '';
-            void target.offsetHeight; // форсируем reflow
+            void target.offsetHeight;
             target.style.transition = '';
             return;
         }
 
         if (collapsed) {
-            // Сначала фиксируем текущую реальную высоту,
-            // потом ведём к нулю — только так transition сработает.
             target.style.maxHeight = target.scrollHeight + 'px';
             void target.offsetHeight;
             target.style.maxHeight = '0px';
         } else {
-            // Раскрытие: ведём к реальной высоте, а по окончании
-            // снимаем ограничение — чтобы контент мог расти свободно.
             target.style.maxHeight = target.scrollHeight + 'px';
 
             const done = (ev) => {
@@ -507,7 +492,7 @@
         let collapsed = false;
         try { collapsed = localStorage.getItem(key) === '1'; } catch (err) {}
 
-            setCollapsed(target, btn, collapsed, true);
+        setCollapsed(target, btn, collapsed, true);
     }
 
     function initFormSections() {
@@ -556,7 +541,6 @@
     }
     updateCategoriesCount();
 
-    // ---- Сброс ошибок и обновление счётчика при изменениях ----
     document.addEventListener('change', (e) => {
         const form = e.target.closest('form');
         if (!form) return;
@@ -575,4 +559,96 @@
             if (error) error.classList.remove('is-visible');
         }
     });
+
+    // ============================================================
+    // ПОЛНОЭКРАННЫЙ ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
+    // ------------------------------------------------------------
+    // htmx перехватывает submit и шлёт XHR — событие submit до
+    // браузера не доходит. Поэтому ловим КЛИК по кнопке submit
+    // внутри формы товара (у неё есть input[name="price"]).
+    //
+    // Показываем оверлей → ждём ответа → скрываем.
+    // Скрытие на: htmx:afterRequest / htmx:responseError / beforeunload.
+    // Плюс автозапас на 15 секунд — если что-то реально зависло.
+    // ============================================================
+    (function () {
+        const overlay = document.getElementById('adm-saving-overlay');
+        const textEl  = document.getElementById('adm-saving-text');
+        if (!overlay) return;
+
+        let hideTimer = null;
+
+        function isProductForm(form) {
+            if (!form || form.tagName !== 'FORM') return false;
+            return !!(form.querySelector('input[name="name"]')
+                   && form.querySelector('input[name="price"]'));
+        }
+
+        function show(message) {
+            if (textEl) textEl.textContent = message || 'Сохраняем…';
+            overlay.classList.add('is-visible');
+            overlay.setAttribute('aria-hidden', 'false');
+
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(hide, 15000);
+        }
+
+        function hide() {
+            clearTimeout(hideTimer);
+            overlay.classList.remove('is-visible');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+
+        // --- Показ при клике по submit-кнопке формы товара ---
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[type="submit"], input[type="submit"]');
+            if (!btn) return;
+            const form = btn.closest('form');
+            if (!isProductForm(form)) return;
+
+            // Если форма не пройдёт HTML5-валидацию — не показываем оверлей.
+            // Проверяем через form.checkValidity() (без побочных эффектов).
+            if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+                return;
+            }
+
+            const action = form.getAttribute('action') || '';
+            let msg = 'Сохраняем…';
+            if (/\/new\b/.test(action) || action.endsWith('/new')) {
+                msg = 'Товар создаётся…';
+            } else if (/\/edit\b/.test(action) || action.endsWith('/edit')) {
+                msg = 'Изменения сохраняются…';
+            }
+
+            show(msg);
+        }, true);
+
+        // --- Скрытие при ответе htmx ---
+        document.body.addEventListener('htmx:afterRequest', (e) => {
+            const elt = e.detail && e.detail.elt;
+            let form = null;
+            if (elt) {
+                form = elt.tagName === 'FORM' ? elt : (elt.closest && elt.closest('form'));
+            }
+            if (isProductForm(form)) hide();
+        });
+
+        document.body.addEventListener('htmx:responseError', (e) => {
+            const elt = e.detail && e.detail.elt;
+            let form = null;
+            if (elt) {
+                form = elt.tagName === 'FORM' ? elt : (elt.closest && elt.closest('form'));
+            }
+            if (isProductForm(form)) hide();
+        });
+
+        // --- Скрытие при перезагрузке страницы ---
+        window.addEventListener('beforeunload', hide);
+
+        // --- Escape — сбросить ---
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') hide();
+        });
+    })();
+
 })();

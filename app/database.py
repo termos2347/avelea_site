@@ -9,7 +9,20 @@ _connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     _connect_args["check_same_thread"] = False
 
-engine = create_engine(DATABASE_URL, connect_args=_connect_args)
+_engine_kwargs: dict = {
+    "connect_args": _connect_args,
+}
+
+if DATABASE_URL.startswith("postgresql"):
+    _engine_kwargs.update(
+        pool_pre_ping=True,
+        pool_recycle=300,
+        # Размеры пула — дефолты SQLAlchemy, но здесь явно, чтобы было видно.
+        pool_size=5,
+        max_overflow=10,
+    )
+
+engine = create_engine(DATABASE_URL, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
