@@ -775,9 +775,10 @@ async def admin_product_edit(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = next((p for p in cache.get_products() if p.id == product_id), None)
     if not product:
         raise HTTPException(status_code=404)
+
     ctx = _product_form_context(db, product)
 
     if request.headers.get("hx-request") == "true":
