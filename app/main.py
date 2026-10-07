@@ -14,18 +14,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoSuchTableError
 from urllib.parse import urlencode
 from pathlib import Path
-import io
 import os
 import sys
 import secrets
-import uuid
 import re
-
-from PIL import Image, UnidentifiedImageError
 
 from app.database import engine, get_db, Base, SessionLocal
 from app.models import Product, Brand, Category, product_categories
 from app.seed import seed_database
+from app.storage import save_image, delete_image
 from app.config import (
     SECRET_KEY,
     ADMIN_PASSWORD,
@@ -44,22 +41,6 @@ PER_PAGE = 12
 
 # Сколько товаров показывать на одной странице админского списка.
 ADMIN_PRODUCTS_PER_PAGE = 50
-
-# Сигнатуры (magic bytes) допустимых форматов. Расширение из имени файла
-# НЕ используется — определяем формат по содержимому.
-_MAGIC = (
-    (b"\xff\xd8\xff",          ".jpg"),
-    (b"\x89PNG\r\n\x1a\n",     ".png"),
-    (b"GIF87a",                ".gif"),
-    (b"GIF89a",                ".gif"),
-)
-
-# Форматы, которые Pillow разрешено пропускать. Должны соответствовать _MAGIC.
-_ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
-
-# Размер порции при чтении загружаемого файла. 64 КБ — компромисс
-# между числом системных вызовов и пиковым потреблением памяти.
-_READ_CHUNK = 64 * 1024
 
 
 # ============== MIDDLEWARE ==============
@@ -87,13 +68,11 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-# ============== LIFESPAN ==============
+# ============== LIFESPAN / MIGRATIONS ==============
 def _migrate_brand_to_fk(db: Session) -> None:
     """Переносит products.brand (строку) → products.brand_id (FK на brands).
 
     Идемпотентно: если колонки `brand` уже нет — выходим сразу.
-    Должна вызываться ДО любых миграций, которые делают db.query(Product),
-    потому что модель Product теперь ожидает колонку brand_id.
     """
     insp = inspect(engine)
     try:
@@ -163,18 +142,13 @@ def _migrate_brand_to_fk(db: Session) -> None:
 
 def _migrate_name_lower(db: Session) -> None:
     """Добавляет колонку products.name_lower, если её ещё нет,
-    и заполняет её для всех существующих строк.
-
-    Нужна для регистронезависимого поиска по кириллице: SQLite LOWER()
-    знает только ASCII, поэтому вычисляем значение в Python.
-    """
+    и заполняет её для всех существующих строк."""
     insp = inspect(engine)
     try:
         product_cols = {c["name"] for c in insp.get_columns("products")}
     except NoSuchTableError:
         return
 
-    # 1. Добавить колонку, если её нет (старая БД).
     if "name_lower" not in product_cols:
         with engine.begin() as conn:
             conn.execute(text(
@@ -186,7 +160,6 @@ def _migrate_name_lower(db: Session) -> None:
                 "ix_products_name_lower ON products (name_lower)"
             ))
 
-    # 2. Заполнить/починить значения.
     updated = 0
     for p in db.query(Product).all():
         expected = (p.name or "").strip().lower()
@@ -198,10 +171,7 @@ def _migrate_name_lower(db: Session) -> None:
 
 
 def _migrate_legacy_category_column(db: Session) -> None:
-    """Миграция старой колонки products.category → many-to-many.
-
-    Выполняется только если в БД реально осталась старая колонка.
-    """
+    """Миграция старой колонки products.category → many-to-many."""
     insp = inspect(engine)
     try:
         product_cols = {c["name"] for c in insp.get_columns("products")}
@@ -217,7 +187,6 @@ def _migrate_legacy_category_column(db: Session) -> None:
             "WHERE category IS NOT NULL AND category != ''"
         )).fetchall()
 
-    # Кеш категорий в Python — потому что SQLite LOWER() не знает кириллицу
     cat_cache: dict[str, Category] = {
         c.name.lower(): c for c in db.query(Category).all()
     }
@@ -251,7 +220,6 @@ def _migrate_legacy_category_column(db: Session) -> None:
         db.commit()
         print(f"✅ Категории мигрированы у {migrated} товаров")
 
-    # Снести старые колонки (SQLite 3.35+), иначе просто обнулить
     for col in ("category", "tags"):
         if col in product_cols:
             try:
@@ -280,6 +248,7 @@ async def lifespan(app: FastAPI):
     # --- shutdown --- (пока ничего не нужно)
 
 
+# ============== APP ==============
 app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 app.add_middleware(
     SessionMiddleware,
@@ -290,8 +259,6 @@ app.add_middleware(
 )
 app.add_middleware(
     BodySizeLimitMiddleware,
-    # +1 МБ запаса: в том же multipart-запросе едут текстовые поля формы
-    # (имя, цена, описание, категории), а не только картинка.
     max_bytes=MAX_UPLOAD_BYTES + 1024 * 1024,
 )
 app.mount(
@@ -299,6 +266,7 @@ app.mount(
     StaticFiles(directory=BASE_DIR / "static"),
     name="static",
 )
+
 
 # ============== АВТОРИЗАЦИЯ ==============
 class NotAuthenticated(Exception):
@@ -332,11 +300,7 @@ def get_csrf_token(request: Request) -> str:
 
 
 async def _check_csrf(request: Request) -> None:
-    """Проверяет csrf_token из формы против токена в сессии.
-
-    Starlette кеширует request.form(), поэтому повторное чтение формы
-    в самом обработчике (через Form(...)) безопасно.
-    """
+    """Проверяет csrf_token из формы против токена в сессии."""
     form = await request.form()
     token = form.get("csrf_token")
     session_token = request.session.get("csrf_token")
@@ -412,121 +376,6 @@ def make_page_items(current: int, total: int, params, base_path: str = "/catalog
     return items
 
 
-def _sniff_image_ext(head: bytes) -> str | None:
-    """Определяет расширение по magic bytes. None — если формат не поддерживается."""
-    for magic, ext in _MAGIC:
-        if head.startswith(magic):
-            return ext
-    # WebP: "RIFF" .... "WEBP"
-    if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
-        return ".webp"
-    return None
-
-
-def _read_limited(file: UploadFile, limit: int) -> tuple[bytes, bool]:
-    """Читает тело UploadFile порциями, не более limit байт.
-
-    Возвращает (content, too_large):
-      - (bytes, False) — файл целиком прочитан и укладывается в лимит;
-      - (b"",   True)  — файл больше лимита, чтение прервано.
-
-    Ключевой момент: как только суммарный размер превысил limit,
-    мы прекращаем читать — в память больше ничего не попадает.
-    """
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        chunk = file.file.read(_READ_CHUNK)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > limit:
-            return b"", True
-        chunks.append(chunk)
-    return b"".join(chunks), False
-
-
-def _verify_image(content: bytes) -> str | None:
-    """Проверяет, что content — валидное изображение одного из разрешённых
-    форматов. Возвращает текст ошибки или None, если всё ок.
-
-    Image.open() ленив — он не декодирует пиксели сразу, а только читает
-    заголовок. .verify() после этого проверяет целостность структуры.
-    После verify() объект использовать нельзя — это его документированное
-    поведение, но нам это и не нужно: мы работаем с исходными bytes.
-    """
-    try:
-        img = Image.open(io.BytesIO(content))
-        if img.format not in _ALLOWED_IMAGE_FORMATS:
-            return (
-                f"Формат {img.format or '?'} не поддерживается "
-                "(разрешены jpg, png, gif, webp) — картинка не сохранена."
-            )
-        img.verify()
-    except (UnidentifiedImageError, OSError, ValueError):
-        return "Файл повреждён или не является изображением — картинка не сохранена."
-    return None
-
-
-def _save_upload(file: UploadFile | None) -> tuple[str | None, str | None]:
-    """Сохраняет картинку в static/uploads.
-
-    Возвращает (url, error):
-      - (url, None)    — успех;
-      - (None, None)   — файла не было или он пустой (не ошибка);
-      - (None, "...")  — файл отклонён по конкретной причине.
-
-    Расширение берётся из magic bytes, имя файла из запроса игнорируется —
-    это защищает от подмены расширения. Тело читается порциями и обрывается
-    на лимите, чтобы большой файл не съел память.
-    """
-    if not file or not file.filename:
-        return None, None
-
-    content, too_large = _read_limited(file, MAX_UPLOAD_BYTES)
-    if too_large:
-        return None, (
-            f"Файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ — "
-            "картинка не сохранена."
-        )
-    if not content:
-        return None, None
-
-    ext = _sniff_image_ext(content[:16])
-    if ext is None:
-        return None, (
-            "Формат не поддерживается (разрешены jpg, png, gif, webp) — "
-            "картинка не сохранена."
-        )
-
-    if (err := _verify_image(content)) is not None:
-        return None, err
-
-    name = f"{uuid.uuid4().hex}{ext}"
-    dest = BASE_DIR / "static" / "uploads" / name
-    with dest.open("wb") as f:
-        f.write(content)
-    return f"/static/uploads/{name}", None
-
-
-def _delete_upload(image_url: str | None) -> None:
-    """Удаляет файл из static/uploads по URL вида /static/uploads/<name>.
-
-    Молча игнорирует всё, что не совпадает с ожидаемым префиксом —
-    чтобы случайно не снести что-то вне папки загрузок.
-    """
-    if not image_url or not image_url.startswith("/static/uploads/"):
-        return
-    name = image_url.rsplit("/", 1)[-1]
-    if not name or "/" in name or ".." in name:
-        return
-    path = BASE_DIR / "static" / "uploads" / name
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
-
 def _resolve_categories(db: Session, names: list[str]) -> list[Category]:
     """Превращает список имён категорий в список ORM-объектов Category.
     Имена, которых нет в БД, молча игнорируются."""
@@ -539,8 +388,6 @@ def _resolve_brand_id(db: Session, raw: str) -> int | None:
     """Превращает значение из формы (строку с id) в id существующего бренда.
 
     Пустая строка / не число / несуществующий id → None.
-    Это защищает от подсунутых руками brand_id, которых нет в БД —
-    иначе связи повиснут в NULL и бренд просто «пропадёт» у товара.
     """
     raw = (raw or "").strip()
     if not raw or not raw.isdigit():
@@ -549,20 +396,13 @@ def _resolve_brand_id(db: Session, raw: str) -> int | None:
     exists = db.query(Brand).filter(Brand.id == bid).first()
     return bid if exists else None
 
-def _validate_price(price: int) -> str | None:
-    """Проверяет цену. Возвращает текст ошибки или None, если всё ок.
 
-    HTML-атрибут min="0" — не защита: его легко обойти через curl или
-    Postman. Отсекаем отрицательные значения на сервере.
-    """
+def _validate_price(price: int) -> str | None:
+    """Проверяет цену. Возвращает текст ошибки или None, если всё ок."""
     if price < 0:
-        return (
-            "Цена не может быть отрицательной — "
-            "изменения не сохранены."
-        )
+        return "Цена не может быть отрицательной — изменения не сохранены."
     return None
 
-import re
 
 def _parse_volume(volume: str | None) -> tuple[str, str]:
     """Разбирает строку объёма вида «50 мл» на (число, единица).
@@ -580,13 +420,25 @@ def _parse_volume(volume: str | None) -> tuple[str, str]:
     amount = m.group(1).replace(",", ".")
     unit = (m.group(2) or "").strip().lower()
 
-    # Нормализуем единицу: всё «граммовое» → "г", остальное → "мл".
     if unit in ("г", "гр", "g", "gr", "gram"):
         unit = "г"
     else:
         unit = "мл"
 
     return amount, unit
+
+
+def _product_form_context(db: Session, product: Product | None):
+    volume_amount, volume_unit = _parse_volume(product.volume if product else None)
+    return {
+        "product": product,
+        "product_categories": [c.name for c in product.categories] if product else [],
+        "all_categories": db.query(Category).order_by(Category.name).all(),
+        "all_brands": db.query(Brand).order_by(Brand.name).all(),
+        "volume_amount": volume_amount,
+        "volume_unit": volume_unit,
+    }
+
 
 # ============== ШАБЛОНЫ ==============
 site_templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates" / "site")
@@ -604,8 +456,6 @@ admin_templates.env.globals["csrf_token"] = get_csrf_token
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
-        # /admin/... → если не залогинен, уводим на логин;
-        #             если залогинен, показываем админский 404.
         if request.url.path.startswith("/admin"):
             if not request.session.get("admin"):
                 return RedirectResponse(url="/admin/login", status_code=303)
@@ -657,7 +507,6 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 
     query = db.query(Product)
 
-    # Регистронезависимый поиск через name_lower (см. миграцию в lifespan).
     if q:
         query = query.filter(Product.name_lower.contains(q.lower()))
 
@@ -702,7 +551,6 @@ async def catalog(request: Request, db: Session = Depends(get_db)):
 
     all_categories = [c.name for c in db.query(Category).order_by(Category.name).all()]
 
-    # Список имён брендов, у которых есть хотя бы один товар.
     all_brands = [
         row[0] for row in (
             db.query(Brand.name)
@@ -756,7 +604,6 @@ async def product_page(request: Request, product_id: int, db: Session = Depends(
     if not product:
         return site_templates.TemplateResponse(request, "404.html", status_code=404)
 
-    # Похожие: из тех же категорий, кроме самого товара, до 6 штук.
     cat_ids = [c.id for c in product.categories]
     similar = []
     if cat_ids:
@@ -858,8 +705,6 @@ async def admin_products(
     start_idx = (page - 1) * ADMIN_PRODUCTS_PER_PAGE + 1 if total_count else 0
     end_idx = min(page * ADMIN_PRODUCTS_PER_PAGE, total_count)
 
-    # Забираем flash-сообщение (например, об отклонённой картинке) и
-    # сразу удаляем — показывается один раз.
     flash_error = request.session.pop("flash_error", None)
 
     return admin_templates.TemplateResponse(request, "products.html", {
@@ -883,18 +728,6 @@ async def admin_products(
     })
 
 
-def _product_form_context(db: Session, product: Product | None):
-    volume_amount, volume_unit = _parse_volume(product.volume if product else None)
-    return {
-        "product": product,
-        "product_categories": [c.name for c in product.categories] if product else [],
-        "all_categories": db.query(Category).order_by(Category.name).all(),
-        "all_brands": db.query(Brand).order_by(Brand.name).all(),
-        "volume_amount": volume_amount,
-        "volume_unit": volume_unit,
-    }
-
-
 @app.get("/admin/products/new", response_class=HTMLResponse)
 async def admin_product_new(request: Request, _: bool = Depends(require_admin)):
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -915,6 +748,7 @@ async def admin_product_create(
     popular: str = Form(None),
     image: UploadFile = File(...),
 ):
+    # 1. Дешёвая валидация — до сохранения картинки
     if (err := _validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
@@ -925,16 +759,22 @@ async def admin_product_create(
         )
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    image_url, img_err = _save_upload(image)
+    if not brand_id or not brand_id.strip():
+        request.session["flash_error"] = "Выберите бренд — товар не создан."
+        return RedirectResponse(url="/admin/products", status_code=303)
+
+    # 2. Сохраняем картинку через абстракцию хранилища
+    image_url, img_err = save_image(image)
     if img_err:
         request.session["flash_error"] = img_err
 
-    # Склеиваем объём в строку «50 мл» / «4.5 г»
+    # 3. Склеиваем объём в строку «50 мл» / «4.5 г»
     volume_str = (
         f"{volume_amount.strip()} {volume_unit.strip()}"
         if volume_amount.strip() else None
     )
 
+    # 4. Создаём товар
     product = Product(
         name=name.strip(),
         brand_id=_resolve_brand_id(db, brand_id),
@@ -993,6 +833,7 @@ async def admin_product_update(
     if not product:
         raise HTTPException(status_code=404)
 
+    # 1. Валидация
     if (err := _validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
@@ -1003,6 +844,13 @@ async def admin_product_update(
         )
         return RedirectResponse(url="/admin/products", status_code=303)
 
+    if not brand_id or not brand_id.strip():
+        request.session["flash_error"] = (
+            "Выберите бренд — изменения не сохранены."
+        )
+        return RedirectResponse(url="/admin/products", status_code=303)
+
+    # 2. Обновляем поля
     product.name = name.strip()
     product.brand_id = _resolve_brand_id(db, brand_id)
     product.price = price
@@ -1015,8 +863,12 @@ async def admin_product_update(
 
     product.categories = _resolve_categories(db, categories)
 
+    # 3. Логика с картинкой:
+    #    новый файл        → берём его, старый удаляем ПОСЛЕ commit;
+    #    remove_image      → стираем старую, ставим None;
+    #    ни то, ни другое  → оставляем как было.
     old_image = product.image
-    new_image, img_err = _save_upload(image)
+    new_image, img_err = save_image(image)
     if img_err:
         request.session["flash_error"] = img_err
 
@@ -1030,10 +882,13 @@ async def admin_product_update(
     product.image = final_image
     db.commit()
 
+    # 4. Файл удаляем только после успешного коммита: если commit упадёт,
+    #    в БД останется ссылка на существующий файл.
     if old_image and old_image != final_image:
-        _delete_upload(old_image)
+        delete_image(old_image)
 
     return RedirectResponse(url="/admin/products", status_code=303)
+
 
 @app.post("/admin/products/{product_id}/delete")
 async def admin_product_delete(
@@ -1048,7 +903,7 @@ async def admin_product_delete(
         db.delete(product)
         db.commit()
         # Удаление файла — после успешного коммита.
-        _delete_upload(old_image)
+        delete_image(old_image)
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
@@ -1064,8 +919,6 @@ async def admin_categories(
 ):
     categories = db.query(Category).order_by(Category.name).all()
 
-    # Один SQL с GROUP BY вместо N+1.
-    # Ключ — category_id (int), см. categories.html.
     counts = dict(
         db.query(
             product_categories.c.category_id,
@@ -1101,6 +954,7 @@ async def admin_category_create(
             db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
 
+
 @app.post("/admin/categories/{category_id}/edit")
 async def admin_category_edit(
     request: Request,
@@ -1127,6 +981,7 @@ async def admin_category_edit(
             db.commit()
     return RedirectResponse(url="/admin/categories", status_code=303)
 
+
 @app.post("/admin/categories/{category_id}/delete")
 async def admin_category_delete(
     request: Request,
@@ -1149,8 +1004,6 @@ async def admin_category_delete(
 async def admin_brands(request: Request, db: Session = Depends(get_db), _: bool = Depends(require_admin)):
     brands = db.query(Brand).order_by(Brand.name).all()
 
-    # Один SQL с GROUP BY вместо полного скана products.brand + Python-цикла.
-    # Ключ словаря — brand_id (int), см. brands.html.
     counts = dict(
         db.query(Product.brand_id, func.count(Product.id))
           .filter(Product.brand_id.isnot(None))
@@ -1184,6 +1037,7 @@ async def admin_brand_create(
             db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)
 
+
 @app.post("/admin/brands/{brand_id}/edit")
 async def admin_brand_edit(
     request: Request,
@@ -1210,6 +1064,7 @@ async def admin_brand_edit(
             db.commit()
     return RedirectResponse(url="/admin/brands", status_code=303)
 
+
 @app.post("/admin/brands/{brand_id}/delete")
 async def admin_brand_delete(
     request: Request,
@@ -1219,7 +1074,6 @@ async def admin_brand_delete(
 ):
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if brand:
-        # Отвязываем товары, потом удаляем сам бренд.
         for p in db.query(Product).filter(Product.brand_id == brand.id).all():
             p.brand_id = None
         db.delete(brand)
