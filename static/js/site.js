@@ -5,6 +5,73 @@
 
     let hideTimer = null;
 
+        // ============================================================
+    // СКЕЛЕТОН ПРИ HTMX-ПЕРЕХОДАХ
+    // ------------------------------------------------------------
+    // Показываем оверлей только если запрос длится >150ms,
+    // иначе на быстрых переходах будет раздражающее мигание.
+    // Вариант скелетона выбирается по URL кликнутой ссылки.
+    // ============================================================
+    const SKELETON_DELAY = 150;
+    let skeletonTimer = null;
+    let lastClickedHref = null;
+
+    // Запоминаем, куда пользователь кликнул, чтобы понять,
+    // какой скелетон показывать.
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href]');
+        if (!a) return;
+        if (a.getAttribute('hx-boost') === 'false') return;
+        const href = a.getAttribute('href');
+        if (!href || href.startsWith('http') || href.startsWith('#')) return;
+        lastClickedHref = href;
+    }, true);
+
+    // Определяем, какой вариант скелетона показать по URL.
+    // Логика простая: смотрим начало пути.
+    function pickSkeletonVariant(href) {
+        if (!href) return 'catalog';              // дефолт
+
+        const path = href.split('?')[0];          // отбрасываем query string
+
+        if (path === '/' || path === '') return 'home';
+        if (path.startsWith('/catalog')) return 'catalog';
+        if (path.startsWith('/product/')) return 'product';
+        if (path.startsWith('/about')) return 'about';
+
+        return 'catalog';                          // фолбэк
+    }
+
+    function showSkeleton() {
+        const overlay = document.getElementById('skeleton-overlay');
+        if (!overlay) return;
+
+        const variant = pickSkeletonVariant(lastClickedHref);
+
+        overlay.querySelectorAll('.sk-variant').forEach(v => {
+            v.classList.toggle('is-active', v.dataset.sk === variant);
+        });
+
+        overlay.classList.add('is-visible');
+    }
+
+    function hideSkeleton() {
+        clearTimeout(skeletonTimer);
+        const el = document.getElementById('skeleton-overlay');
+        if (el) el.classList.remove('is-visible');
+    }
+
+    document.body.addEventListener('htmx:beforeRequest', (e) => {
+        const target = e.detail.target;
+        if (!target || target !== document.body) return;
+        clearTimeout(skeletonTimer);
+        skeletonTimer = setTimeout(showSkeleton, SKELETON_DELAY);
+    });
+
+    document.body.addEventListener('htmx:afterSettle', hideSkeleton);
+    document.body.addEventListener('htmx:afterRequest', hideSkeleton);
+    document.body.addEventListener('htmx:responseError', hideSkeleton);
+
     // ===== HTMX: прогресс-бар =====
     document.body.addEventListener('htmx:beforeRequest', () => {
         const bar = document.getElementById('htmx-progress');

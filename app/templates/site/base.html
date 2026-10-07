@@ -19,6 +19,111 @@
     <div id="htmx-progress"
          class="fixed top-0 left-0 h-0.5 bg-black w-0 transition-all duration-200 z-50 opacity-0"></div>
 
+    {# ============================================================
+       СКЕЛЕТОН-ОКНО
+       ------------------------------------------------------------
+       Несколько вариантов скелетона — по одному на каждый тип
+       страницы. JS показывает нужный, смотря на URL кликнутой
+       ссылки. Если страница отдаётся быстрее 150ms — скелетон
+       вообще не появляется.
+       ============================================================ #}
+    <div id="skeleton-overlay" class="skeleton-overlay" aria-hidden="true">
+        <div class="skeleton-container">
+
+            {# ---------- ГЛАВНАЯ ---------- #}
+            <div class="sk-variant" data-sk="home">
+                {# Hero #}
+                <div class="sk-block sk-hero"></div>
+
+                {# Категории #}
+                <div class="sk-cats">
+                    <div class="sk-block sk-cat"></div>
+                    <div class="sk-block sk-cat"></div>
+                    <div class="sk-block sk-cat"></div>
+                    <div class="sk-block sk-cat"></div>
+                </div>
+
+                {# Заголовок секции #}
+                <div class="sk-block sk-section-title"></div>
+
+                {# Сетка популярных товаров #}
+                <div class="sk-grid">
+                    {% for _ in range(6) %}
+                    <div class="sk-card">
+                        <div class="sk-block sk-img"></div>
+                        <div class="sk-block sk-line sk-line-1"></div>
+                        <div class="sk-block sk-line sk-line-2"></div>
+                        <div class="sk-block sk-line sk-line-price"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# ---------- КАТАЛОГ ---------- #}
+            <div class="sk-variant" data-sk="catalog">
+                {# Баннер #}
+                <div class="sk-block sk-banner"></div>
+
+                {# Строка фильтров #}
+                <div class="sk-toolbar">
+                    <div class="sk-block sk-pill"></div>
+                    <div class="sk-block sk-pill-sm"></div>
+                    <div class="sk-block sk-pill-sm"></div>
+                </div>
+
+                {# Сетка карточек #}
+                <div class="sk-grid">
+                    {% for _ in range(8) %}
+                    <div class="sk-card">
+                        <div class="sk-block sk-img"></div>
+                        <div class="sk-block sk-line sk-line-1"></div>
+                        <div class="sk-block sk-line sk-line-2"></div>
+                        <div class="sk-block sk-line sk-line-price"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# ---------- КАРТОЧКА ТОВАРА ---------- #}
+            <div class="sk-variant" data-sk="product">
+                {# Хлебные крошки #}
+                <div class="sk-block sk-crumbs"></div>
+
+                {# Две колонки: фото + инфо #}
+                <div class="sk-product">
+                    <div class="sk-block sk-product-img"></div>
+                    <div class="sk-product-info">
+                        <div class="sk-block sk-line-badge"></div>
+                        <div class="sk-block sk-line-xl"></div>
+                        <div class="sk-block sk-line-lg"></div>
+                        <div class="sk-block sk-line-md"></div>
+                        <div class="sk-block sk-line-sm"></div>
+                        <div class="sk-block sk-btn-lg"></div>
+                    </div>
+                </div>
+            </div>
+
+            {# ---------- О НАС ---------- #}
+            <div class="sk-variant" data-sk="about">
+                {# Hero #}
+                <div class="sk-block sk-hero-about"></div>
+
+                {# Две колонки: фото + текст #}
+                <div class="sk-about">
+                    <div class="sk-block sk-about-img"></div>
+                    <div class="sk-about-text">
+                        <div class="sk-block sk-line-sm"></div>
+                        <div class="sk-block sk-line-xl"></div>
+                        <div class="sk-block sk-line-md"></div>
+                        <div class="sk-block sk-line-md"></div>
+                        <div class="sk-block sk-line-sm"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
     {# Контейнер: на широких экранах занимает ~80% ширины окна,
        но не больше 1536px (screen-2xl). На мобилке — вся ширина. #}
     <div class="mx-auto px-4 md:px-6 max-w-screen-2xl w-full flex flex-col flex-1">

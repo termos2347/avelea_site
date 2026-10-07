@@ -34,7 +34,7 @@ def test_catalog_search_cyrillic_case_insensitive(client):
 def test_catalog_search_no_results(client):
     r = client.get("/catalog?q=абвгд-нет-такого")
     assert r.status_code == 200
-    assert "Ничего не найдено" in r.text
+    assert "ничего не найдено" in r.text.lower()
 
 
 def test_product_page(client):

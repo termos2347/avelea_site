@@ -64,3 +64,13 @@ SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
 # --- Загрузки ---
 MAX_UPLOAD_MB    = _int("MAX_UPLOAD_MB", 5)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+# --- Хранилище картинок ---
+STORAGE_BACKEND = _str("STORAGE_BACKEND", "local")   # "local" или "s3"
+
+# Параметры S3 (используются, только если STORAGE_BACKEND=s3)
+S3_ENDPOINT   = _str("S3_ENDPOINT", "")      # напр. https://s3.twcstorage.ru
+S3_BUCKET     = _str("S3_BUCKET", "")
+S3_ACCESS_KEY = _str("S3_ACCESS_KEY", "")
+S3_SECRET_KEY = _str("S3_SECRET_KEY", "")
+S3_PUBLIC_URL = _str("S3_PUBLIC_URL", "")    # напр. https://cdn.avelea.ru

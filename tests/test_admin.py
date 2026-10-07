@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image
 
-from app.config import BASE_DIR, MAX_UPLOAD_BYTES
+from app.config import BASE_DIR
 from tests.conftest import extract_csrf
 
 
@@ -25,6 +25,62 @@ def _jpeg(size=(8, 8), color=(30, 30, 200)) -> bytes:
     buf = io.BytesIO()
     Image.new("RGB", size, color).save(buf, format="JPEG")
     return buf.getvalue()
+
+
+def _first_brand_id() -> str:
+    """Берём id первого бренда из БД. В тестовой базе seed создаёт Avelea."""
+    from app.database import SessionLocal
+    from app.models import Brand
+    with SessionLocal() as db:
+        b = db.query(Brand).first()
+        return str(b.id) if b else ""
+
+
+def _first_category_name() -> str:
+    """Берём имя первой категории. Seed создаёт «Лицо», «Макияж» и т.д."""
+    from app.database import SessionLocal
+    from app.models import Category
+    with SessionLocal() as db:
+        c = db.query(Category).first()
+        return c.name if c else ""
+
+
+def _payload(**overrides) -> dict:
+    """Полный набор полей для POST /admin/products/new.
+
+    Возвращает dict со всеми обязательными полями (включая brand_id
+    и категории). Переопределяй через kwargs — что нужно конкретному
+    тесту (name, price и т.п.).
+    """
+    data = {
+        "name": "Тестовый товар",
+        "price": "999",
+        "brand_id": _first_brand_id(),
+        "volume_amount": "50",
+        "volume_unit": "мл",
+        "description": "Описание для теста",
+        "categories": [_first_category_name()],
+    }
+    data.update(overrides)
+    return data
+
+
+def _post_new_product(client, token, **overrides):
+    """POST /admin/products/new со всеми обязательными полями.
+
+    image обязателен в роуте (UploadFile = File(...)), поэтому всегда
+    передаём настоящий PNG. Иначе FastAPI отдаст 400 ещё до входа
+    в обработчик.
+    """
+    data = _payload(**overrides)
+    data["csrf_token"] = token
+    png = _png()
+    return client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image": ("test.png", png, "image/png")},
+        follow_redirects=False,
+    )
 
 
 @pytest.fixture
@@ -114,15 +170,7 @@ def test_create_category(admin_client):
 def test_create_product(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
-    r = admin_client.post(
-        "/admin/products/new",
-        data={
-            "name": "Тестовый товар",
-            "price": "999",
-            "csrf_token": token,
-        },
-        follow_redirects=False,
-    )
+    r = _post_new_product(admin_client, token, name="Тестовый товар", price="999")
     assert r.status_code == 303
 
     r = admin_client.get("/admin/products")
@@ -135,45 +183,34 @@ def test_upload_rejects_non_image(admin_client, clean_uploads):
     """Файл с «картинным» расширением, но чужими magic bytes — отклоняется."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
+
+    data = _payload(name="Мусорный файл", price="1")
+    data["csrf_token"] = token
     r = admin_client.post(
         "/admin/products/new",
-        data={
-            "name": "Мусорный файл",
-            "price": "1",
-            "csrf_token": token,
-        },
-        files={
-            "image": ("fake.png", b"MZ\x90\x00 not really a png", "image/png"),
-        },
+        data=data,
+        files={"image": ("fake.png", b"MZ\x90\x00 not really a png", "image/png")},
         follow_redirects=False,
     )
     assert r.status_code == 303
 
     r = admin_client.get("/admin/products", params={"q": "Мусорный"})
     assert "Мусорный файл" in r.text
-    # Файл не должен был сохраниться — картинка отсутствует.
     assert "/static/uploads/" not in r.text
-    # И на диске тоже ничего.
     assert list(UPLOADS_DIR.iterdir()) == []
 
 
 def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
-    """PNG-magic + мусор: _sniff_image_ext пропускает, Pillow — отклоняет.
-
-    Это ключевая проверка второго барьера: без verify() файл бы лёг
-    на диск, а браузер не смог бы его отрисовать.
-    """
+    """PNG-magic + мусор: _sniff_image_ext пропускает, Pillow — отклоняет."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
     fake_png = b"\x89PNG\r\n\x1a\n" + b"garbage" * 20
+    data = _payload(name="Битый PNG", price="1")
+    data["csrf_token"] = token
     r = admin_client.post(
         "/admin/products/new",
-        data={
-            "name": "Битый PNG",
-            "price": "1",
-            "csrf_token": token,
-        },
+        data=data,
         files={"image": ("broken.png", fake_png, "image/png")},
         follow_redirects=False,
     )
@@ -191,13 +228,11 @@ def test_upload_valid_png_is_saved(admin_client, clean_uploads):
     token = extract_csrf(r.text)
 
     png = _png()
+    data = _payload(name="Товар с картинкой", price="500")
+    data["csrf_token"] = token
     r = admin_client.post(
         "/admin/products/new",
-        data={
-            "name": "Товар с картинкой",
-            "price": "500",
-            "csrf_token": token,
-        },
+        data=data,
         files={"image": ("photo.png", png, "image/png")},
         follow_redirects=False,
     )
@@ -218,13 +253,11 @@ def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
     token = extract_csrf(r.text)
 
     jpg = _jpeg()
+    data = _payload(name="Товар с jpg", price="500")
+    data["csrf_token"] = token
     r = admin_client.post(
         "/admin/products/new",
-        data={
-            "name": "Товар с jpg",
-            "price": "500",
-            "csrf_token": token,
-        },
+        data=data,
         files={"image": ("photo.jpg", jpg, "image/jpeg")},
         follow_redirects=False,
     )
@@ -236,26 +269,18 @@ def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
 
 
 def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
-    """Файл, превышающий MAX_UPLOAD_BYTES, не сохраняется.
-
-    Лимит занижаем, чтобы не гонять через сеть мегабайты.
-    Патчим именно app.main.MAX_UPLOAD_BYTES — константа уже импортирована
-    в модуль, поэтому стандартного monkeypatch.setenv недостаточно.
-    """
+    """Файл, превышающий MAX_UPLOAD_BYTES, не сохраняется."""
     monkeypatch.setattr("app.main.MAX_UPLOAD_BYTES", 100)
 
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
-    # 208 байт — больше лимита 100.
     big = b"\x89PNG\r\n\x1a\n" + b"x" * 200
+    data = _payload(name="Слишком большой", price="1")
+    data["csrf_token"] = token
     r = admin_client.post(
         "/admin/products/new",
-        data={
-            "name": "Слишком большой",
-            "price": "1",
-            "csrf_token": token,
-        },
+        data=data,
         files={"image": ("big.png", big, "image/png")},
         follow_redirects=False,
     )
@@ -268,11 +293,7 @@ def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
 
 
 def test_body_size_limit_returns_413():
-    """BodySizeLimitMiddleware отклоняет запрос по Content-Length.
-
-    Тестируем middleware изолированно, на отдельном FastAPI-приложении:
-    так не нужно гнать через TestClient реальные 6 МБ.
-    """
+    """BodySizeLimitMiddleware отклоняет запрос по Content-Length."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -287,11 +308,9 @@ def test_body_size_limit_returns_413():
     probe.add_middleware(BodySizeLimitMiddleware, max_bytes=1024)
 
     with TestClient(probe) as c:
-        # Маленькое тело проходит.
         r = c.post("/probe", content=b"x" * 10)
         assert r.status_code == 200
 
-        # Большое — отсекается до чтения тела.
         r = c.post(
             "/probe",
             content=b"x" * 4096,
@@ -299,7 +318,8 @@ def test_body_size_limit_returns_413():
         )
         assert r.status_code == 413
         assert "слишком большой" in r.text.lower()
-        
+
+
 # ============== Валидация цены ==============
 
 def test_create_product_rejects_negative_price(admin_client):
@@ -307,18 +327,17 @@ def test_create_product_rejects_negative_price(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
+    data = _payload(name="Отрицательный", price="-100")
+    data["csrf_token"] = token
+    png = _png()
     r = admin_client.post(
         "/admin/products/new",
-        data={
-            "name": "Отрицательный",
-            "price": "-100",
-            "csrf_token": token,
-        },
-        follow_redirects=True,   # чтобы увидеть flash на /admin/products
+        data=data,
+        files={"image": ("test.png", png, "image/png")},
+        follow_redirects=True,
     )
     assert r.status_code == 200
     assert "не может быть отрицательной" in r.text
-    # Товара в списке быть не должно.
     assert "Отрицательный" not in r.text
 
 
@@ -327,15 +346,7 @@ def test_create_product_accepts_zero_price(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
-    r = admin_client.post(
-        "/admin/products/new",
-        data={
-            "name": "Нулевой",
-            "price": "0",
-            "csrf_token": token,
-        },
-        follow_redirects=False,
-    )
+    r = _post_new_product(admin_client, token, name="Нулевой", price="0")
     assert r.status_code == 303
 
     r = admin_client.get("/admin/products", params={"q": "Нулевой"})
@@ -350,11 +361,7 @@ def test_update_product_rejects_negative_price(admin_client):
     # Создаём товар с валидной ценой.
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
-    admin_client.post(
-        "/admin/products/new",
-        data={"name": "Целевой", "price": "500", "csrf_token": token},
-        follow_redirects=False,
-    )
+    _post_new_product(admin_client, token, name="Целевой", price="500")
 
     # Достаём его id из БД — проще, чем парсить HTML.
     with SessionLocal() as db:
@@ -363,13 +370,13 @@ def test_update_product_rejects_negative_price(admin_client):
     # Пробуем «отредактировать» на отрицательную цену.
     r = admin_client.get(f"/admin/products/{pid}/edit")
     token = extract_csrf(r.text)
+    data = _payload(name="Целевой", price="-1")
+    data["csrf_token"] = token
+    png = _png()
     r = admin_client.post(
         f"/admin/products/{pid}/edit",
-        data={
-            "name": "Целевой",
-            "price": "-1",
-            "csrf_token": token,
-        },
+        data=data,
+        files={"image": ("test.png", png, "image/png")},
         follow_redirects=True,
     )
     assert r.status_code == 200
