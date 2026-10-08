@@ -38,8 +38,8 @@ def test_catalog_search_no_results(client):
 
 
 def test_product_page(client):
-    from app.database import SessionLocal
-    from app.models import Product
+    from app.core.database import SessionLocal
+    from app.data.models import Product
 
     with SessionLocal() as db:
         pid = db.query(Product).first().id

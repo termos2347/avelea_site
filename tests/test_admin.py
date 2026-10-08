@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image
 
-from app.config import BASE_DIR
+from app.core.config import BASE_DIR
 from tests.conftest import extract_csrf
 
 
@@ -29,8 +29,8 @@ def _jpeg(size=(8, 8), color=(30, 30, 200)) -> bytes:
 
 def _first_brand_id() -> str:
     """Берём id первого бренда из БД. В тестовой базе seed создаёт Avelea."""
-    from app.database import SessionLocal
-    from app.models import Brand
+    from app.core.database import SessionLocal
+    from app.data.models import Brand
     with SessionLocal() as db:
         b = db.query(Brand).first()
         return str(b.id) if b else ""
@@ -38,8 +38,8 @@ def _first_brand_id() -> str:
 
 def _first_category_name() -> str:
     """Берём имя первой категории. Seed создаёт «Лицо», «Макияж» и т.д."""
-    from app.database import SessionLocal
-    from app.models import Category
+    from app.core.database import SessionLocal
+    from app.data.models import Category
     with SessionLocal() as db:
         c = db.query(Category).first()
         return c.name if c else ""
@@ -297,7 +297,7 @@ def test_body_size_limit_returns_413():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from app.main import BodySizeLimitMiddleware
+    from app.core.middleware import BodySizeLimitMiddleware
 
     probe = FastAPI()
 
@@ -355,8 +355,8 @@ def test_create_product_accepts_zero_price(admin_client):
 
 def test_update_product_rejects_negative_price(admin_client):
     """Отрицательная цена при редактировании — цена не меняется."""
-    from app.database import SessionLocal
-    from app.models import Product
+    from app.core.database import SessionLocal
+    from app.data.models import Product
 
     # Создаём товар с валидной ценой.
     r = admin_client.get("/admin/products")

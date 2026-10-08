@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from app.config import DATABASE_URL
+from app.core.config import DATABASE_URL
 
 # check_same_thread нужен только для SQLite: FastAPI работает в разных потоках,
 # а дефолтный pysqlite-драйвер это запрещает.

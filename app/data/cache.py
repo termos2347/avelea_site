@@ -14,8 +14,8 @@
 """
 from threading import RLock
 
-from app.database import SessionLocal
-from app.models import Product, Brand, Category
+from app.core.database import SessionLocal
+from app.data.models import Product, Brand, Category
 
 
 _lock = RLock()

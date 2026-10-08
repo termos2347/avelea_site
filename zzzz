@@ -1,0 +1,27 @@
+app/
+├── __init__.py               # остаётся (пустой)
+├── main.py                   # ~90 строк: FastAPI(), middleware, lifespan, exception handlers, include_router
+│
+├── config.py                 # остаётся как есть (env + константы)
+├── models.py                 # остаётся как есть (Product, Brand, Category, product_categories)
+├── database.py               # остаётся как есть (engine, SessionLocal, Base, get_db)
+├── seed.py                   # остаётся как есть (seed_database)
+├── cache.py                  # остаётся как есть (in-memory кэш)
+├── storage.py                # остаётся как есть (LocalStorage, S3Storage, save_image, delete_image)
+│
+├── middleware.py             # НОВЫЙ: BodySizeLimitMiddleware (вырезан из main.py)
+├── deps.py                   # НОВЫЙ: NotAuthenticated, require_admin, check_csrf, get_csrf_token, safe_str_compare
+├── helpers.py                # НОВЫЙ: URL-билдеры, parse_volume, validate_price, resolve_*
+├── migrations.py             # НОВЫЙ: run_startup_migrations + три _migrate_* из lifespan
+├── templates_env.py          # НОВЫЙ: site_templates, admin_templates + регистрация глобалов
+│
+├── routers/                  # НОВЫЙ ПАКЕТ
+│   ├── __init__.py           # пустой, обязательно
+│   ├── site.py               # /, /catalog, /product/{id}, /about
+│   ├── admin_auth.py         # /admin/login, /admin/logout, /admin
+│   ├── admin_products.py     # /admin/products/* (CRUD товаров + _product_form_context)
+│   └── admin_catalog.py      # /admin/brands/* + /admin/categories/*
+│
+└── templates/                # без изменений
+    ├── admin/...
+    └── site/...

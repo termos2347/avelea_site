@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent  # корень проекта
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # корень проекта
 
 load_dotenv(BASE_DIR / ".env")
 

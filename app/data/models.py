@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column, Integer, String, Boolean, Text, Table, ForeignKey, event,
 )
 from sqlalchemy.orm import relationship
-from app.database import Base
+from app.core.database import Base
 
 
 product_categories = Table(

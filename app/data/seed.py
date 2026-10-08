@@ -10,7 +10,7 @@
 """
 from sqlalchemy.orm import Session
 
-from app.models import Product, Brand, Category
+from app.data.models import Product, Brand, Category
 
 
 # Базовые категории, которые всегда создаются при первом запуске.

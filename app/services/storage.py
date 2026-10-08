@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 
-from app.config import (
+from app.core.config import (
     BASE_DIR,
     MAX_UPLOAD_BYTES,
     STORAGE_BACKEND,
