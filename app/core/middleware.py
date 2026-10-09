@@ -20,3 +20,24 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
                     status_code=413,
                 )
         return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Добавляет базовые security-заголовки к каждому ответу.
+
+    CSP не ставим — Tailwind и Font Awesome подключены через CDN
+    с inline-стилями, дефолтная политика их сломает.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin",
+        )
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), microphone=(), camera=()",
+        )
+        return response

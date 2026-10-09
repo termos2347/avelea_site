@@ -9,6 +9,7 @@
 
 Вся бизнес-логика — в app/routers/*, app/utils/helpers.py, app/data/migrations.py.
 """
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -28,7 +29,10 @@ from app.core.config import (
 )
 from app.core.database import Base, SessionLocal, engine
 from app.core.deps import NotAuthenticated
-from app.core.middleware import BodySizeLimitMiddleware
+from app.core.middleware import (
+    BodySizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.core.rendering import admin_templates, site_templates
 from app.data import cache
 from app.data.migrations import run_startup_migrations
@@ -41,10 +45,20 @@ from app.routers.admin import auth, catalog, products
 (BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
 
 
+# ============== ЛОГИРОВАНИЕ ==============
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("avelea")
+
+
 # ============== LIFESPAN ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- startup ---
+    log.info("Запуск: миграции + seed")
     db = SessionLocal()
     try:
         Base.metadata.create_all(bind=engine)
@@ -55,9 +69,11 @@ async def lifespan(app: FastAPI):
 
     # Прогреваем кэш — чтобы первый публичный запрос уже был быстрым.
     cache.reload_all()
+    log.info("Кэш прогрет. Приложение готово")
 
     yield
     # --- shutdown ---
+    log.info("Остановка")
 
 
 # ============== APP ==============
@@ -74,11 +90,23 @@ app.add_middleware(
     BodySizeLimitMiddleware,
     max_bytes=MAX_UPLOAD_BYTES + 1024 * 1024,
 )
+# SecurityHeaders добавляется последним → выполняется первым
+# и оборачивает все остальные middleware. Заголовки попадут
+# на любой ответ, включая 413 и редиректы сессии.
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.mount(
     "/static",
     StaticFiles(directory=BASE_DIR / "static"),
     name="static",
 )
+
+
+# ============== HEALTHCHECK ==============
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    """Простейший liveness-чек для балансировщика / k8s."""
+    return {"ok": True}
 
 
 # ============== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==============
