@@ -61,7 +61,9 @@ async def admin_products(
     # Админка работает с БД напрямую — здесь кэш не нужен, важна свежесть.
     query = db.query(Product)
     if q:
-        query = query.filter(Product.name_lower.contains(q.lower()))
+        query = query.filter(
+            Product.name_lower.contains(q.lower(), autoescape=True)
+        )
     query = query.order_by(Product.id.desc())
 
     total_count = query.count()

@@ -134,6 +134,60 @@ def test_login_success(client):
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/products"
 
+def test_login_bruteforce_blocked(client):
+    """После 5 неудачных попыток — 429, даже если пароль верный."""
+    # 5 неудачных попыток
+    for _ in range(5):
+        r = client.get("/admin/login")
+        token = extract_csrf(r.text)
+        r = client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+        )
+        assert r.status_code == 401
+
+    # 6-я — даже с верным паролем — 429
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+    )
+    assert r.status_code == 429
+    assert "Слишком много попыток" in r.text
+
+
+def test_login_success_resets_counter(client):
+    """После успешного входа счётчик сбрасывается — 5 неудач подряд не накапливаются."""
+    # 3 неудачи
+    for _ in range(3):
+        r = client.get("/admin/login")
+        token = extract_csrf(r.text)
+        client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+        )
+
+    # успешный вход
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    # выход и снова логин — должен работать
+    client.get("/admin/logout")
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
 
 # ============== CSRF ==============
 

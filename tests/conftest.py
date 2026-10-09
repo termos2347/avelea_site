@@ -43,3 +43,11 @@ def admin_client(client):
     )
     assert r.status_code == 303, r.text
     return client
+
+@pytest.fixture(autouse=True)
+def _reset_ratelimit():
+    """Чистит in-memory rate-limiter до и после каждого теста."""
+    from app.core.ratelimit import reset_all
+    reset_all()
+    yield
+    reset_all()

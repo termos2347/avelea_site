@@ -64,13 +64,13 @@ def _read_limited(file, limit: int) -> tuple[bytes, bool]:
 
 def _verify_image(content: bytes) -> str | None:
     try:
-        img = Image.open(io.BytesIO(content))
-        if img.format not in _ALLOWED_IMAGE_FORMATS:
-            return (
-                f"Формат {img.format or '?'} не поддерживается "
-                "(разрешены jpg, png, gif, webp) — картинка не сохранена."
-            )
-        img.verify()
+        with Image.open(io.BytesIO(content)) as img:
+            if img.format not in _ALLOWED_IMAGE_FORMATS:
+                return (
+                    f"Формат {img.format or '?'} не поддерживается "
+                    "(разрешены jpg, png, gif, webp) — картинка не сохранена."
+                )
+            img.verify()
     except (UnidentifiedImageError, OSError, ValueError):
         return "Файл повреждён или не является изображением — картинка не сохранена."
     return None

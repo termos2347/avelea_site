@@ -52,9 +52,10 @@ ADMIN_PASSWORD = _require("ADMIN_PASSWORD")
 DATABASE_URL = _str("DATABASE_URL") or f"sqlite:///{BASE_DIR / 'instance' / 'shop.db'}"
 
 # --- Uvicorn ---
-UVICORN_HOST   = _str("UVICORN_HOST", "127.0.0.1")
-UVICORN_PORT   = _int("UVICORN_PORT", 8000)
-UVICORN_RELOAD = _bool("UVICORN_RELOAD", default=False)
+UVICORN_HOST    = _str("UVICORN_HOST", "127.0.0.1")
+UVICORN_PORT    = _int("UVICORN_PORT", 8000)
+UVICORN_RELOAD  = _bool("UVICORN_RELOAD", default=False)
+UVICORN_WORKERS = _int("UVICORN_WORKERS", 1)
 
 # --- Сессия ---
 SESSION_HTTPS_ONLY = _bool("SESSION_HTTPS_ONLY", default=False)

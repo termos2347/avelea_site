@@ -38,6 +38,7 @@ avelea_site/
 │   │   ├── database.py         # engine, SessionLocal, Base, get_db()
 │   │   ├── deps.py             # FastAPI-зависимости: require_admin, CSRF
 │   │   ├── middleware.py       # BodySizeLimitMiddleware
+│   │   ├── ratelimit.py
 │   │   └── rendering.py        # Jinja2-окружения + регистрация глобалов
 │   │
 │   ├── data/                   # Всё про данные
@@ -53,7 +54,7 @@ avelea_site/
 │   │   └── helpers.py          # URL-билдеры, парсинг формы, resolve-хелперы
 │   │
 │   ├── routers/                # HTTP-роуты
-│   │   ├── site.py             # Публичные страницы: /, /catalog, /product, /about
+│   │   ├── site.py             # Страницы: /, /catalog, /product, /about
 │   │   └── admin/              # Админка
 │   │       ├── auth.py         #   /admin/login, /admin/logout
 │   │       ├── products.py     #   /admin/products/*
@@ -95,6 +96,7 @@ avelea_site/
 │   ├── conftest.py             # Фикстуры: TestClient, admin_client, CSRF
 │   ├── test_smoke.py           # Публичные страницы: главная, каталог, товар
 │   └── test_admin.py           # Админка: логин, CSRF, CRUD, загрузки, валидация
+│   └── test_migrations.py
 │
 ├── .venv/                      # Виртуальное окружение
 ├── .gitignore
