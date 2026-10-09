@@ -8,9 +8,13 @@
     Поэтому регистронезависимый поиск категорий делаем в Python через .lower(),
     а не через func.lower() в SQL-запросе.
 """
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.data.models import Product, Brand, Category
+
+log = logging.getLogger(__name__)
 
 
 # Базовые категории, которые всегда создаются при первом запуске.
@@ -176,4 +180,4 @@ def seed_database(db: Session) -> None:
 
     db.add_all(products)
     db.commit()
-    print("✅ База данных заполнена тестовыми товарами")
+    log.info("База данных заполнена тестовыми товарами")

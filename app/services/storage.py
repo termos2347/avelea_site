@@ -5,6 +5,7 @@
 приложения трогать не нужно.
 """
 import io
+import logging
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -21,6 +22,8 @@ from app.core.config import (
     S3_SECRET_KEY,
     S3_PUBLIC_URL,
 )
+
+log = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -110,8 +113,8 @@ class LocalStorage(StorageBackend):
         path = self.folder / name
         try:
             path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        except OSError as e:
+            log.warning("Не удалось удалить %s: %s", path, e)
 
 
 # ============================================================
@@ -154,8 +157,8 @@ class S3Storage(StorageBackend):
             return
         try:
             self.client.delete_object(Bucket=self.bucket, Key=name)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("Не удалось удалить %s из S3: %s", name, e)
 
 
 # ============================================================

@@ -2,7 +2,7 @@
 
 Запускаются в lifespan: create_all -> run_startup_migrations -> seed.
 """
-import sys
+import logging
 
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import NoSuchTableError
@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import engine
 from app.data.models import Product, Brand, Category
+
+log = logging.getLogger(__name__)
 
 
 def _migrate_brand_to_fk(db: Session) -> None:
@@ -64,16 +66,16 @@ def _migrate_brand_to_fk(db: Session) -> None:
 
     if migrated:
         db.commit()
-        print(f"✅ Бренды мигрированы у {migrated} товаров")
+        log.info("Бренды мигрированы у %d товаров", migrated)
 
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE products DROP COLUMN brand"))
     except Exception as e:
-        print(
-            f"⚠️  Не удалось удалить products.brand: {e}. "
-            f"Колонка больше не используется, но осталась в схеме.",
-            file=sys.stderr,
+        log.warning(
+            "Не удалось удалить products.brand: %s. "
+            "Колонка больше не используется, но осталась в схеме.",
+            e,
         )
 
 
@@ -154,7 +156,7 @@ def _migrate_legacy_category_column(db: Session) -> None:
 
     if migrated:
         db.commit()
-        print(f"✅ Категории мигрированы у {migrated} товаров")
+        log.info("Категории мигрированы у %d товаров", migrated)
 
     for col in ("category", "tags"):
         if col in product_cols:
