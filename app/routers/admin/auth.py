@@ -4,6 +4,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.config import ADMIN_PASSWORD
 from app.core.deps import check_csrf, safe_str_compare
+from app.core.ratelimit import (
+    client_key,
+    is_blocked,
+    register_failure,
+    reset,
+)
 from app.core.rendering import admin_templates
 
 router = APIRouter(prefix="/admin", tags=["admin-auth"])
@@ -20,9 +26,24 @@ async def admin_login_form(request: Request):
 
 @router.post("/login", dependencies=[Depends(check_csrf)])
 async def admin_login_submit(request: Request, password: str = Form(...)):
+    key = client_key(request)
+
+    if is_blocked(key):
+        return admin_templates.TemplateResponse(
+            request, "login.html",
+            {"error": "Слишком много попыток входа. Попробуйте через 5 минут."},
+            status_code=429,
+        )
+
     if safe_str_compare(password, ADMIN_PASSWORD):
+        reset(key)
         request.session["admin"] = True
+        # Ротация CSRF-токена после успешного входа:
+        # старый токен, полученный до авторизации, больше не действует.
+        request.session.pop("csrf_token", None)
         return RedirectResponse(url="/admin/products", status_code=303)
+
+    register_failure(key)
     return admin_templates.TemplateResponse(
         request, "login.html",
         {"error": "Неверный пароль"},
