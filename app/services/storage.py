@@ -39,10 +39,13 @@ _MAGIC = (
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 
-# Единая константа ресемплинга: Image.LANCZOS существует во всех
-# актуальных версиях Pillow. В очень новых это алиас на
-# Image.Resampling.LANCZOS — работает одинаково.
-_RESAMPLE = Image.LANCZOS
+# Image.LANCZOS переехал в Image.Resampling.LANCZOS в Pillow 10.
+# Оставляем совместимость со старыми версиями.
+_RESAMPLE = (
+    Image.Resampling.LANCZOS
+    if hasattr(Image, "Resampling")
+    else Image.LANCZOS
+)
 
 
 def _sniff_image_ext(head: bytes) -> str | None:

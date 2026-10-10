@@ -19,8 +19,8 @@
         <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70 aspect-square bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
             {% if product.image %}
                 <img src="{{ product.image }}" alt="{{ product.name }}"
-                    fetchpriority="high"
-                    class="absolute inset-0 w-full h-full object-cover">
+                     fetchpriority="high"
+                     class="absolute inset-0 w-full h-full object-cover">
             {% else %}
                 {# Заглушка: инициалы на градиенте + большая иконка #}
                 <div class="absolute inset-0 flex flex-col items-center justify-center text-pink-300">
@@ -87,15 +87,11 @@
         </div>
         {% endif %}
 
-        {# Кнопки #}
+        {# Кнопка «В каталог» — единственное действие на карточке.
+           Кнопку «В корзину» убрали: витрина без оформления заказа. #}
         <div class="flex flex-wrap gap-3 mt-auto">
-            <button type="button"
-                    class="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-full text-sm md:text-base font-medium transition shadow-lg shadow-pink-500/40">
-                <i class="fas fa-bag-shopping text-sm"></i>
-                В корзину
-            </button>
             <a href="/catalog"
-               class="inline-flex items-center gap-2 border border-pink-200 hover:bg-pink-50 text-pink-700 px-6 py-3 rounded-full text-sm md:text-base font-medium transition">
+               class="inline-flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-full text-sm md:text-base font-medium transition shadow-lg shadow-pink-500/40">
                 <i class="fas fa-arrow-left text-xs"></i>
                 В каталог
             </a>

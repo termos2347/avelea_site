@@ -16,7 +16,7 @@ from app.utils.helpers import (
     resolve_categories,
     validate_price,
 )
-from app.data.models import Product
+from app.data.models import Product, Brand, Category
 from app.services.storage import save_image, delete_image
 from app.core.rendering import admin_templates
 
@@ -126,7 +126,7 @@ async def admin_product_create(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    brand_id: str = Form(...),
+    brand_id: str = Form(None),
     price: int = Form(...),
     volume_amount: str = Form(...),
     volume_unit: str = Form(...),
@@ -138,13 +138,18 @@ async def admin_product_create(
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    if not categories:
+    # Категории обязательны, только если они вообще есть в БД.
+    # Если админ ещё ничего не создал — позволяем товар без категорий,
+    # иначе получается курица и яйцо: форма требует категорию,
+    # а создать её — на другой странице.
+    if not categories and db.query(Category).count() > 0:
         request.session["flash_error"] = (
             "Выберите хотя бы одну категорию — товар не создан."
         )
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    if not brand_id or not brand_id.strip():
+    # То же самое с брендом.
+    if (not brand_id or not brand_id.strip()) and db.query(Brand).count() > 0:
         request.session["flash_error"] = "Выберите бренд — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
@@ -209,7 +214,7 @@ async def admin_product_update(
     _: bool = Depends(require_admin),
     name: str = Form(...),
     categories: list[str] = Form([]),
-    brand_id: str = Form(...),
+    brand_id: str = Form(None),
     price: int = Form(...),
     volume_amount: str = Form(...),
     volume_unit: str = Form(...),
@@ -226,13 +231,14 @@ async def admin_product_update(
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    if not categories:
+    # Те же условные проверки, что и при создании.
+    if not categories and db.query(Category).count() > 0:
         request.session["flash_error"] = (
             "Выберите хотя бы одну категорию — изменения не сохранены."
         )
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    if not brand_id or not brand_id.strip():
+    if (not brand_id or not brand_id.strip()) and db.query(Brand).count() > 0:
         request.session["flash_error"] = (
             "Выберите бренд — изменения не сохранены."
         )
@@ -256,9 +262,6 @@ async def admin_product_update(
         request.session["flash_error"] = img_err
 
     # Приоритет: новый файл > удаление > оставить как было.
-    # Если пользователь загрузил новый и одновременно поставил
-    # «удалить текущую» — новый файл побеждает (удалять уже нечего,
-    # старый всё равно будет удалён ниже).
     if new_image:
         final_image = new_image
     elif remove_image:
