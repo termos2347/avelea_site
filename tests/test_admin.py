@@ -46,12 +46,7 @@ def _first_category_name() -> str:
 
 
 def _payload(**overrides) -> dict:
-    """Полный набор полей для POST /admin/products/new.
-
-    Возвращает dict со всеми обязательными полями (включая brand_id
-    и категории). Переопределяй через kwargs — что нужно конкретному
-    тесту (name, price и т.п.).
-    """
+    """Полный набор полей для POST /admin/products/new."""
     data = {
         "name": "Тестовый товар",
         "price": "999",
@@ -66,12 +61,7 @@ def _payload(**overrides) -> dict:
 
 
 def _post_new_product(client, token, **overrides):
-    """POST /admin/products/new со всеми обязательными полями.
-
-    image обязателен в роуте (UploadFile = File(...)), поэтому всегда
-    передаём настоящий PNG. Иначе FastAPI отдаст 400 ещё до входа
-    в обработчик.
-    """
+    """POST /admin/products/new со всеми обязательными полями."""
     data = _payload(**overrides)
     data["csrf_token"] = token
     png = _png()
@@ -85,11 +75,7 @@ def _post_new_product(client, token, **overrides):
 
 @pytest.fixture
 def clean_uploads():
-    """Изолирует static/uploads: чистит папку до и после теста.
-
-    Без этого файлы из предыдущих прогонов накапливаются и мешают
-    проверкам вида «файл не должен был сохраниться».
-    """
+    """Изолирует static/uploads: чистит папку до и после теста."""
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
     def _clear():
@@ -107,16 +93,10 @@ def clean_uploads():
 # ============== Авторизация ==============
 
 def test_admin_requires_login(client):
-    """Неавторизованный /admin/* встречает обычная 404 как у сайта.
-
-    Раньше здесь был редирект на /admin/login — это подтверждало
-    существование админки любому, кто тыкал /admin/* вслепую.
-    Теперь AdminAuthGuardMiddleware отдаёт тот же 404, что и сайт.
-    """
+    """Неавторизованный /admin/* встречает обычная 404 как у сайта."""
     r = client.get("/admin/products", follow_redirects=False)
     assert r.status_code == 404
 
-    # И в ответе нет ни намёка на админку
     body = r.text.lower()
     assert "admin" not in body
     assert "админ" not in body
@@ -145,9 +125,9 @@ def test_login_success(client):
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/products"
 
+
 def test_login_bruteforce_blocked(client):
     """После 5 неудачных попыток — 429, даже если пароль верный."""
-    # 5 неудачных попыток
     for _ in range(5):
         r = client.get("/admin/login")
         token = extract_csrf(r.text)
@@ -157,7 +137,6 @@ def test_login_bruteforce_blocked(client):
         )
         assert r.status_code == 401
 
-    # 6-я — даже с верным паролем — 429
     r = client.get("/admin/login")
     token = extract_csrf(r.text)
     r = client.post(
@@ -169,8 +148,7 @@ def test_login_bruteforce_blocked(client):
 
 
 def test_login_success_resets_counter(client):
-    """После успешного входа счётчик сбрасывается — 5 неудач подряд не накапливаются."""
-    # 3 неудачи
+    """После успешного входа счётчик сбрасывается."""
     for _ in range(3):
         r = client.get("/admin/login")
         token = extract_csrf(r.text)
@@ -179,7 +157,6 @@ def test_login_success_resets_counter(client):
             data={"password": "wrong", "csrf_token": token},
         )
 
-    # успешный вход
     r = client.get("/admin/login")
     token = extract_csrf(r.text)
     r = client.post(
@@ -189,7 +166,6 @@ def test_login_success_resets_counter(client):
     )
     assert r.status_code == 303
 
-    # выход и снова логин — должен работать
     client.get("/admin/logout")
     r = client.get("/admin/login")
     token = extract_csrf(r.text)
@@ -200,6 +176,7 @@ def test_login_success_resets_counter(client):
     )
     assert r.status_code == 303
 
+
 # ============== CSRF ==============
 
 def test_post_without_csrf_is_forbidden(client):
@@ -208,7 +185,7 @@ def test_post_without_csrf_is_forbidden(client):
 
 
 def test_post_with_wrong_csrf_is_forbidden(client):
-    client.get("/admin/login")  # создаём сессию и токен
+    client.get("/admin/login")
     r = client.post(
         "/admin/login",
         data={"password": "test-password", "csrf_token": "подделка"},
@@ -423,16 +400,13 @@ def test_update_product_rejects_negative_price(admin_client):
     from app.core.database import SessionLocal
     from app.data.models import Product
 
-    # Создаём товар с валидной ценой.
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
     _post_new_product(admin_client, token, name="Целевой", price="500")
 
-    # Достаём его id из БД — проще, чем парсить HTML.
     with SessionLocal() as db:
         pid = db.query(Product).filter(Product.name == "Целевой").one().id
 
-    # Пробуем «отредактировать» на отрицательную цену.
     r = admin_client.get(f"/admin/products/{pid}/edit")
     token = extract_csrf(r.text)
     data = _payload(name="Целевой", price="-1")
@@ -447,7 +421,146 @@ def test_update_product_rejects_negative_price(admin_client):
     assert r.status_code == 200
     assert "не может быть отрицательной" in r.text
 
-    # Цена в БД осталась прежней.
     with SessionLocal() as db:
         p = db.query(Product).filter(Product.id == pid).one()
         assert p.price == 500
+
+
+# ============== Telegram 2FA ==============
+
+def _enable_2fa(monkeypatch, sink: dict):
+    """Активирует 2FA в модуле auth и подменяет отправку в Telegram.
+
+    sink — словарь, куда фейк положит последний «отправленный» код,
+    чтобы тест мог его прочитать.
+    """
+    from app.routers.admin import auth as auth_mod
+
+    monkeypatch.setattr(auth_mod, "TELEGRAM_2FA_ENABLED", True)
+    monkeypatch.setattr(auth_mod, "TELEGRAM_BOT_TOKEN", "fake-token")
+    monkeypatch.setattr(auth_mod, "TELEGRAM_ADMIN_ID", "1")
+    monkeypatch.setattr(auth_mod, "TELEGRAM_CODE_TTL", 180)
+    monkeypatch.setattr(auth_mod, "TELEGRAM_CODE_MAX_ATTEMPTS", 5)
+
+    async def fake_send(code: str) -> tuple[bool, str]:
+        sink["last_code"] = code
+        return True, ""
+
+    monkeypatch.setattr(auth_mod, "_send_telegram_code", fake_send)
+
+
+def test_2fa_disabled_by_default(client):
+    """Без настроек Telegram вход идёт в один шаг — как раньше."""
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/products"
+
+
+def test_2fa_enabled_first_step_redirects_to_code(client, monkeypatch):
+    """С включённым 2FA верный пароль не пускает сразу."""
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/login/2fa"
+    assert "last_code" in sink
+    assert len(sink["last_code"]) == 6
+    assert sink["last_code"].isdigit()
+
+    # В админку всё ещё нельзя
+    r = client.get("/admin/products", follow_redirects=False)
+    assert r.status_code == 404
+
+
+def test_2fa_full_flow(client, monkeypatch):
+    """Пароль → код → админка."""
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    # Шаг 1: пароль
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/login/2fa"
+
+    # Шаг 2: форма кода
+    r = client.get("/admin/login/2fa")
+    assert r.status_code == 200
+    assert "Код из Telegram" in r.text
+    code_token = extract_csrf(r.text)
+
+    # Шаг 3: неверный код → 401
+    r = client.post(
+        "/admin/login/2fa",
+        data={"code": "000000", "csrf_token": code_token},
+    )
+    assert r.status_code == 401
+    assert "Неверный код" in r.text
+
+    # Шаг 4: верный код → 303 на /admin/products
+    r = client.post(
+        "/admin/login/2fa",
+        data={"code": sink["last_code"], "csrf_token": code_token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/products"
+
+    # Админка доступна
+    r = client.get("/admin/products")
+    assert r.status_code == 200
+
+
+def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
+    """После N неверных кодов — сброс, надо начинать заново с пароля."""
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    from app.routers.admin import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "TELEGRAM_CODE_MAX_ATTEMPTS", 3)
+
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    client.post(
+        "/admin/login",
+        data={"password": "test-password", "csrf_token": token},
+        follow_redirects=False,
+    )
+
+    r = client.get("/admin/login/2fa")
+    code_token = extract_csrf(r.text)
+
+    # 3 неверных — все 401
+    for _ in range(3):
+        r = client.post(
+            "/admin/login/2fa",
+            data={"code": "000000", "csrf_token": code_token},
+        )
+        assert r.status_code == 401
+
+    # 4-й раз — сброс, редирект на /admin/login
+    r = client.post(
+        "/admin/login/2fa",
+        data={"code": "000000", "csrf_token": code_token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/login"

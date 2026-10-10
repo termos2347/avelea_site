@@ -1,8 +1,21 @@
-app/__pycache__/
-__pycache__/
-.pytest_cache
-.venv
+# Секреты и локальное состояние
 .env
-task.txt
-instance/shop.db
-shop.db
+.env.local
+
+# Логи
+*.log
+home.txt
+logs/
+
+# Локальная БД
+instance/
+
+# Кэши
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Пользовательские загрузки (в проде — отдельное хранилище)
+static/uploads/

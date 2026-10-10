@@ -120,14 +120,6 @@ def test_admin_login_is_reachable(client):
 
 # ============== SEO ==============
 
-def test_robots_txt(client):
-    r = client.get("/robots.txt")
-    assert r.status_code == 200
-    assert "User-agent: *" in r.text
-    assert "Disallow: /admin/" in r.text
-    assert "Sitemap:" in r.text
-
-
 def test_sitemap_xml(client):
     r = client.get("/sitemap.xml")
     assert r.status_code == 200

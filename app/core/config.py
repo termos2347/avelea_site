@@ -66,17 +66,66 @@ SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
 MAX_UPLOAD_MB    = _int("MAX_UPLOAD_MB", 5)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
-# Максимальная длина большей стороны картинки. Всё, что больше,
-# ужимается при загрузке (пропорции сохраняются).
-# 0 или отрицательное — ресайз отключён (картинки сохраняются как есть).
+# Максимальная длина большей стороны картинки.
 MAX_IMAGE_DIMENSION = _int("MAX_IMAGE_DIMENSION", 2000)
 
 # --- Хранилище картинок ---
 STORAGE_BACKEND = _str("STORAGE_BACKEND", "local")   # "local" или "s3"
 
 # Параметры S3 (используются, только если STORAGE_BACKEND=s3)
-S3_ENDPOINT   = _str("S3_ENDPOINT", "")      # напр. https://s3.twcstorage.ru
+S3_ENDPOINT   = _str("S3_ENDPOINT", "")
 S3_BUCKET     = _str("S3_BUCKET", "")
 S3_ACCESS_KEY = _str("S3_ACCESS_KEY", "")
 S3_SECRET_KEY = _str("S3_SECRET_KEY", "")
-S3_PUBLIC_URL = _str("S3_PUBLIC_URL", "")    # напр. https://cdn.avelea.ru
+S3_PUBLIC_URL = _str("S3_PUBLIC_URL", "")
+
+# --- Telegram 2FA для админки ---
+TELEGRAM_BOT_TOKEN = _str("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_ADMIN_ID  = _str("TELEGRAM_ADMIN_ID", "").strip()
+TELEGRAM_CODE_TTL = _int("TELEGRAM_CODE_TTL", 180)
+TELEGRAM_CODE_MAX_ATTEMPTS = _int("TELEGRAM_CODE_MAX_ATTEMPTS", 5)
+
+
+def _resolve_2fa_flag() -> bool:
+    """Разбирает TELEGRAM_2FA_ENABLED — у него три состояния.
+
+      - не задан вовсе  → авто: включён, если заполнены и токен, и ID;
+      - задан явно "1"  → включён. Если токен/ID пусты — падаем, это
+                          ошибка конфигурации: пользователь явно хотел
+                          2FA, но не настроил;
+      - задан явно "0"  → выключен, что бы ни лежало в токене и ID.
+                          Удобно для отладки и «Telegram лежит, зайти надо».
+
+    Пустая строка (TELEGRAM_2FA_ENABLED=) считается «не задан» — так
+    удобнее дефолт в .env.example, где значение оставлено пустым.
+    """
+    raw = os.getenv("TELEGRAM_2FA_ENABLED", "").strip().lower()
+
+    if raw in ("1", "true", "yes", "on"):
+        explicit: bool | None = True
+    elif raw in ("0", "false", "no", "off"):
+        explicit = False
+    else:
+        explicit = None  # не задан или пустая строка
+
+    has_credentials = bool(TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_ID)
+
+    if explicit is True and not has_credentials:
+        print(
+            "❌ TELEGRAM_2FA_ENABLED=1, но TELEGRAM_BOT_TOKEN или "
+            "TELEGRAM_ADMIN_ID не заполнены.",
+            file=sys.stderr,
+        )
+        print(
+            "   Заполни оба (см. .env.example) или поставь "
+            "TELEGRAM_2FA_ENABLED=0.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    if explicit is None:
+        return has_credentials
+    return explicit
+
+
+TELEGRAM_2FA_ENABLED = _resolve_2fa_flag()

@@ -26,28 +26,74 @@
             <div class="adm-login-brand">
                 avelea <small>admin</small>
             </div>
-            <h1 class="adm-login-title">Вход в админку</h1>
-            <p class="adm-login-sub">Введите пароль администратора</p>
 
-            {% if error %}
-            <div class="adm-alert adm-alert-error">
-                <i class="fas fa-circle-exclamation"></i>
-                <span>{{ error }}</span>
-            </div>
-            {% endif %}
+            {% if step == 'password' %}
 
-            <form method="post" action="/admin/login" autocomplete="off">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                <div style="margin-bottom: 1rem;">
-                    <label class="adm-label">Пароль</label>
-                    <input type="password" name="password" autofocus required
-                           autocomplete="current-password"
-                           class="adm-input" placeholder="••••••••">
+                <h1 class="adm-login-title">Вход в админку</h1>
+                <p class="adm-login-sub">Введите пароль администратора</p>
+
+                {% if error %}
+                <div class="adm-alert adm-alert-error">
+                    <i class="fas fa-circle-exclamation"></i>
+                    <span>{{ error }}</span>
                 </div>
-                <button type="submit" class="adm-btn adm-btn-primary" style="width: 100%; padding: 0.65rem 1rem;">
-                    Войти
-                </button>
-            </form>
+                {% endif %}
+
+                <form method="post" action="/admin/login" autocomplete="off">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <div style="margin-bottom: 1rem;">
+                        <label class="adm-label">Пароль</label>
+                        <input type="password" name="password" autofocus required
+                               autocomplete="current-password"
+                               class="adm-input" placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="adm-btn adm-btn-primary" style="width: 100%; padding: 0.65rem 1rem;">
+                        Продолжить
+                    </button>
+                </form>
+
+            {% else %}
+
+                <h1 class="adm-login-title">Подтверждение</h1>
+                <p class="adm-login-sub">
+                    Мы отправили код в Telegram.
+                    Введите его ниже — код действует {{ code_ttl_minutes }} мин.
+                </p>
+
+                {% if error %}
+                <div class="adm-alert adm-alert-error">
+                    <i class="fas fa-circle-exclamation"></i>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
+
+                <form method="post" action="/admin/login/2fa" autocomplete="off">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <div style="margin-bottom: 1rem;">
+                        <label class="adm-label">Код из Telegram</label>
+                        <input type="text"
+                               name="code"
+                               autofocus required
+                               inputmode="numeric"
+                               pattern="[0-9]{6}"
+                               maxlength="6"
+                               autocomplete="one-time-code"
+                               class="adm-input"
+                               placeholder="000000"
+                               style="font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; font-variant-numeric: tabular-nums;">
+                    </div>
+                    <button type="submit" class="adm-btn adm-btn-primary" style="width: 100%; padding: 0.65rem 1rem;">
+                        Войти
+                    </button>
+                </form>
+
+                <div style="margin-top: 1.25rem; text-align: center;">
+                    <a href="/admin/login" style="font-size: 0.8rem; color: var(--adm-muted); text-decoration: none;">
+                        Начать заново
+                    </a>
+                </div>
+
+            {% endif %}
 
             <div style="margin-top: 1.5rem; text-align: center;">
                 <a href="/" style="font-size: 0.85rem; color: var(--adm-muted); text-decoration: none;">
