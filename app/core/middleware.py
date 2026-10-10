@@ -45,6 +45,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy",
             "geolocation=(), microphone=(), camera=()",
         )
+        # COOP: изолирует browsing context от чужого opener.
+        # Защита от Spectre-подобных атак и «window.opener»-манипуляций.
+        response.headers.setdefault(
+            "Cross-Origin-Opener-Policy", "same-origin",
+        )
         if SESSION_HTTPS_ONLY:
             response.headers.setdefault(
                 "Strict-Transport-Security",
@@ -69,10 +74,13 @@ class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
                                         без единого намёка на админку;
       - /admin/* с сессией           → пропускаем, дальше рулит
                                         require_admin на роутерах.
+
+    Дополнительно ко всем ответам из /admin/* ставим заголовок
+    X-Robots-Tag: noindex, nofollow. Это защита от индексации
+    на уровне HTTP — работает даже если робот не читал robots.txt
+    (а мы там /admin явно не перечисляем — не подсказываем).
     """
 
-    # Плейн-HTML вместо шаблона: рендер Jinja из middleware
-    # требует передачи Request, а это лишний риск. Страница — 15 строк.
     _NOT_FOUND_HTML = (
         "<!DOCTYPE html>"
         "<html lang='ru'><head><meta charset='utf-8'>"
@@ -94,16 +102,29 @@ class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
 
-        # Открыто: /admin/login и всё под ним
-        if path == "/admin/login" or path.startswith("/admin/login/"):
+        # Обрабатываем только /admin/*
+        is_admin = (path == "/admin" or path.startswith("/admin/"))
+        if not is_admin:
             return await call_next(request)
 
-        # Закрыто: любой другой /admin или /admin/*
-        if path == "/admin" or path.startswith("/admin/"):
-            if not request.session.get("admin"):
-                return HTMLResponse(
-                    content=self._NOT_FOUND_HTML,
-                    status_code=404,
-                )
+        # Открыто: /admin/login и всё под ним
+        if path == "/admin/login" or path.startswith("/admin/login/"):
+            response = await call_next(request)
+            return self._add_noindex(response)
 
-        return await call_next(request)
+        # Закрыто: любой другой /admin или /admin/* без сессии
+        if not request.session.get("admin"):
+            response = HTMLResponse(
+                content=self._NOT_FOUND_HTML,
+                status_code=404,
+            )
+            return self._add_noindex(response)
+
+        # Залогинен — пропускаем дальше, но noindex всё равно ставим
+        response = await call_next(request)
+        return self._add_noindex(response)
+
+    @staticmethod
+    def _add_noindex(response):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response

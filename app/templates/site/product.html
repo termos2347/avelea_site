@@ -19,7 +19,8 @@
         <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70 aspect-square bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
             {% if product.image %}
                 <img src="{{ product.image }}" alt="{{ product.name }}"
-                     class="absolute inset-0 w-full h-full object-cover">
+                    fetchpriority="high"
+                    class="absolute inset-0 w-full h-full object-cover">
             {% else %}
                 {# Заглушка: инициалы на градиенте + большая иконка #}
                 <div class="absolute inset-0 flex flex-col items-center justify-center text-pink-300">

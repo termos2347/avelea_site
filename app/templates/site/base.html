@@ -7,7 +7,25 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="view-transition" content="same-origin">
+
     <title>{% block title %}Avelea — Натуральная косметика{% endblock %}</title>
+
+    {# Favicon: розовая точка с буквой «a». Inline-SVG — без файла на диске.
+       %23 — это URL-encoded #, иначе # воспримется как fragment data-URI. #}
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23ec4899'/><text x='50' y='68' font-size='60' font-family='-apple-system,sans-serif' font-weight='600' fill='white' text-anchor='middle'>a</text></svg>">
+
+    <meta name="description" content="{% block description %}Натуральная косметика для бережного ухода. Без парабенов, без сульфатов, без жестокости.{% endblock %}">
+
+    {# Open Graph — превью при шаринге в мессенджерах и соцсетях. #}
+    <meta property="og:title" content="{% block og_title %}Avelea — Натуральная косметика{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Натуральная косметика для бережного ухода. Без парабенов, без сульфатов.{% endblock %}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Avelea">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:image" content="https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=1200&q=80&auto=format&fit=crop">
+
+    <meta name="twitter:card" content="summary_large_image">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
@@ -21,32 +39,20 @@
 
     {# ============================================================
        СКЕЛЕТОН-ОКНО
-       ------------------------------------------------------------
-       Несколько вариантов скелетона — по одному на каждый тип
-       страницы. JS показывает нужный, смотря на URL кликнутой
-       ссылки. Если страница отдаётся быстрее 150ms — скелетон
-       вообще не появляется.
        ============================================================ #}
     <div id="skeleton-overlay" class="skeleton-overlay" aria-hidden="true">
         <div class="skeleton-container">
 
             {# ---------- ГЛАВНАЯ ---------- #}
             <div class="sk-variant" data-sk="home">
-                {# Hero #}
                 <div class="sk-block sk-hero"></div>
-
-                {# Категории #}
                 <div class="sk-cats">
                     <div class="sk-block sk-cat"></div>
                     <div class="sk-block sk-cat"></div>
                     <div class="sk-block sk-cat"></div>
                     <div class="sk-block sk-cat"></div>
                 </div>
-
-                {# Заголовок секции #}
                 <div class="sk-block sk-section-title"></div>
-
-                {# Сетка популярных товаров #}
                 <div class="sk-grid">
                     {% for _ in range(6) %}
                     <div class="sk-card">
@@ -61,17 +67,12 @@
 
             {# ---------- КАТАЛОГ ---------- #}
             <div class="sk-variant" data-sk="catalog">
-                {# Баннер #}
                 <div class="sk-block sk-banner"></div>
-
-                {# Строка фильтров #}
                 <div class="sk-toolbar">
                     <div class="sk-block sk-pill"></div>
                     <div class="sk-block sk-pill-sm"></div>
                     <div class="sk-block sk-pill-sm"></div>
                 </div>
-
-                {# Сетка карточек #}
                 <div class="sk-grid">
                     {% for _ in range(8) %}
                     <div class="sk-card">
@@ -86,10 +87,7 @@
 
             {# ---------- КАРТОЧКА ТОВАРА ---------- #}
             <div class="sk-variant" data-sk="product">
-                {# Хлебные крошки #}
                 <div class="sk-block sk-crumbs"></div>
-
-                {# Две колонки: фото + инфо #}
                 <div class="sk-product">
                     <div class="sk-block sk-product-img"></div>
                     <div class="sk-product-info">
@@ -105,10 +103,7 @@
 
             {# ---------- О НАС ---------- #}
             <div class="sk-variant" data-sk="about">
-                {# Hero #}
                 <div class="sk-block sk-hero-about"></div>
-
-                {# Две колонки: фото + текст #}
                 <div class="sk-about">
                     <div class="sk-block sk-about-img"></div>
                     <div class="sk-about-text">

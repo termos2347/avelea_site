@@ -18,11 +18,12 @@
 """
 import logging
 from contextlib import asynccontextmanager
+from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
@@ -105,9 +106,6 @@ app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 # Итоговый порядок выполнения (изнутри наружу — как добавляем):
 #   GZip → AdminGuard → Session → BodySize → SecurityHeaders
 #
-# То есть на запрос: SecurityHeaders → BodySize → Session →
-# AdminGuard → GZip → ExceptionMiddleware → роутер.
-#
 # AdminGuard специально ПОСЛЕ Session — иначе request.session
 # внутри guard упадёт с AssertionError (session ещё не создан).
 app.add_middleware(GZipMiddleware, minimum_size=800)
@@ -125,9 +123,6 @@ app.add_middleware(
     BodySizeLimitMiddleware,
     max_bytes=MAX_UPLOAD_BYTES + 1024 * 1024,
 )
-# SecurityHeaders добавляется последним → выполняется первым
-# и оборачивает все остальные middleware. Заголовки попадут
-# на любой ответ, включая 413 и редиректы сессии.
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.mount(
@@ -142,6 +137,50 @@ app.mount(
 async def healthz():
     """Простейший liveness-чек для балансировщика / k8s."""
     return {"ok": True}
+
+
+# ============== SEO: robots.txt и sitemap.xml ==============
+@app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
+async def robots_txt(request: Request):
+    """Подсказки для поисковых роботов.
+
+    Не перечисляем /admin/ явно: robots.txt публичен, и такая строка
+    была бы подсказкой «здесь есть админка». От индексации /admin/*
+    защищает AdminAuthGuardMiddleware (отдаёт 404) плюс заголовок
+    X-Robots-Tag: noindex, который ставится там же.
+    """
+    base = str(request.base_url).rstrip("/")
+    return PlainTextResponse(
+        "User-agent: *\n"
+        "Allow: /\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml(request: Request):
+    """Карта сайта со всеми публичными страницами и товарами.
+
+    Читаем из кэша — то есть без запросов в БД. Для магазина
+    на несколько тысяч товаров это всё ещё один короткий запрос.
+    """
+    base = str(request.base_url).rstrip("/")
+
+    urls = [
+        f"{base}/",
+        f"{base}/catalog",
+        f"{base}/about",
+    ]
+    for p in cache.get_products():
+        urls.append(f"{base}/product/{p.id}")
+
+    body = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    body += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for u in urls:
+        body += f"  <url><loc>{escape(u)}</loc></url>\n"
+    body += "</urlset>\n"
+
+    return Response(content=body, media_type="application/xml")
 
 
 # ============== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==============
@@ -266,10 +305,6 @@ def _render_error(
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    # NotAuthenticated сюда не доходит: AdminAuthGuardMiddleware
-    # перехватывает /admin/* раньше роутера. Но require_admin может
-    # кинуть 403 через HTTPException — например, если кто-то
-    # стучится в write-метод с чужой CSRF-сессией.
     return _render_error(request, exc.status_code)
 
 

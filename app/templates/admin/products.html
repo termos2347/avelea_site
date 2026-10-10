@@ -69,7 +69,7 @@
                     <td class="adm-col-id adm-table-id">{{ p.id }}</td>
                     <td class="adm-col-hide-mobile">
                         {% if p.image %}
-                        <img src="{{ p.image }}" alt="" class="adm-table-thumb">
+                        <img src="{{ p.image }}" alt="" loading="lazy" decoding="async" class="adm-table-thumb">
                         {% else %}
                         <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
                         {% endif %}
@@ -170,7 +170,7 @@
                 <span class="adm-product-badge">популярное</span>
                 {% endif %}
                 {% if p.image %}
-                <img src="{{ p.image }}" alt="{{ p.name }}">
+                <img src="{{ p.image }}" alt="{{ p.name }}" loading="lazy" decoding="async">
                 {% else %}
                 {{ p.name[:2].upper() }}
                 {% endif %}

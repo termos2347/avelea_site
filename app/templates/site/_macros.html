@@ -12,6 +12,7 @@
                 bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
         {% if product.image %}
         <img src="{{ product.image }}" alt="{{ product.name }}"
+             loading="lazy" decoding="async"
              class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
         {% else %}
         {{ product.name[:2].upper() }}
