@@ -5,6 +5,10 @@ JavaScript (HTMX + Tailwind). Без корзины, без оплаты, без
 кабинета — только публичный каталог и панель управления.
 ---
 
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![Tests](https://img.shields.io/badge/tests-49%20passed-brightgreen)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
+
 ## Запуск
 
 ```bash

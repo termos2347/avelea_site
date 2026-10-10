@@ -5,7 +5,8 @@
   - подключение middleware;
   - lifespan (create_all → миграции → seed → прогрев кэша);
   - глобальные exception handlers;
-  - регистрация роутеров.
+  - регистрация роутеров;
+  - /robots.txt и /sitemap.xml.
 
 Вся бизнес-логика — в app/routers/*, app/utils/helpers.py, app/data/migrations.py.
 
@@ -15,15 +16,26 @@
     Текст выбирается функцией _pick_error_preset: сначала
     смотрит на URL (например, /product/* — «Товар не найден»),
     потом — на общий пресет из _ERROR_PAGES.
+
+Про логирование:
+    Консоль + файл с ротацией (instance/logs/avelea.log).
+    Uvicorn-логгеры перенастроены, чтобы писать через наш формат.
+    httpx приглушён до WARNING — иначе Telegram-токен светится в URL.
 """
 import logging
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
 from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
@@ -56,11 +68,43 @@ from app.routers.admin import auth, catalog, products
 
 
 # ============== ЛОГИРОВАНИЕ ==============
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
+_LOG_DIR = BASE_DIR / "instance" / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+_formatter = logging.Formatter(
+    fmt="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
+
+# Консоль.
+_console = logging.StreamHandler()
+_console.setFormatter(_formatter)
+
+# Файл — с ротацией: 5 МБ, 5 архивов. Старше — удаляются.
+_file = RotatingFileHandler(
+    _LOG_DIR / "avelea.log",
+    maxBytes=5 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
+_file.setFormatter(_formatter)
+
+logging.basicConfig(level=logging.INFO, handlers=[_console, _file])
+
+# --- Унификация логов uvicorn ---
+# Uvicorn при старте создаёт собственные обработчики со своим форматом
+# и не даёт записям идти через root. Очищаем их и включаем propagate —
+# теперь uvicorn пишет через наш handler, в нашем формате, в тот же файл.
+for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "uvicorn.asgi"):
+    _uv = logging.getLogger(_name)
+    _uv.handlers.clear()
+    _uv.propagate = True
+
+# httpx на INFO печатает URL каждого запроса — включая наш Telegram-токен
+# в path. Заглушаем, чтобы токен не светился в логах.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 log = logging.getLogger("avelea")
 
 
@@ -103,8 +147,8 @@ app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 # Порядок middleware в Starlette: тот, кого добавили последним —
 # оказывается самым внешним и выполняется первым на запрос.
 #
-# Итоговый порядок выполнения (изнутри наружу — как добавляем):
-#   GZip → AdminGuard → Session → BodySize → SecurityHeaders
+# Итоговый порядок выполнения: SecurityHeaders → BodySize → Session →
+# AdminGuard → GZip → ExceptionMiddleware → роутер.
 #
 # AdminGuard специально ПОСЛЕ Session — иначе request.session
 # внутри guard упадёт с AssertionError (session ещё не создан).
@@ -161,8 +205,7 @@ async def robots_txt(request: Request):
 async def sitemap_xml(request: Request):
     """Карта сайта со всеми публичными страницами и товарами.
 
-    Читаем из кэша — то есть без запросов в БД. Для магазина
-    на несколько тысяч товаров это всё ещё один короткий запрос.
+    Читаем из кэша — то есть без запросов в БД.
     """
     base = str(request.base_url).rstrip("/")
 
@@ -204,8 +247,6 @@ _ERROR_PAGES: dict[int, dict] = {
         "icon":  "fa-lock",
     },
     404: {
-        # Общий текст для 404. Уточнения — в _pick_error_preset
-        # (например, для /product/* там отдельный вариант).
         "title": "Страница не найдена",
         "message": "Такой страницы на сайте нет. Возможно, ссылка устарела или в ней опечатка.",
         "icon":  "fa-magnifying-glass",

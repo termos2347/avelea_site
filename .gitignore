@@ -9,6 +9,7 @@ logs/
 
 # Локальная БД
 instance/
+instance/logs/
 
 # Кэши
 __pycache__/
