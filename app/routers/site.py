@@ -1,5 +1,5 @@
 """Публичные страницы: главная, каталог, карточка товара, о нас."""
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from app.data import cache
@@ -165,9 +165,10 @@ async def product_page(request: Request, product_id: int):
 
     product = next((p for p in all_products if p.id == product_id), None)
     if not product:
-        return site_templates.TemplateResponse(
-            request, "404.html", status_code=404,
-        )
+        # Отдаём через глобальный обработчик — он сам выберет шаблон,
+        # пресет и иконку. Раньше тут был прямой рендер "error.html",
+        # но после унификации страниц ошибок его больше нет.
+        raise HTTPException(status_code=404)
 
     cat_names = {c.name for c in product.categories}
     similar = [

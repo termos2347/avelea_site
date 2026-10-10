@@ -107,9 +107,20 @@ def clean_uploads():
 # ============== Авторизация ==============
 
 def test_admin_requires_login(client):
+    """Неавторизованный /admin/* встречает обычная 404 как у сайта.
+
+    Раньше здесь был редирект на /admin/login — это подтверждало
+    существование админки любому, кто тыкал /admin/* вслепую.
+    Теперь AdminAuthGuardMiddleware отдаёт тот же 404, что и сайт.
+    """
     r = client.get("/admin/products", follow_redirects=False)
-    assert r.status_code == 303
-    assert r.headers["location"] == "/admin/login"
+    assert r.status_code == 404
+
+    # И в ответе нет ни намёка на админку
+    body = r.text.lower()
+    assert "admin" not in body
+    assert "админ" not in body
+    assert "csrf_token" not in body
 
 
 def test_login_wrong_password(client):

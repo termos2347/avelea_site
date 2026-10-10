@@ -69,7 +69,7 @@ avelea_site/
 │       │   ├── _product_form.html
 │       │   ├── brands.html
 │       │   ├── categories.html
-│       │   └── 404.html
+│       │   └── error.html
 │       └── site/               #   Шаблоны публичной части
 │           ├── _macros.html
 │           ├── base.html
@@ -77,7 +77,7 @@ avelea_site/
 │           ├── catalog.html
 │           ├── product.html
 │           ├── about.html
-│           └── 404.html
+│           └── error.html
 │
 ├── static/
 │   ├── css/

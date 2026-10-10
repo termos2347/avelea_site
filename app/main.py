@@ -12,8 +12,9 @@
 Про страницы ошибок:
     Все коды отдают один универсальный шаблон на секцию —
     templates/site/error.html и templates/admin/error.html.
-    Какой код что показывает — в словаре _ERROR_PAGES ниже.
-    Добавить новый вариант — одна строчка, шаблон трогать не нужно.
+    Текст выбирается функцией _pick_error_preset: сначала
+    смотрит на URL (например, /product/* — «Товар не найден»),
+    потом — на общий пресет из _ERROR_PAGES.
 """
 import logging
 from contextlib import asynccontextmanager
@@ -36,8 +37,8 @@ from app.core.config import (
     UVICORN_WORKERS,
 )
 from app.core.database import Base, SessionLocal, engine
-from app.core.deps import NotAuthenticated
 from app.core.middleware import (
+    AdminAuthGuardMiddleware,
     BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
@@ -101,9 +102,17 @@ app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 # Порядок middleware в Starlette: тот, кого добавили последним —
 # оказывается самым внешним и выполняется первым на запрос.
 #
-# Здесь: SecurityHeaders (внешний) → BodySize → Session → GZip (внутренний).
-# GZip внутри — сжимает тело ответа, а Security добавляет заголовки поверх.
+# Итоговый порядок выполнения (изнутри наружу — как добавляем):
+#   GZip → AdminGuard → Session → BodySize → SecurityHeaders
+#
+# То есть на запрос: SecurityHeaders → BodySize → Session →
+# AdminGuard → GZip → ExceptionMiddleware → роутер.
+#
+# AdminGuard специально ПОСЛЕ Session — иначе request.session
+# внутри guard упадёт с AssertionError (session ещё не создан).
 app.add_middleware(GZipMiddleware, minimum_size=800)
+
+app.add_middleware(AdminAuthGuardMiddleware)
 
 app.add_middleware(
     SessionMiddleware,
@@ -141,8 +150,8 @@ async def healthz():
 #   templates/admin/error.html
 #   templates/site/error.html
 #
-# Какой код что показывает — в словаре ниже. Хочешь новый
-# вариант — добавь строчку, шаблон трогать не нужно.
+# Текст подбирается в _pick_error_preset: сначала контекст (URL),
+# потом — общий пресет по коду.
 #
 _ERROR_PAGES: dict[int, dict] = {
     400: {
@@ -156,8 +165,10 @@ _ERROR_PAGES: dict[int, dict] = {
         "icon":  "fa-lock",
     },
     404: {
-        "title": "Такой страницы нет",
-        "message": "Возможно, ссылка устарела или в ней опечатка. А может, товар уже раскупили.",
+        # Общий текст для 404. Уточнения — в _pick_error_preset
+        # (например, для /product/* там отдельный вариант).
+        "title": "Страница не найдена",
+        "message": "Такой страницы на сайте нет. Возможно, ссылка устарела или в ней опечатка.",
         "icon":  "fa-magnifying-glass",
     },
     405: {
@@ -183,6 +194,47 @@ _ERROR_PAGES: dict[int, dict] = {
 }
 
 
+def _pick_error_preset(status_code: int, path: str) -> dict:
+    """Подбирает текст для страницы ошибки.
+
+    Сначала проверяет контекст URL — если путь характерный
+    (например, /product/*), даём специфичное сообщение. Иначе —
+    общий пресет из _ERROR_PAGES. Совсем незнакомые коды получают
+    нейтральную заглушку.
+    """
+    # --- Контекстные уточнения ---
+    if status_code == 404:
+        if path.startswith("/product/"):
+            return {
+                "title":   "Товар не найден",
+                "message": "Возможно, его раскупили или сняли с продажи. "
+                           "Загляните в каталог — там есть похожие.",
+                "icon":    "fa-box-open",
+            }
+        if path.startswith("/catalog"):
+            return {
+                "title":   "Страница каталога не найдена",
+                "message": "Такой страницы каталога нет. "
+                           "Откройте каталог заново.",
+                "icon":    "fa-bag-shopping",
+            }
+
+    if status_code == 500 and path.startswith("/admin/"):
+        return {
+            "title":   "Ошибка в админке",
+            "message": "Что-то сломалось. Попробуйте обновить страницу "
+                       "или вернуться к списку товаров.",
+            "icon":    "fa-triangle-exclamation",
+        }
+
+    # --- Общий пресет ---
+    return _ERROR_PAGES.get(status_code, {
+        "title":   f"Ошибка {status_code}",
+        "message": "Что-то пошло не так.",
+        "icon":    "fa-circle-exclamation",
+    })
+
+
 def _render_error(
     request: Request,
     status_code: int,
@@ -192,13 +244,9 @@ def _render_error(
     """Единая точка рендера страниц ошибок.
 
     Выбирает шаблон (admin/site) по URL, подставляет пресет
-    из _ERROR_PAGES. Незнакомые коды получают нейтральный текст.
+    из _pick_error_preset.
     """
-    preset = _ERROR_PAGES.get(status_code, {
-        "title":   f"Ошибка {status_code}",
-        "message": "Что-то пошло не так.",
-        "icon":    "fa-circle-exclamation",
-    })
+    preset = _pick_error_preset(status_code, request.url.path)
 
     is_admin = force_admin or request.url.path.startswith("/admin")
     templates = admin_templates if is_admin else site_templates
@@ -216,29 +264,18 @@ def _render_error(
     )
 
 
-@app.exception_handler(NotAuthenticated)
-async def not_auth_handler(request: Request, exc: NotAuthenticated):
-    return RedirectResponse(url="/admin/login", status_code=303)
-
-
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    # Спецслучай: неавторизованный 404 в админке → редирект на логин.
-    # Показывать «страницы нет» до логина — плохая идея: это раскрывает
-    # структуру админки любому, кто угадывает URL.
-    if (
-        exc.status_code == 404
-        and request.url.path.startswith("/admin")
-        and not request.session.get("admin")
-    ):
-        return RedirectResponse(url="/admin/login", status_code=303)
-
+    # NotAuthenticated сюда не доходит: AdminAuthGuardMiddleware
+    # перехватывает /admin/* раньше роутера. Но require_admin может
+    # кинуть 403 через HTTPException — например, если кто-то
+    # стучится в write-метод с чужой CSRF-сессией.
     return _render_error(request, exc.status_code)
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # /product/{id} с нечисловым id → 404 (id не найден), а не 400.
+    # /product/{id} с нечисловым id → 404 (товар не найден), а не 400.
     if request.url.path.startswith("/product/"):
         return _render_error(request, 404)
     return _render_error(request, 400)
