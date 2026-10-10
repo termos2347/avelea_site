@@ -145,6 +145,10 @@ body.filters-open {
    ------------------------------------------------------------
    Раскладка: [← кнопка] [рейл flex:1, overflow:hidden] [→ кнопка]
    Кнопки занимают СВОЁ место и не накладываются на карточки.
+
+   min-width на <a> страхует от сжатия карточки при уменьшении
+   масштаба шрифта в браузере: без него `width: 190px` на
+   маленьком шрифте выглядит «плюснутым» по содержимому.
    ============================================================ */
 .product-rail-wrap {
     display: flex;
@@ -174,16 +178,17 @@ body.filters-open {
     flex: 0 0 auto;
     width: 46vw;
     max-width: 200px;
+    min-width: 160px;
     scroll-snap-align: start;
 }
 
 @media (min-width: 640px) {
     .product-rail { gap: 1rem; }
-    .product-rail > a { width: 190px; max-width: none; }
+    .product-rail > a { width: 190px; max-width: none; min-width: 170px; }
 }
 
 @media (min-width: 1024px) {
-    .product-rail > a { width: 210px; }
+    .product-rail > a { width: 210px; min-width: 180px; }
 }
 
 /* Кнопки прокрутки — только на десктопе */
@@ -233,6 +238,10 @@ body.filters-open {
 [data-progress] {
     width: 0%;
 }
+
+/* Карусель фокусируется с клавиатуры (стрелки ←/→).
+   Outline визуально лишний — пользователь кликает по ней мышью. */
+[data-carousel]:focus { outline: none; }
 
 /* ============================================================
    СКЕЛЕТОН-ОКНО

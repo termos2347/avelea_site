@@ -15,6 +15,7 @@ from PIL import Image, UnidentifiedImageError
 from app.core.config import (
     BASE_DIR,
     MAX_UPLOAD_BYTES,
+    MAX_IMAGE_DIMENSION,
     STORAGE_BACKEND,
     S3_ENDPOINT,
     S3_BUCKET,
@@ -27,7 +28,7 @@ log = logging.getLogger(__name__)
 
 
 # ============================================================
-# Общий код: валидация картинок (одинаков для всех бэкендов)
+# Общий код: валидация и оптимизация картинок
 # ============================================================
 _MAGIC = (
     (b"\xff\xd8\xff",          ".jpg"),
@@ -37,6 +38,11 @@ _MAGIC = (
 )
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
+
+# Единая константа ресемплинга: Image.LANCZOS существует во всех
+# актуальных версиях Pillow. В очень новых это алиас на
+# Image.Resampling.LANCZOS — работает одинаково.
+_RESAMPLE = Image.LANCZOS
 
 
 def _sniff_image_ext(head: bytes) -> str | None:
@@ -62,18 +68,67 @@ def _read_limited(file, limit: int) -> tuple[bytes, bool]:
     return b"".join(chunks), False
 
 
-def _verify_image(content: bytes) -> str | None:
+def _optimize_image(content: bytes) -> tuple[bytes | None, str | None]:
+    """Проверяет, что файл — картинка, и ужимает её до MAX_IMAGE_DIMENSION.
+
+    Возвращает (bytes, None) при успехе или (None, error_text).
+
+    Особенности:
+      - GIF не трогаем — ресайз сломает анимацию.
+      - Если ресайз упал, отдаём оригинал (лучше большая картинка, чем
+        потеря товара из-за каприза Pillow).
+      - Если MAX_IMAGE_DIMENSION <= 0, ресайз отключён.
+    """
+    # Первый проход: проверка формата и целостности.
+    # verify() «закрывает» объект, поэтому для ресайза открываем заново.
     try:
         with Image.open(io.BytesIO(content)) as img:
-            if img.format not in _ALLOWED_IMAGE_FORMATS:
-                return (
-                    f"Формат {img.format or '?'} не поддерживается "
+            fmt = img.format
+            if fmt not in _ALLOWED_IMAGE_FORMATS:
+                return None, (
+                    f"Формат {fmt or '?'} не поддерживается "
                     "(разрешены jpg, png, gif, webp) — картинка не сохранена."
                 )
             img.verify()
     except (UnidentifiedImageError, OSError, ValueError):
-        return "Файл повреждён или не является изображением — картинка не сохранена."
-    return None
+        return None, (
+            "Файл повреждён или не является изображением — "
+            "картинка не сохранена."
+        )
+
+    if MAX_IMAGE_DIMENSION <= 0:
+        return content, None
+
+    # Второй проход: собственно ресайз.
+    try:
+        with Image.open(io.BytesIO(content)) as img:
+            fmt = img.format
+
+            if fmt == "GIF":
+                return content, None
+
+            if max(img.size) <= MAX_IMAGE_DIMENSION:
+                return content, None
+
+            img.thumbnail(
+                (MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION),
+                _RESAMPLE,
+            )
+
+            buf = io.BytesIO()
+            if fmt == "PNG":
+                img.save(buf, format="PNG", optimize=True)
+            elif fmt == "WEBP":
+                img.save(buf, format="WEBP", quality=85, method=6)
+            else:
+                # JPEG не умеет альфу — конвертируем при необходимости.
+                if img.mode in ("RGBA", "P", "LA"):
+                    img = img.convert("RGB")
+                img.save(buf, format="JPEG", quality=85, optimize=True)
+            return buf.getvalue(), None
+    except (OSError, ValueError) as e:
+        log.warning("Ресайз не удался, сохраняем оригинал: %s", e)
+        return content, None
 
 
 # ============================================================
@@ -213,7 +268,8 @@ def save_image(file) -> tuple[str | None, str | None]:
             "картинка не сохранена."
         )
 
-    if (err := _verify_image(content)) is not None:
+    content, err = _optimize_image(content)
+    if err is not None:
         return None, err
 
     url = _backend.save(content, ext)

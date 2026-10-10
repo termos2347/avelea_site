@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_code }} — админка avelea{% endblock %}
+
+{% block admin_content %}
+<div class="adm-empty" style="padding: 4rem 1rem;">
+    <i class="fas {{ error_icon }}"></i>
+    <div style="font-size: 3rem; font-weight: 600; color: var(--adm-text); letter-spacing: -0.03em; margin-bottom: 0.5rem;">
+        {{ error_code }}
+    </div>
+    <p style="font-size: 1rem;">{{ error_title }}</p>
+    <p style="font-size: 0.875rem; color: var(--adm-muted); max-width: 28rem; margin: 0.5rem auto 0; line-height: 1.5;">
+        {{ error_message }}
+    </p>
+    <a href="/admin/products" class="adm-btn adm-btn-primary" style="margin-top: 1.25rem;">
+        <i class="fas fa-box"></i> К товарам
+    </a>
+</div>
+{% endblock %}

@@ -85,11 +85,12 @@ def parse_volume(volume: str | None) -> tuple[str, str]:
     """'150 мл' -> ('150', 'мл'); '4.5 г' -> ('4.5', 'г').
 
     Если строка не распознана — возвращает ('', 'мл').
+    Регэксп включает букву «ё» (U+0451), которая вне диапазона а-я.
     """
     if not volume:
         return "", "мл"
 
-    m = re.match(r"^\s*([\d.,]+)\s*([а-яa-z]*)\s*$", volume, re.IGNORECASE)
+    m = re.match(r"^\s*([\d.,]+)\s*([а-яёa-z]*)\s*$", volume, re.IGNORECASE)
     if not m:
         return "", "мл"
 

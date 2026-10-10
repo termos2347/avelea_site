@@ -7,14 +7,25 @@
     SQLite-функция LOWER() умеет только ASCII, кириллицу не трогает.
     Поэтому регистронезависимый поиск категорий делаем в Python через .lower(),
     а не через func.lower() в SQL-запросе.
+
+ВАЖНО про флаг сида:
+    Раньше признаком «сид уже был» считалось «в таблице есть хотя бы один
+    товар». Это приводило к багу: если админ удалит ВСЕ товары, при рестарте
+    приложения сид снова насыпал демо-данные. Теперь факт сида фиксируется
+    в таблице settings (key='seeded_v1').
 """
 import logging
 
 from sqlalchemy.orm import Session
 
-from app.data.models import Product, Brand, Category
+from app.data.models import Product, Brand, Category, Setting
 
 log = logging.getLogger(__name__)
+
+
+# Ключ-маркер в таблице settings. Меняй суффикс (v1 → v2), если захочешь
+# однажды досыпать новые демо-данные в уже существующие базы.
+SEED_MARKER_KEY = "seeded_v1"
 
 
 # Базовые категории, которые всегда создаются при первом запуске.
@@ -23,8 +34,16 @@ BASE_CATEGORIES = ("Лицо", "Макияж", "Тело", "Парфюм")
 
 
 def seed_database(db: Session) -> None:
-    """Наполняет БД тестовыми товарами, если она пустая."""
+    """Наполняет БД тестовыми товарами ровно один раз за всю жизнь базы."""
+    marker = db.query(Setting).filter(Setting.key == SEED_MARKER_KEY).first()
+    if marker and marker.value == "1":
+        return
+
+    # Апгрейд со старой версии: товары в БД уже есть, а флага ещё нет.
+    # Не трогаем данные — просто фиксируем, что сид пройден.
     if db.query(Product).count() > 0:
+        db.add(Setting(key=SEED_MARKER_KEY, value="1"))
+        db.commit()
         return
 
     # ------------------------------------------------------------------
@@ -179,5 +198,7 @@ def seed_database(db: Session) -> None:
     ]
 
     db.add_all(products)
+    # Ставим флаг в той же транзакции, что и товары: либо всё, либо ничего.
+    db.add(Setting(key=SEED_MARKER_KEY, value="1"))
     db.commit()
     log.info("База данных заполнена тестовыми товарами")

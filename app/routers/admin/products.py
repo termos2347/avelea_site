@@ -255,6 +255,10 @@ async def admin_product_update(
     if img_err:
         request.session["flash_error"] = img_err
 
+    # Приоритет: новый файл > удаление > оставить как было.
+    # Если пользователь загрузил новый и одновременно поставил
+    # «удалить текущую» — новый файл побеждает (удалять уже нечего,
+    # старый всё равно будет удалён ниже).
     if new_image:
         final_image = new_image
     elif remove_image:

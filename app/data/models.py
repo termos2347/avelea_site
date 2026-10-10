@@ -61,6 +61,18 @@ class Category(Base):
     name = Column(String(100), unique=True, nullable=False, index=True)
 
 
+class Setting(Base):
+    """Key-value хранилище для служебных флагов.
+
+    Сейчас используется только для флага «сид выполнен», чтобы демо-товары
+    не возвращались после того, как админ их удалил.
+    """
+    __tablename__ = "settings"
+
+    key = Column(String(50), primary_key=True)
+    value = Column(String(200), nullable=True)
+
+
 @event.listens_for(Product, "before_insert")
 @event.listens_for(Product, "before_update")
 def _sync_product_name_lower(mapper, connection, target):  # noqa: ARG001

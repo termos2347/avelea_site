@@ -28,7 +28,6 @@
     }, true);
 
     // Определяем, какой вариант скелетона показать по URL.
-    // Логика простая: смотрим начало пути.
     function pickSkeletonVariant(href) {
         if (!href) return 'catalog';              // дефолт
 
@@ -202,6 +201,22 @@
             x0 = null;
         });
         root.addEventListener('touchcancel', () => { x0 = null; });
+
+        // --- Клавиатурная навигация ---
+        // Делаем root фокусируемым, чтобы стрелки работали после клика
+        // по карусели. Outline убран в CSS — визуально он тут лишний.
+        if (!root.hasAttribute('tabindex')) {
+            root.setAttribute('tabindex', '0');
+        }
+        root.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                goTo(current - 1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                goTo(current + 1);
+            }
+        });
 
         render();
         startTimer();

@@ -2,6 +2,8 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import PlainTextResponse
 
+from app.core.config import SESSION_HTTPS_ONLY
+
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """Отклоняет запросы, у которых Content-Length больше лимита."""
@@ -27,6 +29,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     CSP не ставим — Tailwind и Font Awesome подключены через CDN
     с inline-стилями, дефолтная политика их сломает.
+
+    HSTS включается автоматически, если приложение крутится за HTTPS
+    (сигнал — SESSION_HTTPS_ONLY=True, значит cookie Secure и вообще
+    окружение продакшен).
     """
 
     async def dispatch(self, request, call_next):
@@ -40,4 +46,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy",
             "geolocation=(), microphone=(), camera=()",
         )
+        if SESSION_HTTPS_ONLY:
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
         return response

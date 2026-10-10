@@ -404,12 +404,18 @@
         if (no) no.style.display = visible > 0 ? 'none' : 'block';
     }
 
+    // Debounce: при быстром наборе не гоняем фильтр на каждую букву.
+    // 150 мс — практически незаметно, но заметно экономит работу
+    // браузера на длинных списках (сотни строк).
+    let rowFilterTimer = null;
     document.addEventListener('input', (e) => {
         const input = e.target.closest('input[data-action="filter-rows"]');
         if (!input) return;
-        runRowFilter(input);
+        clearTimeout(rowFilterTimer);
+        rowFilterTimer = setTimeout(() => runRowFilter(input), 150);
     });
 
+    // Кнопка «очистить» работает мгновенно — ждать там нечего.
     document.addEventListener('click', (e) => {
         const clearBtn = e.target.closest('[data-search-clear]');
         if (!clearBtn) return;
@@ -417,6 +423,7 @@
         const input = searchBox && searchBox.querySelector('input');
         if (input) {
             input.value = '';
+            clearTimeout(rowFilterTimer);
             runRowFilter(input);
             input.focus();
         }
@@ -562,14 +569,6 @@
 
     // ============================================================
     // ПОЛНОЭКРАННЫЙ ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
-    // ------------------------------------------------------------
-    // htmx перехватывает submit и шлёт XHR — событие submit до
-    // браузера не доходит. Поэтому ловим КЛИК по кнопке submit
-    // внутри формы товара (у неё есть input[name="price"]).
-    //
-    // Показываем оверлей → ждём ответа → скрываем.
-    // Скрытие на: htmx:afterRequest / htmx:responseError / beforeunload.
-    // Плюс автозапас на 15 секунд — если что-то реально зависло.
     // ============================================================
     (function () {
         const overlay = document.getElementById('adm-saving-overlay');
@@ -599,15 +598,12 @@
             overlay.setAttribute('aria-hidden', 'true');
         }
 
-        // --- Показ при клике по submit-кнопке формы товара ---
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('button[type="submit"], input[type="submit"]');
             if (!btn) return;
             const form = btn.closest('form');
             if (!isProductForm(form)) return;
 
-            // Если форма не пройдёт HTML5-валидацию — не показываем оверлей.
-            // Проверяем через form.checkValidity() (без побочных эффектов).
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 return;
             }
@@ -623,7 +619,6 @@
             show(msg);
         }, true);
 
-        // --- Скрытие при ответе htmx ---
         document.body.addEventListener('htmx:afterRequest', (e) => {
             const elt = e.detail && e.detail.elt;
             let form = null;
@@ -642,10 +637,8 @@
             if (isProductForm(form)) hide();
         });
 
-        // --- Скрытие при перезагрузке страницы ---
         window.addEventListener('beforeunload', hide);
 
-        // --- Escape — сбросить ---
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') hide();
         });

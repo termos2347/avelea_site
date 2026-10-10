@@ -66,6 +66,11 @@ SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
 MAX_UPLOAD_MB    = _int("MAX_UPLOAD_MB", 5)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
+# Максимальная длина большей стороны картинки. Всё, что больше,
+# ужимается при загрузке (пропорции сохраняются).
+# 0 или отрицательное — ресайз отключён (картинки сохраняются как есть).
+MAX_IMAGE_DIMENSION = _int("MAX_IMAGE_DIMENSION", 2000)
+
 # --- Хранилище картинок ---
 STORAGE_BACKEND = _str("STORAGE_BACKEND", "local")   # "local" или "s3"
 
