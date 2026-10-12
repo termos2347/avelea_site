@@ -17,8 +17,8 @@
     {# ================= ФОТО ================= #}
     <div class="relative">
         <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70 aspect-square bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
-            {% if product.image %}
-                <img src="{{ product.image }}" alt="{{ product.name }}"
+            {% if product.image_url %}
+                <img src="{{ product.image_url }}" alt="{{ product.name }}"
                      fetchpriority="high"
                      class="absolute inset-0 w-full h-full object-cover">
             {% else %}

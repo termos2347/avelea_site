@@ -1,8 +1,8 @@
 """Абстракция хранилища картинок.
 
-Сейчас работает с локальной папкой, но интерфейс готов к S3.
-Чтобы переехать на S3 — поменяй STORAGE_BACKEND в .env, код
-приложения трогать не нужно.
+В БД лежит ТОЛЬКО имя файла ("abc123.jpg"), без пути и домена.
+Публичный URL собирается здесь, под текущий бэкенд — поэтому
+переключение local↔S3 не требует правки БД.
 """
 import io
 import logging
@@ -28,19 +28,17 @@ log = logging.getLogger(__name__)
 
 
 # ============================================================
-# Общий код: валидация и оптимизация картинок
+# Валидация и оптимизация картинок
 # ============================================================
 _MAGIC = (
-    (b"\xff\xd8\xff",          ".jpg"),
-    (b"\x89PNG\r\n\x1a\n",     ".png"),
-    (b"GIF87a",                ".gif"),
-    (b"GIF89a",                ".gif"),
+    (b"\xff\xd8\xff",      ".jpg"),
+    (b"\x89PNG\r\n\x1a\n", ".png"),
+    (b"GIF87a",            ".gif"),
+    (b"GIF89a",            ".gif"),
 )
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 
-# Image.LANCZOS переехал в Image.Resampling.LANCZOS в Pillow 10.
-# Оставляем совместимость со старыми версиями.
 _RESAMPLE = (
     Image.Resampling.LANCZOS
     if hasattr(Image, "Resampling")
@@ -58,8 +56,7 @@ def _sniff_image_ext(head: bytes) -> str | None:
 
 
 def _read_limited(file, limit: int) -> tuple[bytes, bool]:
-    chunks = []
-    total = 0
+    chunks, total = [], 0
     while True:
         chunk = file.file.read(_READ_CHUNK)
         if not chunk:
@@ -72,18 +69,6 @@ def _read_limited(file, limit: int) -> tuple[bytes, bool]:
 
 
 def _optimize_image(content: bytes) -> tuple[bytes | None, str | None]:
-    """Проверяет, что файл — картинка, и ужимает её до MAX_IMAGE_DIMENSION.
-
-    Возвращает (bytes, None) при успехе или (None, error_text).
-
-    Особенности:
-      - GIF не трогаем — ресайз сломает анимацию.
-      - Если ресайз упал, отдаём оригинал (лучше большая картинка, чем
-        потеря товара из-за каприза Pillow).
-      - Если MAX_IMAGE_DIMENSION <= 0, ресайз отключён.
-    """
-    # Первый проход: проверка формата и целостности.
-    # verify() «закрывает» объект, поэтому для ресайза открываем заново.
     try:
         with Image.open(io.BytesIO(content)) as img:
             fmt = img.format
@@ -102,29 +87,21 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None]:
     if MAX_IMAGE_DIMENSION <= 0:
         return content, None
 
-    # Второй проход: собственно ресайз.
     try:
         with Image.open(io.BytesIO(content)) as img:
             fmt = img.format
-
             if fmt == "GIF":
                 return content, None
-
             if max(img.size) <= MAX_IMAGE_DIMENSION:
                 return content, None
 
-            img.thumbnail(
-                (MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION),
-                _RESAMPLE,
-            )
-
+            img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), _RESAMPLE)
             buf = io.BytesIO()
             if fmt == "PNG":
                 img.save(buf, format="PNG", optimize=True)
             elif fmt == "WEBP":
                 img.save(buf, format="WEBP", quality=85, method=6)
             else:
-                # JPEG не умеет альфу — конвертируем при необходимости.
                 if img.mode in ("RGBA", "P", "LA"):
                     img = img.convert("RGB")
                 img.save(buf, format="JPEG", quality=85, optimize=True)
@@ -136,19 +113,28 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None]:
 
 # ============================================================
 # Интерфейс бэкенда
+# Все методы работают с ИМЕНЕМ ФАЙЛА, не с URL.
 # ============================================================
 class StorageBackend(ABC):
     @abstractmethod
     def save(self, content: bytes, ext: str) -> str:
-        """Сохраняет файл и возвращает публичный URL."""
+        """Сохраняет байты, возвращает имя файла."""
 
     @abstractmethod
-    def delete(self, url: str) -> None:
-        """Удаляет файл по публичному URL."""
+    def delete(self, filename: str) -> None:
+        """Удаляет файл по имени."""
+
+    @abstractmethod
+    def exists(self, filename: str) -> bool:
+        """Есть ли файл в хранилище."""
+
+    @abstractmethod
+    def public_url(self, filename: str) -> str:
+        """Публичный URL для имени файла."""
 
 
 # ============================================================
-# Локальная папка
+# Локальное хранилище
 # ============================================================
 class LocalStorage(StorageBackend):
     def __init__(self, folder: Path, url_prefix: str):
@@ -158,41 +144,43 @@ class LocalStorage(StorageBackend):
 
     def save(self, content: bytes, ext: str) -> str:
         name = f"{uuid.uuid4().hex}{ext}"
-        dest = self.folder / name
-        dest.write_bytes(content)
-        return f"{self.url_prefix}/{name}"
+        (self.folder / name).write_bytes(content)
+        return name
 
-    def delete(self, url: str) -> None:
-        if not url or not url.startswith(self.url_prefix + "/"):
+    def delete(self, filename: str) -> None:
+        if not filename or "/" in filename or ".." in filename:
             return
-        name = url.rsplit("/", 1)[-1]
-        if not name or "/" in name or ".." in name:
-            return
-        path = self.folder / name
         try:
-            path.unlink(missing_ok=True)
+            (self.folder / filename).unlink(missing_ok=True)
         except OSError as e:
-            log.warning("Не удалось удалить %s: %s", path, e)
+            log.warning("Не удалось удалить %s: %s", filename, e)
+
+    def exists(self, filename: str) -> bool:
+        if not filename or "/" in filename or ".." in filename:
+            return False
+        return (self.folder / filename).exists()
+
+    def public_url(self, filename: str) -> str:
+        return f"{self.url_prefix}/{filename}"
 
 
 # ============================================================
-# S3 / Cloudflare R2 / MinIO — готово к подключению
+# S3 / MinIO / R2
 # ============================================================
 class S3Storage(StorageBackend):
-    def __init__(self, endpoint, bucket, access_key, secret_key, public_url):
+    def __init__(self, endpoint, bucket, access_key, secret_key, base_url):
         try:
-            import boto3  # noqa: F401
+            import boto3
         except ImportError:
             raise RuntimeError(
                 "STORAGE_BACKEND=s3, но boto3 не установлен. "
                 "Выполни: pip install boto3"
             )
-        import boto3
         self.bucket = bucket
-        self.public_url = public_url.rstrip("/")
+        self.base_url = (base_url or "").rstrip("/")
         self.client = boto3.client(
             "s3",
-            endpoint_url=endpoint,
+            endpoint_url=endpoint or None,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
         )
@@ -205,22 +193,31 @@ class S3Storage(StorageBackend):
             Body=content,
             ContentType="image/" + ext.lstrip("."),
         )
-        return f"{self.public_url}/{name}"
+        return name
 
-    def delete(self, url: str) -> None:
-        if not url or not url.startswith(self.public_url + "/"):
-            return
-        name = url.rsplit("/", 1)[-1]
-        if not name:
+    def delete(self, filename: str) -> None:
+        if not filename or "/" in filename or ".." in filename:
             return
         try:
-            self.client.delete_object(Bucket=self.bucket, Key=name)
+            self.client.delete_object(Bucket=self.bucket, Key=filename)
         except Exception as e:
-            log.warning("Не удалось удалить %s из S3: %s", name, e)
+            log.warning("Не удалось удалить %s из S3: %s", filename, e)
+
+    def exists(self, filename: str) -> bool:
+        if not filename or "/" in filename or ".." in filename:
+            return False
+        try:
+            self.client.head_object(Bucket=self.bucket, Key=filename)
+            return True
+        except Exception:
+            return False
+
+    def public_url(self, filename: str) -> str:
+        return f"{self.base_url}/{filename}"
 
 
 # ============================================================
-# Фабрика: выбираем бэкенд по .env
+# Фабрика
 # ============================================================
 def _make_backend() -> StorageBackend:
     if STORAGE_BACKEND == "s3":
@@ -229,9 +226,8 @@ def _make_backend() -> StorageBackend:
             bucket=S3_BUCKET,
             access_key=S3_ACCESS_KEY,
             secret_key=S3_SECRET_KEY,
-            public_url=S3_PUBLIC_URL,
+            base_url=S3_PUBLIC_URL,
         )
-    # по умолчанию — локальная папка
     return LocalStorage(
         folder=BASE_DIR / "static" / "uploads",
         url_prefix="/static/uploads",
@@ -242,15 +238,14 @@ _backend = _make_backend()
 
 
 # ============================================================
-# Публичный API — этим пользуется весь остальной код
+# Публичный API
 # ============================================================
 def save_image(file) -> tuple[str | None, str | None]:
-    """Сохраняет картинку из UploadFile.
+    """Сохраняет картинку. Возвращает (filename, error).
 
-    Возвращает (url, error):
-      - (url, None)    — успех;
-      - (None, None)   — файла не было или он пустой (не ошибка);
-      - (None, "...")  — файл отклонён по конкретной причине.
+    - (filename, None) — успех;
+    - (None, None)     — файла не было / пустой (не ошибка);
+    - (None, "...")    — отклонён с причиной.
     """
     if not file or not file.filename:
         return None, None
@@ -275,11 +270,23 @@ def save_image(file) -> tuple[str | None, str | None]:
     if err is not None:
         return None, err
 
-    url = _backend.save(content, ext)
-    return url, None
+    return _backend.save(content, ext), None
 
 
-def delete_image(url: str | None) -> None:
-    """Удаляет картинку. Молча игнорирует всё, что не в нашем хранилище."""
-    if url:
-        _backend.delete(url)
+def delete_image(filename: str | None) -> None:
+    if filename:
+        _backend.delete(filename)
+
+
+def public_url(filename: str | None) -> str | None:
+    """Собирает публичный URL из имени файла. None → None."""
+    if not filename:
+        return None
+    return _backend.public_url(filename)
+
+
+def file_exists(filename: str | None) -> bool:
+    """Проверяет наличие файла в текущем хранилище."""
+    if not filename:
+        return False
+    return _backend.exists(filename)

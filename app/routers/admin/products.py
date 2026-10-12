@@ -153,7 +153,8 @@ async def admin_product_create(
         request.session["flash_error"] = "Выберите бренд — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    image_url, img_err = save_image(image)
+    # save_image возвращает ИМЯ ФАЙЛА (не URL) — так хранится в БД.
+    filename, img_err = save_image(image)
     if img_err:
         request.session["flash_error"] = img_err
 
@@ -169,7 +170,7 @@ async def admin_product_create(
         volume=volume_str,
         description=description.strip() or None,
         popular=bool(popular),
-        image=image_url,
+        image=filename,
     )
     product.categories = resolve_categories(db, categories)
 
@@ -256,7 +257,10 @@ async def admin_product_update(
 
     product.categories = resolve_categories(db, categories)
 
+    # old_image — ИМЯ файла (или None), не URL.
     old_image = product.image
+
+    # save_image возвращает ИМЯ нового файла (или None).
     new_image, img_err = save_image(image)
     if img_err:
         request.session["flash_error"] = img_err

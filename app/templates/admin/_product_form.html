@@ -161,9 +161,9 @@
 
         <div class="adm-col-full">
             <label class="adm-label">Картинка {% if not product %}*{% endif %}</label>
-            {% if product and product.image %}
+            {% if product and product.image_url %}
             <div class="adm-current-image">
-                <img src="{{ product.image }}" alt="">
+                <img src="{{ product.image_url }}" alt="">
                 <label class="adm-checkbox-row">
                     <input type="checkbox" name="remove_image" value="1">
                     Удалить текущую
