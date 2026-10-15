@@ -170,6 +170,7 @@
                 openEditDialog(
                     '/admin/brands/' + btn.dataset.editId + '/edit',
                     btn.dataset.editName,
+                    btn.dataset.editDescription || '',
                     'Редактировать бренд'
                 );
                 break;
@@ -177,6 +178,7 @@
                 openEditDialog(
                     '/admin/categories/' + btn.dataset.editId + '/edit',
                     btn.dataset.editName,
+                    '',
                     'Редактировать категорию'
                 );
                 break;
@@ -197,7 +199,7 @@
         }
     });
 
-    function openEditDialog(actionUrl, name, title) {
+    function openEditDialog(actionUrl, name, description, title) {
         const dlg = document.getElementById('edit-dialog');
         if (!dlg) return;
         document.getElementById('edit-title').textContent = title;
@@ -207,6 +209,19 @@
         form.setAttribute('action', actionUrl);
 
         document.getElementById('edit-name').value = name;
+
+        const descField = document.getElementById('edit-description');
+        const descWrap = document.getElementById('edit-description-wrap');
+        if (descField && descWrap) {
+            if (title.toLowerCase().indexOf('бренд') !== -1) {
+                descWrap.style.display = '';
+                descField.value = description || '';
+            } else {
+                descWrap.style.display = 'none';
+                descField.value = '';
+            }
+        }
+
         openModal(dlg, '#edit-name');
     }
 
@@ -383,7 +398,7 @@
     }, true);
 
     // ============================================================
-    // ЖИВОЙ ФИЛЬТР СПИСКОВ (Товары / Бренды / Категории)
+    // ЖИВОЙ ФИЛЬТР СПИСКОВ
     // ============================================================
     function runRowFilter(input) {
         const q = input.value.trim().toLowerCase();
@@ -404,9 +419,6 @@
         if (no) no.style.display = visible > 0 ? 'none' : 'block';
     }
 
-    // Debounce: при быстром наборе не гоняем фильтр на каждую букву.
-    // 150 мс — практически незаметно, но заметно экономит работу
-    // браузера на длинных списках (сотни строк).
     let rowFilterTimer = null;
     document.addEventListener('input', (e) => {
         const input = e.target.closest('input[data-action="filter-rows"]');
@@ -415,7 +427,6 @@
         rowFilterTimer = setTimeout(() => runRowFilter(input), 150);
     });
 
-    // Кнопка «очистить» работает мгновенно — ждать там нечего.
     document.addEventListener('click', (e) => {
         const clearBtn = e.target.closest('[data-search-clear]');
         if (!clearBtn) return;
@@ -446,7 +457,7 @@
             b.classList.toggle('is-active', b === btn));
     });
 
-    // ---- Сворачивание секций (Категории / Бренд) ----
+    // ---- Сворачивание секций ----
     function findCollapseTarget(btn) {
         const id = btn.dataset.collapseTarget;
         if (!id) return null;

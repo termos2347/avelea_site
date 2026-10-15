@@ -14,6 +14,85 @@ from app.data.models import Product, Brand, Category
 log = logging.getLogger(__name__)
 
 
+def _migrate_drop_layout_column(db: Session) -> None:
+    """Удаляет устаревшую колонку products.image_layout.
+
+    Раньше она хранила раскладку галереи (2/3/4 картинки).
+    Сейчас галерея всегда 2×2, поле больше не нужно.
+    Идемпотентно: если колонки нет — тихо выходит.
+    """
+    insp = inspect(engine)
+    try:
+        product_cols = {c["name"] for c in insp.get_columns("products")}
+    except NoSuchTableError:
+        return
+
+    if "image_layout" not in product_cols:
+        return
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE products DROP COLUMN image_layout"
+            ))
+        log.info("Удалена устаревшая колонка products.image_layout")
+    except Exception as e:
+        log.warning("Не удалось удалить products.image_layout: %s", e)
+
+
+def _migrate_add_gallery_and_sections(db: Session) -> None:
+    """Добавляет колонки галереи и секций.
+
+    ВАЖНО: вызывается ПЕРВОЙ в run_startup_migrations — до любых
+    ORM-запросов к Product. Иначе SQLAlchemy сгенерит SELECT с новыми
+    колонками, которых в старой схеме ещё нет, и упадёт.
+    """
+    insp = inspect(engine)
+    try:
+        product_cols = {c["name"] for c in insp.get_columns("products")}
+    except NoSuchTableError:
+        return
+
+    to_add: list[str] = []
+    if "image_2" not in product_cols:
+        to_add.append("ALTER TABLE products ADD COLUMN image_2 VARCHAR(200)")
+    if "image_3" not in product_cols:
+        to_add.append("ALTER TABLE products ADD COLUMN image_3 VARCHAR(200)")
+    if "image_4" not in product_cols:
+        to_add.append("ALTER TABLE products ADD COLUMN image_4 VARCHAR(200)")
+    if "composition" not in product_cols:
+        to_add.append("ALTER TABLE products ADD COLUMN composition TEXT")
+    if "usage" not in product_cols:
+        to_add.append("ALTER TABLE products ADD COLUMN usage TEXT")
+
+    if not to_add:
+        return
+
+    with engine.begin() as conn:
+        for sql in to_add:
+            conn.execute(text(sql))
+
+    log.info("Добавлены колонки галереи/секций: %d", len(to_add))
+
+
+def _migrate_add_brand_description(db: Session) -> None:
+    """Добавляет brands.description (описание бренда)."""
+    insp = inspect(engine)
+    try:
+        brand_cols = {c["name"] for c in insp.get_columns("brands")}
+    except NoSuchTableError:
+        return
+
+    if "description" in brand_cols:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE brands ADD COLUMN description TEXT"
+        ))
+    log.info("Добавлено поле brands.description")
+
+
 def _migrate_brand_to_fk(db: Session) -> None:
     """products.brand (VARCHAR) -> products.brand_id (FK на brands.id)."""
     insp = inspect(engine)
@@ -169,8 +248,21 @@ def _migrate_legacy_category_column(db: Session) -> None:
 
 
 def run_startup_migrations(db: Session) -> None:
-    """Единая точка входа. Порядок важен: brand_id должен существовать
-    до того, как мы трогаем name_lower и category."""
+    """Единая точка входа.
+
+    Порядок критичен:
+      1. ALTER-миграции ПЕРВЫМИ — до любых ORM-запросов.
+         Они добавляют/удаляют голым SQL колонки, которые модель
+         знает, но БД ещё нет (или наоборот).
+      2. Остальные миграции — они используют db.query(Product),
+         поэтому схема к этому моменту должна быть актуальной.
+    """
+    # --- ALTER-миграции (только SQL, без ORM) ---
+    _migrate_drop_layout_column(db)
+    _migrate_add_gallery_and_sections(db)
+    _migrate_add_brand_description(db)
+
+    # --- Миграции через ORM ---
     _migrate_brand_to_fk(db)
     _migrate_name_lower(db)
     _migrate_legacy_category_column(db)

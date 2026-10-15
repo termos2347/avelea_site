@@ -38,6 +38,36 @@ def _product_form_context(db: Session, product: Product | None):
     }
 
 
+def _apply_image_slot(
+    request: Request,
+    old_filename: str | None,
+    new_file: UploadFile | None,
+    remove_flag: str | None,
+) -> str | None:
+    """Единая логика для одного слота галереи.
+
+    Приоритет: новый файл > удаление > оставить как было.
+    Старый файл удаляется, если перестал использоваться.
+    """
+    new_filename, err = (None, None)
+    if new_file is not None and getattr(new_file, "filename", ""):
+        new_filename, err = save_image(new_file)
+        if err:
+            request.session["flash_error"] = err
+
+    if new_filename:
+        final = new_filename
+    elif remove_flag:
+        final = None
+    else:
+        final = old_filename
+
+    if old_filename and old_filename != final:
+        delete_image(old_filename)
+
+    return final
+
+
 # ============================================================
 # Список
 # ============================================================
@@ -58,7 +88,6 @@ async def admin_products(
     if page < 1:
         page = 1
 
-    # Админка работает с БД напрямую — здесь кэш не нужен, важна свежесть.
     query = db.query(Product)
     if q:
         query = query.filter(
@@ -115,7 +144,6 @@ async def admin_products(
 
 @router.get("/new", response_class=HTMLResponse)
 async def admin_product_new(request: Request, _: bool = Depends(require_admin)):
-    # Форма создания живёт в модалке на /admin/products — отдельная страница не нужна.
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
@@ -130,33 +158,37 @@ async def admin_product_create(
     price: int = Form(...),
     volume_amount: str = Form(...),
     volume_unit: str = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
+    composition: str = Form(""),
+    usage: str = Form(""),
     popular: str = Form(None),
-    image: UploadFile = File(...),
+    image_1: UploadFile = File(None),
+    image_2: UploadFile = File(None),
+    image_3: UploadFile = File(None),
+    image_4: UploadFile = File(None),
 ):
     if (err := validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # Категории обязательны, только если они вообще есть в БД.
-    # Если админ ещё ничего не создал — позволяем товар без категорий,
-    # иначе получается курица и яйцо: форма требует категорию,
-    # а создать её — на другой странице.
     if not categories and db.query(Category).count() > 0:
         request.session["flash_error"] = (
             "Выберите хотя бы одну категорию — товар не создан."
         )
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # То же самое с брендом.
     if (not brand_id or not brand_id.strip()) and db.query(Brand).count() > 0:
         request.session["flash_error"] = "Выберите бренд — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # save_image возвращает ИМЯ ФАЙЛА (не URL) — так хранится в БД.
-    filename, img_err = save_image(image)
-    if img_err:
-        request.session["flash_error"] = img_err
+    f1, e1 = save_image(image_1)
+    f2, e2 = save_image(image_2)
+    f3, e3 = save_image(image_3)
+    f4, e4 = save_image(image_4)
+    for err in (e1, e2, e3, e4):
+        if err:
+            request.session["flash_error"] = err
+            break
 
     volume_str = (
         f"{volume_amount.strip()} {volume_unit.strip()}"
@@ -169,15 +201,19 @@ async def admin_product_create(
         price=price,
         volume=volume_str,
         description=description.strip() or None,
+        composition=composition.strip() or None,
+        usage=usage.strip() or None,
         popular=bool(popular),
-        image=filename,
+        image=f1,
+        image_2=f2,
+        image_3=f3,
+        image_4=f4,
     )
     product.categories = resolve_categories(db, categories)
 
     db.add(product)
     db.commit()
 
-    # Свежие данные — сбрасываем кэш, публичная часть перечитает при следующем запросе.
     cache.invalidate()
 
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -219,10 +255,18 @@ async def admin_product_update(
     price: int = Form(...),
     volume_amount: str = Form(...),
     volume_unit: str = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
+    composition: str = Form(""),
+    usage: str = Form(""),
     popular: str = Form(None),
-    image: UploadFile = File(None),
-    remove_image: str = Form(None),
+    image_1: UploadFile = File(None),
+    image_2: UploadFile = File(None),
+    image_3: UploadFile = File(None),
+    image_4: UploadFile = File(None),
+    remove_image:   str = Form(None),
+    remove_image_2: str = Form(None),
+    remove_image_3: str = Form(None),
+    remove_image_4: str = Form(None),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
@@ -232,7 +276,6 @@ async def admin_product_update(
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # Те же условные проверки, что и при создании.
     if not categories and db.query(Category).count() > 0:
         request.session["flash_error"] = (
             "Выберите хотя бы одну категорию — изменения не сохранены."
@@ -253,32 +296,26 @@ async def admin_product_update(
         if volume_amount.strip() else None
     )
     product.description = description.strip() or None
+    product.composition = composition.strip() or None
+    product.usage = usage.strip() or None
     product.popular = bool(popular)
 
     product.categories = resolve_categories(db, categories)
 
-    # old_image — ИМЯ файла (или None), не URL.
-    old_image = product.image
+    product.image = _apply_image_slot(
+        request, product.image, image_1, remove_image,
+    )
+    product.image_2 = _apply_image_slot(
+        request, product.image_2, image_2, remove_image_2,
+    )
+    product.image_3 = _apply_image_slot(
+        request, product.image_3, image_3, remove_image_3,
+    )
+    product.image_4 = _apply_image_slot(
+        request, product.image_4, image_4, remove_image_4,
+    )
 
-    # save_image возвращает ИМЯ нового файла (или None).
-    new_image, img_err = save_image(image)
-    if img_err:
-        request.session["flash_error"] = img_err
-
-    # Приоритет: новый файл > удаление > оставить как было.
-    if new_image:
-        final_image = new_image
-    elif remove_image:
-        final_image = None
-    else:
-        final_image = old_image
-
-    product.image = final_image
     db.commit()
-
-    if old_image and old_image != final_image:
-        delete_image(old_image)
-
     cache.invalidate()
 
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -297,9 +334,13 @@ async def admin_product_delete(
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if product:
-        old_image = product.image
+        files = [
+            product.image, product.image_2,
+            product.image_3, product.image_4,
+        ]
         db.delete(product)
         db.commit()
-        delete_image(old_image)
+        for f in files:
+            delete_image(f)
         cache.invalidate()
     return RedirectResponse(url="/admin/products", status_code=303)

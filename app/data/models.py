@@ -20,19 +20,33 @@ class Product(Base):
     name = Column(String(200), nullable=False)
     name_lower = Column(String(200), nullable=False, default="", index=True)
 
+    # Бренд — FK. Строка переехала в миграцию (см. _migrate_brand_to_fk).
     brand_id = Column(
         Integer, ForeignKey("brands.id"), nullable=True, index=True,
     )
+    # lazy="joined": многие-к-одному — один LEFT JOIN вместо N+1
     brand_ref = relationship("Brand", backref="products", lazy="joined")
 
     price = Column(Integer, nullable=False)
     popular = Column(Boolean, default=False)
-    description = Column(Text, nullable=True)
+
+    # Секции карточки товара. В БД — сырой текст.
+    description = Column(Text, nullable=True)   # «Описание»
+    composition = Column(Text, nullable=True)   # «Состав»
+    usage       = Column(Text, nullable=True)   # «Применение»
+
     volume = Column(String(50), nullable=True)
 
-    # ИМЯ ФАЙЛА, не URL. Например "abc123.jpg".
-    # Публичный URL собирается через image_url.
-    image = Column(String(200), nullable=True)
+    # Всегда четыре картинки. Сетка 2×2 на сайте.
+    # В БД — ИМЕНА файлов, не URL.
+    #   image   — верхняя левая
+    #   image_2 — верхняя правая
+    #   image_3 — нижняя левая
+    #   image_4 — нижняя правая
+    image   = Column(String(200), nullable=True)
+    image_2 = Column(String(200), nullable=True)
+    image_3 = Column(String(200), nullable=True)
+    image_4 = Column(String(200), nullable=True)
 
     categories = relationship(
         "Category",
@@ -41,22 +55,43 @@ class Product(Base):
         lazy="selectin",
     )
 
+    # Удобное свойство для шаблонов и Jinja — читается как раньше,
+    # но под капотом это FK-связь.
     @property
     def brand(self) -> str | None:
         return self.brand_ref.name if self.brand_ref else None
 
     @property
-    def image_url(self) -> str | None:
-        """Полный URL картинки — собирается под текущий бэкенд.
-
-        В шаблонах используй product.image_url, а не product.image.
-        """
-        if not self.image:
+    def brand_description(self) -> str | None:
+        """Описание бренда — для раскрывающегося блока под названием."""
+        if not self.brand_ref:
             return None
-        # Локальный импорт — чтобы не ловить циклический импорт
-        # (storage импортируется из многих мест).
+        desc = (self.brand_ref.description or "").strip()
+        return desc or None
+
+    # ---- Публичные URL картинок (собираются под текущий бэкенд) ----
+    def _url(self, filename: str | None) -> str | None:
+        if not filename:
+            return None
+        # Локальный импорт — чтобы не ловить циклический импорт.
         from app.services.storage import public_url
-        return public_url(self.image)
+        return public_url(filename)
+
+    @property
+    def image_url(self) -> str | None:
+        return self._url(self.image)
+
+    @property
+    def image_url_2(self) -> str | None:
+        return self._url(self.image_2)
+
+    @property
+    def image_url_3(self) -> str | None:
+        return self._url(self.image_3)
+
+    @property
+    def image_url_4(self) -> str | None:
+        return self._url(self.image_4)
 
 
 class Brand(Base):
@@ -64,6 +99,7 @@ class Brand(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
 
 
 class Category(Base):
@@ -74,6 +110,11 @@ class Category(Base):
 
 
 class Setting(Base):
+    """Key-value хранилище для служебных флагов.
+
+    Сейчас используется только для флага «сид выполнен», чтобы демо-товары
+    не возвращались после того, как админ их удалил.
+    """
     __tablename__ = "settings"
 
     key = Column(String(50), primary_key=True)

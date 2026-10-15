@@ -139,14 +139,17 @@ async def admin_brand_create(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
     name: str = Form(...),
+    description: str = Form(""),
 ):
     name = name.strip()
+    desc = (description or "").strip() or None
+
     if name:
         exists = db.query(Brand).filter(Brand.name == name).first()
         if exists:
             request.session["flash_error"] = f"Бренд «{name}» уже существует."
         else:
-            db.add(Brand(name=name))
+            db.add(Brand(name=name, description=desc))
             db.commit()
             cache.invalidate()
     return RedirectResponse(url="/admin/brands", status_code=303)
@@ -159,12 +162,17 @@ async def admin_brand_edit(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
     name: str = Form(...),
+    description: str = Form(""),
 ):
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if not brand:
         raise HTTPException(status_code=404)
 
     name = name.strip()
+    desc = (description or "").strip() or None
+
+    changed = False
+
     if name and name != brand.name:
         exists = (
             db.query(Brand)
@@ -175,8 +183,16 @@ async def admin_brand_edit(
             request.session["flash_error"] = f"Бренд «{name}» уже существует."
         else:
             brand.name = name
-            db.commit()
-            cache.invalidate()
+            changed = True
+
+    if brand.description != desc:
+        brand.description = desc
+        changed = True
+
+    if changed:
+        db.commit()
+        cache.invalidate()
+
     return RedirectResponse(url="/admin/brands", status_code=303)
 
 

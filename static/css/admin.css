@@ -1432,3 +1432,71 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     .adm-saving-spinner { animation-duration: 1.4s; }
     .adm-saving-card { animation: none; }
 }
+
+/* ============================================================
+   Раскладка галереи: переключатель 2 / 3 картинки
+   ============================================================ */
+.adm-layout-switch {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.adm-layout-option {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    flex: 1;
+    min-width: 200px;
+}
+.adm-layout-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.adm-layout-option > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: var(--adm-surface);
+    color: var(--adm-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.adm-layout-option > span i { font-size: 0.85rem; }
+.adm-layout-option:hover > span { border-color: var(--adm-muted-soft); }
+.adm-layout-option input:checked + span {
+    background: var(--adm-primary);
+    color: #fff;
+    border-color: var(--adm-primary);
+}
+
+/* ============================================================
+   Placeholder пустого слота картинки в админке
+   ============================================================ */
+.adm-slot-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border: 1.5px dashed var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: #fbfbfb;
+    color: var(--adm-muted-soft);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-height: 4.5rem;
+}
+.adm-slot-placeholder i {
+    font-size: 1.1rem;
+    opacity: 0.7;
+}
