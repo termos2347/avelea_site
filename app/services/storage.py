@@ -1,8 +1,11 @@
-"""Абстракция хранилища картинок.
+"""Абстракция хранилища медиафайлов (картинки + видео).
 
-В БД лежит ТОЛЬКО имя файла ("abc123.jpg"), без пути и домена.
+В БД лежит ТОЛЬКО имя файла ("abc123.jpg" или "video.mp4").
 Публичный URL собирается здесь, под текущий бэкенд — поэтому
 переключение local↔S3 не требует правки БД.
+
+Картинки: валидируются через Pillow, ресайзятся до MAX_IMAGE_DIMENSION.
+Видео: только проверка magic bytes и размера, сохраняются как есть.
 """
 import io
 import logging
@@ -15,6 +18,7 @@ from PIL import Image, UnidentifiedImageError
 from app.core.config import (
     BASE_DIR,
     MAX_UPLOAD_BYTES,
+    MAX_VIDEO_UPLOAD_BYTES,
     MAX_IMAGE_DIMENSION,
     STORAGE_BACKEND,
     S3_ENDPOINT,
@@ -28,14 +32,20 @@ log = logging.getLogger(__name__)
 
 
 # ============================================================
-# Валидация и оптимизация картинок
+# Определение типа файла по magic bytes
 # ============================================================
 _MAGIC = (
-    (b"\xff\xd8\xff",      ".jpg"),
-    (b"\x89PNG\r\n\x1a\n", ".png"),
-    (b"GIF87a",            ".gif"),
-    (b"GIF89a",            ".gif"),
+    # --- Картинки ---
+    (b"\xff\xd8\xff",          ".jpg"),
+    (b"\x89PNG\r\n\x1a\n",     ".png"),
+    (b"GIF87a",                ".gif"),
+    (b"GIF89a",                ".gif"),
+    # --- Видео ---
+    # MP4 и MOV: [size:4] ftyp. Точный бренд не важен, берём первые 8 байт.
+    # WebM/Matroska: EBML header.
+    (b"\x1a\x45\xdf\xa3",      ".webm"),
 )
+_VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v", ".ogv"}
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 
@@ -46,13 +56,37 @@ _RESAMPLE = (
 )
 
 
-def _sniff_image_ext(head: bytes) -> str | None:
+def _sniff_ext(head: bytes) -> tuple[str | None, bool]:
+    """Определяет расширение и является ли файл видео.
+
+    Возвращает (ext, is_video):
+      ('.jpg', False), ('.mp4', True), (None, False) — если не распознали.
+    """
     for magic, ext in _MAGIC:
         if head.startswith(magic):
-            return ext
+            return ext, ext in _VIDEO_EXTS
+
+    # WEBP: RIFF....WEBP
     if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
-        return ".webp"
-    return None
+        return ".webp", False
+
+    # MP4/MOV: байты 4-8 == 'ftyp'
+    if len(head) >= 12 and head[4:8] == b"ftyp":
+        # Бренд в байтах 8-12: isom, mp42, M4V, qt и т.п.
+        brand = head[8:12]
+        if brand in (b"qt  ",):
+            return ".mov", True
+        return ".mp4", True
+
+    return None, False
+
+
+def is_video(filename: str | None) -> bool:
+    """True, если имя файла соответствует видео-формату."""
+    if not filename:
+        return False
+    ext = Path(filename).suffix.lower()
+    return ext in _VIDEO_EXTS
 
 
 def _read_limited(file, limit: int) -> tuple[bytes, bool]:
@@ -113,29 +147,18 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None]:
 
 # ============================================================
 # Интерфейс бэкенда
-# Все методы работают с ИМЕНЕМ ФАЙЛА, не с URL.
 # ============================================================
 class StorageBackend(ABC):
     @abstractmethod
-    def save(self, content: bytes, ext: str) -> str:
-        """Сохраняет байты, возвращает имя файла."""
-
+    def save(self, content: bytes, ext: str) -> str: ...
     @abstractmethod
-    def delete(self, filename: str) -> None:
-        """Удаляет файл по имени."""
-
+    def delete(self, filename: str) -> None: ...
     @abstractmethod
-    def exists(self, filename: str) -> bool:
-        """Есть ли файл в хранилище."""
-
+    def exists(self, filename: str) -> bool: ...
     @abstractmethod
-    def public_url(self, filename: str) -> str:
-        """Публичный URL для имени файла."""
+    def public_url(self, filename: str) -> str: ...
 
 
-# ============================================================
-# Локальное хранилище
-# ============================================================
 class LocalStorage(StorageBackend):
     def __init__(self, folder: Path, url_prefix: str):
         self.folder = folder
@@ -164,17 +187,13 @@ class LocalStorage(StorageBackend):
         return f"{self.url_prefix}/{filename}"
 
 
-# ============================================================
-# S3 / MinIO / R2
-# ============================================================
 class S3Storage(StorageBackend):
     def __init__(self, endpoint, bucket, access_key, secret_key, base_url):
         try:
             import boto3
         except ImportError:
             raise RuntimeError(
-                "STORAGE_BACKEND=s3, но boto3 не установлен. "
-                "Выполни: pip install boto3"
+                "STORAGE_BACKEND=s3, но boto3 не установлен."
             )
         self.bucket = bucket
         self.base_url = (base_url or "").rstrip("/")
@@ -187,11 +206,25 @@ class S3Storage(StorageBackend):
 
     def save(self, content: bytes, ext: str) -> str:
         name = f"{uuid.uuid4().hex}{ext}"
+        content_type = {
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".m4v": "video/x-m4v",
+            ".ogv": "video/ogg",
+        }.get(ext, "application/octet-stream")
+        if ext in (".jpg", ".jpeg"):
+            content_type = "image/jpeg"
+        elif ext == ".png":
+            content_type = "image/png"
+        elif ext == ".gif":
+            content_type = "image/gif"
+        elif ext == ".webp":
+            content_type = "image/webp"
+
         self.client.put_object(
-            Bucket=self.bucket,
-            Key=name,
-            Body=content,
-            ContentType="image/" + ext.lstrip("."),
+            Bucket=self.bucket, Key=name,
+            Body=content, ContentType=content_type,
         )
         return name
 
@@ -216,9 +249,6 @@ class S3Storage(StorageBackend):
         return f"{self.base_url}/{filename}"
 
 
-# ============================================================
-# Фабрика
-# ============================================================
 def _make_backend() -> StorageBackend:
     if STORAGE_BACKEND == "s3":
         return S3Storage(
@@ -240,32 +270,43 @@ _backend = _make_backend()
 # ============================================================
 # Публичный API
 # ============================================================
-def save_image(file) -> tuple[str | None, str | None]:
-    """Сохраняет картинку. Возвращает (filename, error).
-
-    - (filename, None) — успех;
-    - (None, None)     — файла не было / пустой (не ошибка);
-    - (None, "...")    — отклонён с причиной.
-    """
+def save_media(file) -> tuple[str | None, str | None]:
+    """Сохраняет картинку или видео. Возвращает (filename, error)."""
     if not file or not file.filename:
         return None, None
 
-    content, too_large = _read_limited(file, MAX_UPLOAD_BYTES)
-    if too_large:
+    # Сначала читаем первые байты, чтобы понять тип.
+    head = file.file.read(16)
+    if not head:
+        return None, None
+
+    ext, is_vid = _sniff_ext(head)
+    if ext is None:
         return None, (
-            f"Файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ — "
-            "картинка не сохранена."
+            "Формат не поддерживается (картинки: jpg, png, gif, webp; "
+            "видео: mp4, webm, mov) — файл не сохранён."
         )
+
+    # Возвращаем голову обратно в поток.
+    file.file.seek(0)
+
+    # Читаем весь файл с лимитом под тип.
+    limit = MAX_VIDEO_UPLOAD_BYTES if is_vid else MAX_UPLOAD_BYTES
+    content, too_large = _read_limited(file, limit)
+
+    if too_large:
+        mb = limit // (1024 * 1024)
+        kind = "Видео" if is_vid else "Файл"
+        return None, f"{kind} больше {mb} МБ — не сохранён."
+
     if not content:
         return None, None
 
-    ext = _sniff_image_ext(content[:16])
-    if ext is None:
-        return None, (
-            "Формат не поддерживается (разрешены jpg, png, gif, webp) — "
-            "картинка не сохранена."
-        )
+    if is_vid:
+        # Видео — сохраняем как есть.
+        return _backend.save(content, ext), None
 
+    # Картинка — оптимизируем.
     content, err = _optimize_image(content)
     if err is not None:
         return None, err
@@ -273,20 +314,18 @@ def save_image(file) -> tuple[str | None, str | None]:
     return _backend.save(content, ext), None
 
 
-def delete_image(filename: str | None) -> None:
+def delete_media(filename: str | None) -> None:
     if filename:
         _backend.delete(filename)
 
 
 def public_url(filename: str | None) -> str | None:
-    """Собирает публичный URL из имени файла. None → None."""
     if not filename:
         return None
     return _backend.public_url(filename)
 
 
 def file_exists(filename: str | None) -> bool:
-    """Проверяет наличие файла в текущем хранилище."""
     if not filename:
         return False
     return _backend.exists(filename)

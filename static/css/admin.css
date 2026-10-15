@@ -206,6 +206,7 @@
     white-space: nowrap;
     text-decoration: none;
     font-family: inherit;
+    position: relative;
 }
 .adm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .adm-btn i { font-size: 0.8rem; }
@@ -928,24 +929,6 @@ body.adm-modal-open {
 }
 .adm-chip:hover span { border-color: var(--adm-muted-soft); }
 
-/* ---- Текущая картинка товара ---- */
-.adm-current-image {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    border: 1px solid var(--adm-border);
-    border-radius: var(--adm-radius-sm);
-    background: #fbfbfb;
-    margin-bottom: 0.75rem;
-}
-.adm-current-image img {
-    width: 3.5rem;
-    height: 3.5rem;
-    border-radius: var(--adm-radius-sm);
-    object-fit: cover;
-}
-
 /* ---- Объём: число + единица измерения ---- */
 .adm-volume-row {
     display: flex;
@@ -1281,11 +1264,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
 
 /* ============================================================
    Индикатор загрузки формы (товар сохраняется в БД)
-   ------------------------------------------------------------
-   Пока идёт POST к БД, поверх формы показывается полупрозрачный
-   оверлей со спиннером и текстом. Кнопка submit блокируется
-   и превращается в спиннер. Так понятно, что процесс идёт,
-   а не «страница зависла».
    ============================================================ */
 .adm-form-overlay {
     position: absolute;
@@ -1310,7 +1288,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     pointer-events: auto;
 }
 
-/* Позиционируем оверлей внутри формы */
 .adm-form-relative {
     position: relative;
 }
@@ -1334,7 +1311,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     letter-spacing: -0.005em;
 }
 
-/* Кнопка submit в состоянии загрузки */
 .adm-btn.is-loading {
     cursor: progress;
     opacity: 0.85;
@@ -1358,15 +1334,8 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     border-top-color: var(--adm-text);
 }
 
-/* Кнопка должна иметь position: relative для ::after-спиннера */
-.adm-btn { position: relative; }
-
 /* ============================================================
    Полноэкранный индикатор сохранения товара
-   ------------------------------------------------------------
-   Показывается поверх всего интерфейса, пока идёт POST в БД.
-   Полупрозрачный фон + blur, по центру — карточка со спиннером
-   и подписью. Управляется классами из JS.
    ============================================================ */
 .adm-saving-overlay {
     position: fixed;
@@ -1477,26 +1446,146 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
 }
 
 /* ============================================================
-   Placeholder пустого слота картинки в админке
+   Слоты картинок в форме товара
+   ------------------------------------------------------------
+   Единый блок: пустой = пунктирная зона с иконкой; заполненный
+   = картинка + overlay при ховере. Крестик удаления в углу.
    ============================================================ */
-.adm-slot-placeholder {
+.adm-image-slots {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.adm-image-slot {
+    position: relative;
+    min-width: 0;
+}
+
+.adm-image-uploader {
+    position: relative;
+    display: block;
+    aspect-ratio: 1 / 1;
+    border: 1.5px dashed var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: #fbfbfb;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+
+.adm-image-uploader:hover {
+    border-color: var(--adm-muted-soft);
+    background: var(--adm-border-soft);
+}
+
+/* Нативный input растянут и невидим */
+.adm-file-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 3;
+}
+
+/* ---- Пустой слот: иконка + слово по центру ---- */
+.adm-image-empty {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.35rem;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-    border: 1.5px dashed var(--adm-border);
-    border-radius: var(--adm-radius-sm);
-    background: #fbfbfb;
+    gap: 0.4rem;
     color: var(--adm-muted-soft);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    min-height: 4.5rem;
+    pointer-events: none;
+    z-index: 1;
 }
-.adm-slot-placeholder i {
-    font-size: 1.1rem;
-    opacity: 0.7;
+.adm-image-empty i {
+    font-size: 1.75rem;
+    opacity: 0.5;
+}
+
+/* ---- Заполненный слот ---- */
+.adm-image-uploader.has-image {
+    border-style: solid;
+    border-color: var(--adm-border);
+    background: var(--adm-surface);
+}
+
+.adm-image-preview {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    z-index: 1;
+}
+
+.adm-image-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(17, 24, 39, 0.55);
+    opacity: 0;
+    transition: opacity 160ms ease;
+    pointer-events: none;
+    z-index: 2;
+}
+.adm-image-overlay i { font-size: 1.5rem; }
+
+.adm-image-uploader.has-image:hover .adm-image-overlay {
+    opacity: 1;
+}
+
+/* ---- Крестик удаления ---- */
+.adm-image-remove {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 1.85rem;
+    height: 1.85rem;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 1px solid var(--adm-border);
+    color: var(--adm-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    padding: 0;
+    font-family: inherit;
+}
+.adm-image-remove:hover {
+    background: var(--adm-danger);
+    color: #fff;
+    border-color: var(--adm-danger);
+}
+.adm-image-remove.is-marked {
+    background: var(--adm-danger);
+    color: #fff;
+    border-color: var(--adm-danger);
+}
+.adm-image-remove i {
+    font-size: 0.8rem;
+    pointer-events: none;
 }

@@ -43,6 +43,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import (
     BASE_DIR,
     MAX_UPLOAD_BYTES,
+    MAX_VIDEO_UPLOAD_BYTES,
     SECRET_KEY,
     SESSION_HTTPS_ONLY,
     SESSION_MAX_AGE,
@@ -163,10 +164,16 @@ app.add_middleware(
     same_site=SESSION_SAME_SITE,
     max_age=SESSION_MAX_AGE,
 )
+
+# BodySizeLimit — защита от слишком больших тел запроса.
+# Лимит = больший из двух (картинка/видео) + 1 МБ на multipart-обёртку.
+# Иначе видео (которые больше картинок) режутся на входе.
+_BODY_LIMIT = max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
 app.add_middleware(
     BodySizeLimitMiddleware,
-    max_bytes=MAX_UPLOAD_BYTES + 1024 * 1024,
+    max_bytes=_BODY_LIMIT,
 )
+
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.mount(

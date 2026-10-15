@@ -33,11 +33,6 @@
 
 /* ============================================================
    Модал фильтров — большое окно по центру экрана
-   ------------------------------------------------------------
-   Появление плавное, слоями:
-     1) фон мягко проявляется (~280ms)
-     2) через 60ms окно плавно «выдыхает» (scale + translateY)
-   Центрирование через margin:auto — без translateX(-50%).
    ============================================================ */
 #filters-backdrop {
     position: fixed;
@@ -142,13 +137,6 @@ body.filters-open {
 
 /* ============================================================
    Главная: горизонтальный рейл карточек (Популярное и т.д.)
-   ------------------------------------------------------------
-   Раскладка: [← кнопка] [рейл flex:1, overflow:hidden] [→ кнопка]
-   Кнопки занимают СВОЁ место и не накладываются на карточки.
-
-   min-width на <a> страхует от сжатия карточки при уменьшении
-   масштаба шрифта в браузере: без него `width: 190px` на
-   маленьком шрифте выглядит «плюснутым» по содержимому.
    ============================================================ */
 .product-rail-wrap {
     display: flex;
@@ -191,7 +179,6 @@ body.filters-open {
     .product-rail > a { width: 210px; min-width: 180px; }
 }
 
-/* Кнопки прокрутки — только на десктопе */
 .product-rail-btn {
     display: none;
     flex-shrink: 0;
@@ -239,15 +226,10 @@ body.filters-open {
     width: 0%;
 }
 
-/* Карусель фокусируется с клавиатуры (стрелки ←/→).
-   Outline визуально лишний — пользователь кликает по ней мышью. */
 [data-carousel]:focus { outline: none; }
 
 /* ============================================================
    СКЕЛЕТОН-ОКНО
-   ------------------------------------------------------------
-   Несколько вариантов — по одному на каждый тип страницы.
-   JS выбирает нужный вариант по URL кликнутой ссылки.
    ============================================================ */
 .skeleton-overlay {
     position: fixed;
@@ -271,11 +253,9 @@ body.filters-open {
     margin: 0 auto;
 }
 
-/* ---- Варианты: показывается только активный ---- */
 .sk-variant { display: none; }
 .sk-variant.is-active { display: block; }
 
-/* ---- Базовый shimmering-блок ---- */
 .sk-block {
     background: linear-gradient(
         90deg,
@@ -293,9 +273,7 @@ body.filters-open {
     100% { background-position: -200% 0; }
 }
 
-/* ============================================================
-   Скелетон: ГЛАВНАЯ
-   ============================================================ */
+/* ---- Скелетон: ГЛАВНАЯ ---- */
 .sk-hero {
     width: 100%;
     height: 420px;
@@ -330,9 +308,7 @@ body.filters-open {
     margin-bottom: 1.5rem;
 }
 
-/* ============================================================
-   Скелетон: КАТАЛОГ
-   ============================================================ */
+/* ---- Скелетон: КАТАЛОГ ---- */
 .sk-banner {
     width: 100%;
     height: 180px;
@@ -360,9 +336,7 @@ body.filters-open {
     border-radius: 9999px;
 }
 
-/* ============================================================
-   Скелетон: КАРТОЧКА ТОВАРА
-   ============================================================ */
+/* ---- Скелетон: КАРТОЧКА ТОВАРА ---- */
 .sk-crumbs {
     width: 320px;
     height: 14px;
@@ -402,9 +376,7 @@ body.filters-open {
     margin-top: 1rem;
 }
 
-/* ============================================================
-   Скелетон: О НАС
-   ============================================================ */
+/* ---- Скелетон: О НАС ---- */
 .sk-hero-about {
     width: 100%;
     height: 260px;
@@ -439,9 +411,7 @@ body.filters-open {
 .sk-about-text .sk-line-xl { width: 70%; height: 28px; margin: 0.5rem 0; }
 .sk-about-text .sk-line-md { width: 95%; height: 14px; }
 
-/* ============================================================
-   Скелетон: общие блоки (сетка карточек, поиск, карточки)
-   ============================================================ */
+/* ---- Скелетон: общие блоки ---- */
 .sk-row {
     display: flex;
     align-items: center;
@@ -502,4 +472,111 @@ body.filters-open {
 @media (prefers-reduced-motion: reduce) {
     .sk-block { animation: none; }
     .skeleton-overlay { transition: none; }
+}
+
+/* ============================================================
+   Scroll reveal — элементы плавно появляются при прокрутке
+   ============================================================ */
+html.rv [data-rv] {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+        opacity 550ms ease-out,
+        transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+html.rv [data-rv].rv-in {
+    opacity: 1;
+    transform: none;
+}
+
+/* Модалки/оверлеи не трогаем — у них своя логика появления */
+html.rv #filters-backdrop,
+html.rv #filters-panel,
+html.rv .skeleton-overlay {
+    opacity: inherit;
+    transform: inherit;
+    transition: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.rv [data-rv] {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+    }
+}
+
+/* ============================================================
+   Аккордеон в карточке товара
+   ------------------------------------------------------------
+   Раскрытие через grid-template-rows: 0fr → 1fr — работает
+   без JS-замеров высоты и анимируется плавно в обе стороны.
+   ============================================================ */
+
+.acc-head,
+.acc-head-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 0;
+    background: none;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 150ms ease;
+    color: inherit;
+}
+
+.acc-head {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #111827;
+}
+.acc-head:hover { color: #be185d; }
+
+.acc-head-brand {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #ec4899;
+    padding: 0;
+}
+.acc-head-brand:hover { color: #be185d; }
+
+.acc-head i,
+.acc-head-brand i {
+    font-size: 0.65rem;
+    color: #f472b6;
+    transition: transform 320ms cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.acc-item.is-open .acc-head i,
+.acc-item.is-open .acc-head-brand i {
+    transform: rotate(180deg);
+}
+
+/* Плавное раскрытие/закрытие */
+.acc-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.acc-item.is-open .acc-body {
+    grid-template-rows: 1fr;
+}
+
+.acc-inner {
+    overflow: hidden;
+    min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .acc-body { transition: none; }
+    .acc-head i, .acc-head-brand i { transition: none; }
 }

@@ -22,9 +22,15 @@
             <div class="relative rounded-2xl overflow-hidden border border-pink-200/70 aspect-square
                         bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
                 {% if product.image_url %}
-                    <img src="{{ product.image_url }}" alt="{{ product.name }}"
-                         fetchpriority="high"
-                         class="absolute inset-0 w-full h-full object-cover">
+                    {% if is_video(product.image) %}
+                        <video src="{{ product.image_url }}"
+                               autoplay muted loop playsinline
+                               class="absolute inset-0 w-full h-full object-cover"></video>
+                    {% else %}
+                        <img src="{{ product.image_url }}" alt="{{ product.name }}"
+                             fetchpriority="high"
+                             class="absolute inset-0 w-full h-full object-cover">
+                    {% endif %}
                     {% if product.popular %}
                     <div class="absolute top-3 left-3 inline-flex items-center gap-1.5
                                 bg-pink-600 text-white text-xs font-medium px-2.5 py-1 rounded-full
@@ -45,8 +51,14 @@
             <div class="relative rounded-2xl overflow-hidden border border-pink-200/70 aspect-square
                         bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
                 {% if product.image_url_2 %}
-                    <img src="{{ product.image_url_2 }}" alt="{{ product.name }}"
-                         class="absolute inset-0 w-full h-full object-cover">
+                    {% if is_video(product.image_2) %}
+                        <video src="{{ product.image_url_2 }}"
+                               autoplay muted loop playsinline
+                               class="absolute inset-0 w-full h-full object-cover"></video>
+                    {% else %}
+                        <img src="{{ product.image_url_2 }}" alt="{{ product.name }}"
+                             class="absolute inset-0 w-full h-full object-cover">
+                    {% endif %}
                 {% else %}
                     <div class="absolute inset-0 flex flex-col items-center justify-center text-pink-300/70">
                         <i class="fas fa-image text-3xl md:text-4xl mb-2"></i>
@@ -59,8 +71,14 @@
             <div class="relative rounded-2xl overflow-hidden border border-pink-200/70 aspect-square
                         bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
                 {% if product.image_url_3 %}
-                    <img src="{{ product.image_url_3 }}" alt="{{ product.name }}"
-                         class="absolute inset-0 w-full h-full object-cover">
+                    {% if is_video(product.image_3) %}
+                        <video src="{{ product.image_url_3 }}"
+                               autoplay muted loop playsinline
+                               class="absolute inset-0 w-full h-full object-cover"></video>
+                    {% else %}
+                        <img src="{{ product.image_url_3 }}" alt="{{ product.name }}"
+                             class="absolute inset-0 w-full h-full object-cover">
+                    {% endif %}
                 {% else %}
                     <div class="absolute inset-0 flex flex-col items-center justify-center text-pink-300/70">
                         <i class="fas fa-image text-3xl md:text-4xl mb-2"></i>
@@ -73,8 +91,14 @@
             <div class="relative rounded-2xl overflow-hidden border border-pink-200/70 aspect-square
                         bg-gradient-to-br from-pink-100 via-rose-50 to-fuchsia-100">
                 {% if product.image_url_4 %}
-                    <img src="{{ product.image_url_4 }}" alt="{{ product.name }}"
-                         class="absolute inset-0 w-full h-full object-cover">
+                    {% if is_video(product.image_4) %}
+                        <video src="{{ product.image_url_4 }}"
+                               autoplay muted loop playsinline
+                               class="absolute inset-0 w-full h-full object-cover"></video>
+                    {% else %}
+                        <img src="{{ product.image_url_4 }}" alt="{{ product.name }}"
+                             class="absolute inset-0 w-full h-full object-cover">
+                    {% endif %}
                 {% else %}
                     <div class="absolute inset-0 flex flex-col items-center justify-center text-pink-300/70">
                         <i class="fas fa-image text-3xl md:text-4xl mb-2"></i>
@@ -92,19 +116,20 @@
         {# --- Бренд --- #}
         {% if product.brand %}
             {% if product.brand_description %}
-            <details class="group/brand mb-3">
-                <summary class="cursor-pointer list-none inline-flex items-baseline gap-1.5
-                                text-[11px] uppercase tracking-[0.2em] text-pink-500 font-semibold
-                                hover:text-pink-700 transition">
-                    {{ product.brand }}
-                    <i class="fas fa-chevron-down text-[8px] transition-transform
-                              group-open/brand:rotate-180 opacity-70"></i>
-                </summary>
-                <div class="mt-2 text-xs text-gray-500 leading-relaxed whitespace-pre-line
-                            border-l-2 border-pink-200 pl-3">
-                    {{ product.brand_description }}
+            <div class="acc-item mb-3" data-acc>
+                <button type="button" class="acc-head-brand" data-acc-toggle>
+                    <span>{{ product.brand }}</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="acc-body">
+                    <div class="acc-inner">
+                        <div class="text-sm text-gray-500 leading-relaxed whitespace-pre-line
+                                    border-l-2 border-pink-200 pl-3 pb-1">
+                            {{ product.brand_description }}
+                        </div>
+                    </div>
                 </div>
-            </details>
+            </div>
             {% else %}
             <span class="text-[11px] uppercase tracking-[0.2em] text-pink-500 font-semibold mb-3 block">
                 {{ product.brand }}
@@ -112,10 +137,12 @@
             {% endif %}
         {% endif %}
 
+        {# --- Название --- #}
         <h1 class="text-2xl md:text-4xl font-semibold leading-tight text-gray-900 mb-4">
             {{ product.name }}
         </h1>
 
+        {# --- Категории --- #}
         {% if product_categories %}
         <div class="flex flex-wrap gap-1.5 mb-5">
             {% for c in product_categories %}
@@ -129,6 +156,7 @@
         </div>
         {% endif %}
 
+        {# --- Цена --- #}
         <div class="flex items-end gap-3 mb-5 pb-5 border-b border-pink-100">
             <span class="text-3xl md:text-4xl font-semibold text-gray-900">{{ product.price|int }} ₽</span>
             {% if product.volume %}
@@ -139,42 +167,57 @@
             {% endif %}
         </div>
 
-        <div class="space-y-2">
+        {# ================= СЕКЦИИ ================= #}
+        <div class="space-y-1">
+
             {% if product.description %}
-            <details class="group border border-pink-200 rounded-2xl overflow-hidden bg-white">
-                <summary class="cursor-pointer list-none px-5 py-4 flex items-center justify-between hover:bg-pink-50 transition">
-                    <span class="font-medium text-gray-900">Описание</span>
-                    <i class="fas fa-chevron-down text-xs text-pink-400 transition-transform group-open:rotate-180"></i>
-                </summary>
-                <div class="px-5 pb-5 pt-1 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                    {{ product.description }}
+            <div class="acc-item" data-acc>
+                <button type="button" class="acc-head" data-acc-toggle>
+                    <span>Описание</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="acc-body">
+                    <div class="acc-inner">
+                        <div class="text-base text-gray-700 leading-relaxed whitespace-pre-line pb-3">
+                            {{ product.description }}
+                        </div>
+                    </div>
                 </div>
-            </details>
+            </div>
             {% endif %}
 
             {% if product.composition %}
-            <details class="group border border-pink-200 rounded-2xl overflow-hidden bg-white">
-                <summary class="cursor-pointer list-none px-5 py-4 flex items-center justify-between hover:bg-pink-50 transition">
-                    <span class="font-medium text-gray-900">Состав</span>
-                    <i class="fas fa-chevron-down text-xs text-pink-400 transition-transform group-open:rotate-180"></i>
-                </summary>
-                <div class="px-5 pb-5 pt-1 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                    {{ product.composition }}
+            <div class="acc-item" data-acc>
+                <button type="button" class="acc-head" data-acc-toggle>
+                    <span>Состав</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="acc-body">
+                    <div class="acc-inner">
+                        <div class="text-base text-gray-700 leading-relaxed whitespace-pre-line pb-3">
+                            {{ product.composition }}
+                        </div>
+                    </div>
                 </div>
-            </details>
+            </div>
             {% endif %}
 
             {% if product.usage %}
-            <details class="group border border-pink-200 rounded-2xl overflow-hidden bg-white">
-                <summary class="cursor-pointer list-none px-5 py-4 flex items-center justify-between hover:bg-pink-50 transition">
-                    <span class="font-medium text-gray-900">Применение</span>
-                    <i class="fas fa-chevron-down text-xs text-pink-400 transition-transform group-open:rotate-180"></i>
-                </summary>
-                <div class="px-5 pb-5 pt-1 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                    {{ product.usage }}
+            <div class="acc-item" data-acc>
+                <button type="button" class="acc-head" data-acc-toggle>
+                    <span>Применение</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="acc-body">
+                    <div class="acc-inner">
+                        <div class="text-base text-gray-700 leading-relaxed whitespace-pre-line pb-3">
+                            {{ product.usage }}
+                        </div>
+                    </div>
                 </div>
-            </details>
+            </div>
             {% endif %}
+
         </div>
     </div>
 </div>

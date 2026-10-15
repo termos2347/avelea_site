@@ -11,9 +11,15 @@
     <div class="aspect-square w-full rounded-xl mb-3 overflow-hidden flex items-center justify-center
                 bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
         {% if product.image_url %}
-        <img src="{{ product.image_url }}" alt="{{ product.name }}"
-             loading="lazy" decoding="async"
-             class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            {% if is_video(product.image) %}
+                <video src="{{ product.image_url }}"
+                       autoplay muted loop playsinline
+                       class="w-full h-full object-cover group-hover:scale-105 transition duration-500"></video>
+            {% else %}
+                <img src="{{ product.image_url }}" alt="{{ product.name }}"
+                     loading="lazy" decoding="async"
+                     class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            {% endif %}
         {% else %}
         {{ product.name[:2].upper() }}
         {% endif %}

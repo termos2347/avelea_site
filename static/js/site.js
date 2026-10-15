@@ -268,4 +268,92 @@
 
     initRails();
     document.body.addEventListener('htmx:afterSettle', initRails);
+
+    // ============================================================
+    // SCROLL REVEAL — элементы плавно появляются при прокрутке
+    // ------------------------------------------------------------
+    // Работает через IntersectionObserver, без библиотек.
+    // Если у пользователя включён prefers-reduced-motion, класс
+    // html.rv не ставится, и блок молча выходит по return.
+    // ============================================================
+    (function initScrollReveal() {
+        if (!document.documentElement.classList.contains('rv')) return;
+
+        const io = ('IntersectionObserver' in window)
+            ? new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) return;
+                    entry.target.classList.add('rv-in');
+                    io.unobserve(entry.target);
+                });
+            }, {
+                rootMargin: '0px 0px -8% 0px',
+                threshold: 0.01
+            })
+            : null;
+
+        // Не трогаем hero-карусель — там своя анимация слайдов.
+        function inCarousel(el) {
+            return !!el.closest('[data-carousel]');
+        }
+
+        function tagTargets() {
+            const nodes = document.querySelectorAll(
+                'section, .product-grid > a, .product-rail > a'
+            );
+
+            nodes.forEach((el) => {
+                if (inCarousel(el)) return;
+                if (el.hasAttribute('data-rv')) return;
+                el.setAttribute('data-rv', '');
+
+                const parent = el.parentElement;
+                if (!parent) return;
+
+                const siblings = Array.from(parent.children)
+                    .filter((c) => c.hasAttribute('data-rv'));
+                const i = siblings.indexOf(el);
+                if (i > 0) {
+                    el.style.transitionDelay = Math.min(i * 45, 360) + 'ms';
+                }
+            });
+        }
+
+        function scan() {
+            tagTargets();
+
+            const targets = document.querySelectorAll('[data-rv]:not(.rv-in)');
+
+            if (!io) {
+                targets.forEach((el) => el.classList.add('rv-in'));
+                return;
+            }
+
+            targets.forEach((el) => io.observe(el));
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', scan);
+        } else {
+            scan();
+        }
+
+        document.body.addEventListener('htmx:afterSettle', scan);
+    })();
+
+    // ============================================================
+    // АККОРДЕОН в карточке товара
+    // ------------------------------------------------------------
+    // Раскрытие через класс is-open. Высота анимируется CSS-ом
+    // через grid-template-rows: 0fr → 1fr. Один обработчик на
+    // весь документ — работает и после HTMX-переходов.
+    // ============================================================
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-acc-toggle]');
+        if (!btn) return;
+        var item = btn.closest('[data-acc]');
+        if (!item) return;
+        item.classList.toggle('is-open');
+    });
+
 })();

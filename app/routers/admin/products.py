@@ -17,7 +17,7 @@ from app.utils.helpers import (
     validate_price,
 )
 from app.data.models import Product, Brand, Category
-from app.services.storage import save_image, delete_image
+from app.services.storage import save_media, delete_media
 from app.core.rendering import admin_templates
 
 router = APIRouter(prefix="/admin/products", tags=["admin-products"])
@@ -51,7 +51,7 @@ def _apply_image_slot(
     """
     new_filename, err = (None, None)
     if new_file is not None and getattr(new_file, "filename", ""):
-        new_filename, err = save_image(new_file)
+        new_filename, err = save_media(new_file)
         if err:
             request.session["flash_error"] = err
 
@@ -63,7 +63,7 @@ def _apply_image_slot(
         final = old_filename
 
     if old_filename and old_filename != final:
-        delete_image(old_filename)
+        delete_media(old_filename)
 
     return final
 
@@ -181,10 +181,10 @@ async def admin_product_create(
         request.session["flash_error"] = "Выберите бренд — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    f1, e1 = save_image(image_1)
-    f2, e2 = save_image(image_2)
-    f3, e3 = save_image(image_3)
-    f4, e4 = save_image(image_4)
+    f1, e1 = save_media(image_1)
+    f2, e2 = save_media(image_2)
+    f3, e3 = save_media(image_3)
+    f4, e4 = save_media(image_4)
     for err in (e1, e2, e3, e4):
         if err:
             request.session["flash_error"] = err
@@ -341,6 +341,6 @@ async def admin_product_delete(
         db.delete(product)
         db.commit()
         for f in files:
-            delete_image(f)
+            delete_media(f)
         cache.invalidate()
     return RedirectResponse(url="/admin/products", status_code=303)

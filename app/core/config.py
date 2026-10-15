@@ -66,6 +66,10 @@ SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
 MAX_UPLOAD_MB    = _int("MAX_UPLOAD_MB", 5)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
+# Лимит для видео — отдельный, они обычно крупнее картинок.
+MAX_VIDEO_UPLOAD_MB    = _int("MAX_VIDEO_UPLOAD_MB", 30)
+MAX_VIDEO_UPLOAD_BYTES = MAX_VIDEO_UPLOAD_MB * 1024 * 1024
+
 # Максимальная длина большей стороны картинки.
 MAX_IMAGE_DIMENSION = _int("MAX_IMAGE_DIMENSION", 2000)
 

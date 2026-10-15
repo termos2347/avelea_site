@@ -310,10 +310,10 @@
     // ============================================================
     // ДИАЛОГ ПОДТВЕРЖДЕНИЯ
     // ============================================================
-    let pendingForm = null;
+    let pendingConfirmForm = null;
 
     function openConfirm(message, form) {
-        pendingForm = form;
+        pendingConfirmForm = form;
 
         document.getElementById('confirm-title').textContent = 'Подтвердите действие';
         document.getElementById('confirm-text').textContent  = message;
@@ -330,13 +330,13 @@
 
     function closeConfirm() {
         closeModal(document.getElementById('confirm-dialog'));
-        pendingForm = null;
+        pendingConfirmForm = null;
     }
 
     document.addEventListener('click', (e) => {
         if (e.target.closest('#confirm-cancel')) { closeConfirm(); return; }
         if (e.target.closest('#confirm-ok')) {
-            const form = pendingForm;
+            const form = pendingConfirmForm;
             closeConfirm();
             if (form) {
                 form.dataset.confirmed = '1';
@@ -444,7 +444,6 @@
     // ФОРМА ТОВАРА: единицы объёма, сворачивание, поиск, счётчик
     // ============================================================
 
-    // ---- Переключатель мл / г ----
     document.addEventListener('click', (e) => {
         const btn = e.target.closest('.adm-unit-switch button');
         if (!btn) return;
@@ -457,7 +456,6 @@
             b.classList.toggle('is-active', b === btn));
     });
 
-    // ---- Сворачивание секций ----
     function findCollapseTarget(btn) {
         const id = btn.dataset.collapseTarget;
         if (!id) return null;
@@ -534,7 +532,6 @@
         try { localStorage.setItem(btn.dataset.collapseKey, nowCollapsed ? '1' : '0'); } catch (err) {}
     });
 
-    // ---- Поиск внутри чип-групп ----
     document.addEventListener('input', (e) => {
         const input = e.target.closest('[data-filter-target]');
         if (!input) return;
@@ -547,7 +544,6 @@
         });
     });
 
-    // ---- Счётчик выбранных категорий ----
     function updateCategoriesCount(scope) {
         const root = scope || document;
         root.querySelectorAll('form').forEach(form => {
@@ -579,7 +575,143 @@
     });
 
     // ============================================================
-    // ПОЛНОЭКРАННЫЙ ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
+    // СЛОТЫ МЕДИА: превью (картинка или видео) + удаление
+    // ============================================================
+    (function initImageSlots() {
+
+        function isVideoFile(name) {
+            return /\.(mp4|webm|mov|m4v|ogv)$/i.test(name || '');
+        }
+
+        function makePreview(fileName, url) {
+            if (isVideoFile(fileName)) {
+                var v = document.createElement('video');
+                v.className = 'adm-image-preview';
+                v.src = url;
+                v.muted = true;
+                v.playsInline = true;
+                v.autoplay = true;
+                v.loop = true;
+                return v;
+            }
+            var img = document.createElement('img');
+            img.className = 'adm-image-preview';
+            img.src = url;
+            img.alt = '';
+            return img;
+        }
+
+        function updateRemoveButton(slot) {
+            var btn = slot.querySelector('[data-remove-image]');
+            var label = slot.querySelector('.adm-image-uploader');
+            var input = slot.querySelector('.adm-file-input');
+            var cb = slot.querySelector('.adm-remove-checkbox');
+
+            if (!btn || !label || !input) return;
+
+            var hasFile = input.files && input.files.length > 0;
+            var hasSaved = label.classList.contains('has-image');
+            var marked = cb && cb.checked;
+
+            btn.style.display = ((hasFile || hasSaved) && !marked) ? '' : 'none';
+        }
+
+        function resetSlotToEmpty(slot) {
+            var label = slot.querySelector('.adm-image-uploader');
+            var input = slot.querySelector('.adm-file-input');
+            var preview = slot.querySelector('.adm-image-preview');
+            var overlay = slot.querySelector('.adm-image-overlay');
+            var empty = slot.querySelector('.adm-image-empty');
+
+            if (input) input.value = '';
+            if (preview) preview.remove();
+            if (overlay) overlay.remove();
+
+            if (!empty) {
+                empty = document.createElement('div');
+                empty.className = 'adm-image-empty';
+                empty.innerHTML =
+                    '<i class="fas fa-photo-film"></i>' +
+                    '<span class="adm-file-text">Загрузить</span>';
+                label.insertBefore(empty, input);
+            } else {
+                var t = empty.querySelector('.adm-file-text');
+                if (t) t.textContent = 'Загрузить';
+            }
+
+            label.classList.remove('has-image');
+        }
+
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-remove-image]');
+            if (!btn) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            var slot = btn.closest('.adm-image-slot');
+            if (!slot) return;
+
+            var cb = slot.querySelector('.adm-remove-checkbox');
+            if (cb && !cb.checked) cb.checked = true;
+
+            resetSlotToEmpty(slot);
+            updateRemoveButton(slot);
+        });
+
+        document.addEventListener('change', function (e) {
+            if (!e.target.matches('.adm-file-input')) return;
+
+            var label = e.target.closest('.adm-image-uploader');
+            if (!label) return;
+            var slot = label.closest('.adm-image-slot');
+            if (!slot) return;
+
+            var file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            var url = URL.createObjectURL(file);
+
+            var cb = slot.querySelector('.adm-remove-checkbox');
+            if (cb) cb.checked = false;
+
+            var old = label.querySelector('.adm-image-preview');
+            if (old) old.remove();
+
+            var preview = makePreview(file.name, url);
+            var input = label.querySelector('.adm-file-input');
+            label.insertBefore(preview, input);
+
+            var empty = label.querySelector('.adm-image-empty');
+            if (empty) empty.remove();
+
+            if (!label.querySelector('.adm-image-overlay')) {
+                var overlay = document.createElement('div');
+                overlay.className = 'adm-image-overlay';
+                overlay.innerHTML =
+                    '<i class="fas fa-cloud-arrow-up"></i>' +
+                    '<span class="adm-file-text">Заменить</span>';
+                label.insertBefore(overlay, input);
+            }
+
+            label.classList.add('has-image');
+            updateRemoveButton(slot);
+        });
+
+        document.querySelectorAll('.adm-image-slot').forEach(updateRemoveButton);
+
+        document.body.addEventListener('htmx:afterSwap', function () {
+            document.querySelectorAll('.adm-image-slot').forEach(updateRemoveButton);
+        });
+
+    })();
+
+    // ============================================================
+    // ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
+    // ------------------------------------------------------------
+    // Показ плавный — через CSS transition. Чтобы transition успел
+    // стартовать до отправки, откладываем form.submit() на 2 кадра
+    // (requestAnimationFrame). Это ~30 мс, пользователь не замечает.
     // ============================================================
     (function () {
         const overlay = document.getElementById('adm-saving-overlay');
@@ -587,6 +719,7 @@
         if (!overlay) return;
 
         let hideTimer = null;
+        let pendingForm = null;
 
         function isProductForm(form) {
             if (!form || form.tagName !== 'FORM') return false;
@@ -594,8 +727,24 @@
                    && form.querySelector('input[name="price"]'));
         }
 
+        function pickMsg(form) {
+            const action = form.getAttribute('action') || '';
+            if (/\/new\b/.test(action) || action.endsWith('/new')) {
+                return 'Товар создаётся…';
+            }
+            if (/\/edit\b/.test(action) || action.endsWith('/edit')) {
+                return 'Изменения сохраняются…';
+            }
+            return 'Сохраняем…';
+        }
+
         function show(message) {
             if (textEl) textEl.textContent = message || 'Сохраняем…';
+
+            // Гарантируем старт с opacity:0 — сбрасываем класс и
+            // форсируем reflow, чтобы transition точно сработал.
+            overlay.classList.remove('is-visible');
+            void overlay.offsetHeight;
             overlay.classList.add('is-visible');
             overlay.setAttribute('aria-hidden', 'false');
 
@@ -609,44 +758,44 @@
             overlay.setAttribute('aria-hidden', 'true');
         }
 
-        document.addEventListener('click', (e) => {
-            const btn = e.target.closest('button[type="submit"], input[type="submit"]');
-            if (!btn) return;
-            const form = btn.closest('form');
+        // Перехватываем submit формы товара.
+        document.addEventListener('submit', (e) => {
+            const form = e.target;
             if (!isProductForm(form)) return;
 
+            // Кто-то до нас (валидация) отменил — не мешаем.
+            if (e.defaultPrevented) return;
+
+            // Нативная валидация браузера (required поля).
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 return;
             }
 
-            const action = form.getAttribute('action') || '';
-            let msg = 'Сохраняем…';
-            if (/\/new\b/.test(action) || action.endsWith('/new')) {
-                msg = 'Товар создаётся…';
-            } else if (/\/edit\b/.test(action) || action.endsWith('/edit')) {
-                msg = 'Изменения сохраняются…';
+            // Защита от двойного срабатывания при быстрых кликах.
+            if (pendingForm === form) {
+                e.preventDefault();
+                return;
             }
 
-            show(msg);
+            e.preventDefault();
+            pendingForm = form;
+
+            show(pickMsg(form));
+
+            // Отправляем через 2 кадра — transition уже стартовал,
+            // браузер отрисовал первый «шаг» анимации.
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    pendingForm = null;
+                    // form.submit() не генерирует событие submit — цикла не будет.
+                    HTMLFormElement.prototype.submit.call(form);
+                });
+            });
         }, true);
 
-        document.body.addEventListener('htmx:afterRequest', (e) => {
-            const elt = e.detail && e.detail.elt;
-            let form = null;
-            if (elt) {
-                form = elt.tagName === 'FORM' ? elt : (elt.closest && elt.closest('form'));
-            }
-            if (isProductForm(form)) hide();
-        });
-
-        document.body.addEventListener('htmx:responseError', (e) => {
-            const elt = e.detail && e.detail.elt;
-            let form = null;
-            if (elt) {
-                form = elt.tagName === 'FORM' ? elt : (elt.closest && elt.closest('form'));
-            }
-            if (isProductForm(form)) hide();
-        });
+        // Fallback: если форма ушла через HTMX, а не нативным submit.
+        document.body.addEventListener('htmx:afterRequest', hide);
+        document.body.addEventListener('htmx:responseError', hide);
 
         window.addEventListener('beforeunload', hide);
 

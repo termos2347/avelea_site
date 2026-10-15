@@ -153,103 +153,57 @@
                       placeholder="Нанести на очищенную кожу...">{{ product.usage or '' if product else '' }}</textarea>
         </div>
 
-        {# ============ КАРТИНКИ (4 слота) ============ #}
+        {# ============ МЕДИА (4 слота) ============ #}
         <div class="adm-col-full">
-            <label class="adm-label">Картинки — до 4 штук</label>
+            <label class="adm-label">Медиа — до 4 файлов</label>
 
-            <div class="adm-form-grid">
+            <div class="adm-image-slots">
 
-                {# --- Слот 1: верхняя левая --- #}
-                <div>
-                    <label class="adm-label" style="font-weight: 400; color: var(--adm-muted);">
-                        1 — верхняя левая
+                {% set slots = [
+                    (1, product.image_url   if product else None, 'image_1', 'remove_image'),
+                    (2, product.image_url_2 if product else None, 'image_2', 'remove_image_2'),
+                    (3, product.image_url_3 if product else None, 'image_3', 'remove_image_3'),
+                    (4, product.image_url_4 if product else None, 'image_4', 'remove_image_4'),
+                ] %}
+
+                {% for num, url, field, remove_name in slots %}
+                <div class="adm-image-slot">
+                    <label class="adm-image-uploader {% if url %}has-image{% endif %}">
+                        <input type="file" name="{{ field }}" accept="image/*,video/*" class="adm-file-input">
+
+                        {% if url %}
+                            {% if is_video(url) %}
+                                <video src="{{ url }}" muted playsinline class="adm-image-preview"></video>
+                            {% else %}
+                                <img src="{{ url }}" class="adm-image-preview" alt="">
+                            {% endif %}
+                            <div class="adm-image-overlay">
+                                <i class="fas fa-cloud-arrow-up"></i>
+                                <span class="adm-file-text">Заменить</span>
+                            </div>
+                        {% else %}
+                            <div class="adm-image-empty">
+                                <i class="fas fa-photo-film"></i>
+                                <span class="adm-file-text">Загрузить</span>
+                            </div>
+                        {% endif %}
                     </label>
-                    {% if product and product.image_url %}
-                    <div class="adm-current-image">
-                        <img src="{{ product.image_url }}" alt="">
-                        <label class="adm-checkbox-row">
-                            <input type="checkbox" name="remove_image" value="1">
-                            Удалить
-                        </label>
-                    </div>
-                    {% else %}
-                    <div class="adm-slot-placeholder">
-                        <i class="fas fa-image"></i>
-                        <span>Слот пуст</span>
-                    </div>
-                    {% endif %}
-                    <input type="file" name="image_1" accept="image/*" class="adm-input">
-                </div>
 
-                {# --- Слот 2: верхняя правая --- #}
-                <div>
-                    <label class="adm-label" style="font-weight: 400; color: var(--adm-muted);">
-                        2 — верхняя правая
-                    </label>
-                    {% if product and product.image_url_2 %}
-                    <div class="adm-current-image">
-                        <img src="{{ product.image_url_2 }}" alt="">
-                        <label class="adm-checkbox-row">
-                            <input type="checkbox" name="remove_image_2" value="1">
-                            Удалить
-                        </label>
-                    </div>
-                    {% else %}
-                    <div class="adm-slot-placeholder">
-                        <i class="fas fa-image"></i>
-                        <span>Слот пуст</span>
-                    </div>
-                    {% endif %}
-                    <input type="file" name="image_2" accept="image/*" class="adm-input">
-                </div>
+                    <button type="button"
+                            class="adm-image-remove"
+                            data-remove-image
+                            aria-label="Удалить"
+                            {% if not url %}style="display: none;"{% endif %}>
+                        <i class="fas fa-times"></i>
+                    </button>
 
-                {# --- Слот 3: нижняя левая --- #}
-                <div>
-                    <label class="adm-label" style="font-weight: 400; color: var(--adm-muted);">
-                        3 — нижняя левая
-                    </label>
-                    {% if product and product.image_url_3 %}
-                    <div class="adm-current-image">
-                        <img src="{{ product.image_url_3 }}" alt="">
-                        <label class="adm-checkbox-row">
-                            <input type="checkbox" name="remove_image_3" value="1">
-                            Удалить
-                        </label>
-                    </div>
-                    {% else %}
-                    <div class="adm-slot-placeholder">
-                        <i class="fas fa-image"></i>
-                        <span>Слот пуст</span>
-                    </div>
-                    {% endif %}
-                    <input type="file" name="image_3" accept="image/*" class="adm-input">
+                    <input type="checkbox" name="{{ remove_name }}" value="1" class="adm-remove-checkbox" hidden>
                 </div>
-
-                {# --- Слот 4: нижняя правая --- #}
-                <div>
-                    <label class="adm-label" style="font-weight: 400; color: var(--adm-muted);">
-                        4 — нижняя правая
-                    </label>
-                    {% if product and product.image_url_4 %}
-                    <div class="adm-current-image">
-                        <img src="{{ product.image_url_4 }}" alt="">
-                        <label class="adm-checkbox-row">
-                            <input type="checkbox" name="remove_image_4" value="1">
-                            Удалить
-                        </label>
-                    </div>
-                    {% else %}
-                    <div class="adm-slot-placeholder">
-                        <i class="fas fa-image"></i>
-                        <span>Слот пуст</span>
-                    </div>
-                    {% endif %}
-                    <input type="file" name="image_4" accept="image/*" class="adm-input">
-                </div>
+                {% endfor %}
 
             </div>
             <div class="adm-hint">
-                jpg, png, webp, gif. Слоты необязательные — можно загрузить только нужные.
+                jpg, png, webp, gif, mp4, webm, mov. Можно смешивать картинки и видео. Слоты необязательные.
             </div>
         </div>
 

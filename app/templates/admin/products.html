@@ -69,9 +69,13 @@
                     <td class="adm-col-id adm-table-id">{{ p.id }}</td>
                     <td class="adm-col-hide-mobile">
                         {% if p.image_url %}
-                        <img src="{{ p.image_url }}" alt="" loading="lazy" decoding="async" class="adm-table-thumb">
+                            {% if is_video(p.image) %}
+                                <video src="{{ p.image_url }}" muted playsinline class="adm-table-thumb"></video>
+                            {% else %}
+                                <img src="{{ p.image_url }}" alt="" loading="lazy" decoding="async" class="adm-table-thumb">
+                            {% endif %}
                         {% else %}
-                        <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
+                            <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
                         {% endif %}
                     </td>
                     <td class="adm-col-name">
@@ -170,9 +174,13 @@
                 <span class="adm-product-badge">популярное</span>
                 {% endif %}
                 {% if p.image_url %}
-                <img src="{{ p.image_url }}" alt="{{ p.name }}" loading="lazy" decoding="async">
+                    {% if is_video(p.image) %}
+                        <video src="{{ p.image_url }}" muted playsinline></video>
+                    {% else %}
+                        <img src="{{ p.image_url }}" alt="{{ p.name }}" loading="lazy" decoding="async">
+                    {% endif %}
                 {% else %}
-                {{ p.name[:2].upper() }}
+                    {{ p.name[:2].upper() }}
                 {% endif %}
             </div>
 
@@ -248,10 +256,7 @@
     </div>
 </div>
 
-{# ================= МОДАЛ РЕДАКТИРОВАНИЯ =================
-   Содержимое #edit-product-dialog-content подгружается HTMX-ом
-   с роута /admin/products/{id}/edit.
-   ========================================================= #}
+{# ================= МОДАЛ РЕДАКТИРОВАНИЯ ================= #}
 <div class="adm-modal" id="edit-product-dialog" role="dialog" aria-modal="true">
     <div class="adm-modal-backdrop" data-modal-close="edit-product-dialog"></div>
     <div class="adm-dialog-card adm-dialog-card-wide">
