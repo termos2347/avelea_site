@@ -709,14 +709,20 @@
     // ============================================================
     // ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
     // ------------------------------------------------------------
-    // Показ плавный — через CSS transition. Чтобы transition успел
-    // стартовать до отправки, откладываем form.submit() на 2 кадра
-    // (requestAnimationFrame). Это ~30 мс, пользователь не замечает.
+    // Показ плавный (CSS transition 160ms). Чтобы transition успел
+    // отрисоваться ДО ухода формы, отправляем форму с задержкой
+    // 200 мс — этого достаточно, чтобы анимация завершилась и
+    // пользователь увидел полноценный оверлей.
     // ============================================================
     (function () {
         const overlay = document.getElementById('adm-saving-overlay');
         const textEl  = document.getElementById('adm-saving-text');
         if (!overlay) return;
+
+        // Сколько держать оверлей до отправки. Должно быть чуть больше
+        // длительности CSS-transition (у нас 160ms), чтобы анимация
+        // успела доиграть до ухода страницы.
+        const SHOW_BEFORE_SUBMIT = 220;
 
         let hideTimer = null;
         let pendingForm = null;
@@ -741,15 +747,15 @@
         function show(message) {
             if (textEl) textEl.textContent = message || 'Сохраняем…';
 
-            // Гарантируем старт с opacity:0 — сбрасываем класс и
-            // форсируем reflow, чтобы transition точно сработал.
+            // Сброс класса + форс reflow, чтобы transition точно
+            // запустился с opacity:0 → 1 (а не применился мгновенно).
             overlay.classList.remove('is-visible');
             void overlay.offsetHeight;
             overlay.classList.add('is-visible');
             overlay.setAttribute('aria-hidden', 'false');
 
             clearTimeout(hideTimer);
-            hideTimer = setTimeout(hide, 15000);
+            hideTimer = setTimeout(hide, 60000);
         }
 
         function hide() {
@@ -758,20 +764,16 @@
             overlay.setAttribute('aria-hidden', 'true');
         }
 
-        // Перехватываем submit формы товара.
         document.addEventListener('submit', (e) => {
             const form = e.target;
             if (!isProductForm(form)) return;
-
-            // Кто-то до нас (валидация) отменил — не мешаем.
             if (e.defaultPrevented) return;
 
-            // Нативная валидация браузера (required поля).
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 return;
             }
 
-            // Защита от двойного срабатывания при быстрых кликах.
+            // Защита от повторной отправки, пока идёт анимация.
             if (pendingForm === form) {
                 e.preventDefault();
                 return;
@@ -780,24 +782,23 @@
             e.preventDefault();
             pendingForm = form;
 
+            // Показываем оверлей — transition стартует.
             show(pickMsg(form));
 
-            // Отправляем через 2 кадра — transition уже стартовал,
-            // браузер отрисовал первый «шаг» анимации.
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    pendingForm = null;
-                    // form.submit() не генерирует событие submit — цикла не будет.
-                    HTMLFormElement.prototype.submit.call(form);
-                });
-            });
+            // И только через SHOW_BEFORE_SUBMIT мс реально отправляем.
+            // HTMLFormElement.prototype.submit.call — отправка «в обход»
+            // события submit, чтобы не поймать себя же в этом же обработчике.
+            setTimeout(() => {
+                if (pendingForm !== form) return;   // отменили/перезапустили
+                pendingForm = null;
+                HTMLFormElement.prototype.submit.call(form);
+            }, SHOW_BEFORE_SUBMIT);
         }, true);
 
-        // Fallback: если форма ушла через HTMX, а не нативным submit.
         document.body.addEventListener('htmx:afterRequest', hide);
         document.body.addEventListener('htmx:responseError', hide);
 
-        window.addEventListener('beforeunload', hide);
+        //window.addEventListener('beforeunload', hide);
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') hide();

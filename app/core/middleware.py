@@ -1,12 +1,16 @@
 """HTTP-мидлвари приложения."""
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import HTMLResponse, PlainTextResponse
 
 from app.core.config import SESSION_HTTPS_ONLY
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Отклоняет запросы, у которых Content-Length больше лимита."""
+    """Отклоняет запросы, у которых Content-Length больше лимита.
+
+    Рендерит ту же HTML-страницу ошибки, что и глобальный handler 413 —
+    потому что этот middleware сидит СНАРУЖИ от ExceptionMiddleware,
+    и его HTTPException не был бы пойман глобальными handlers.
+    """
 
     def __init__(self, app, max_bytes: int):
         super().__init__(app)
@@ -16,12 +20,33 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         if request.method in ("POST", "PUT", "PATCH"):
             cl = request.headers.get("content-length")
             if cl and cl.isdigit() and int(cl) > self.max_bytes:
-                return PlainTextResponse(
-                    f"Файл слишком большой "
-                    f"(лимит {self.max_bytes // (1024 * 1024)} МБ)",
-                    status_code=413,
-                )
+                return self._render_413(request)
         return await call_next(request)
+
+    def _render_413(self, request):
+        # Локальный импорт — чтобы не ловить циклический импорт на старте.
+        from app.core.rendering import admin_templates, site_templates
+
+        is_admin = request.url.path.startswith("/admin")
+        templates = admin_templates if is_admin else site_templates
+
+        limit_mb = self.max_bytes // (1024 * 1024)
+
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "error_code":    413,
+                "error_title":   "Слишком большой запрос",
+                "error_message": (
+                    f"Файл превышает допустимый размер "
+                    f"(лимит на весь запрос — {limit_mb} МБ). "
+                    "Попробуйте загрузить файл поменьше."
+                ),
+                "error_icon":    "fa-weight-hanging",
+            },
+            status_code=413,
+        )
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -114,6 +139,7 @@ class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
 
         # Закрыто: любой другой /admin или /admin/* без сессии
         if not request.session.get("admin"):
+            from starlette.responses import HTMLResponse
             response = HTMLResponse(
                 content=self._NOT_FOUND_HTML,
                 status_code=404,

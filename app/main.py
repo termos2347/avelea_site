@@ -166,9 +166,11 @@ app.add_middleware(
 )
 
 # BodySizeLimit — защита от слишком больших тел запроса.
-# Лимит = больший из двух (картинка/видео) + 1 МБ на multipart-обёртку.
-# Иначе видео (которые больше картинок) режутся на входе.
-_BODY_LIMIT = max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
+# Лимит = 4 слота × лимит на файл + запас 1 МБ на multipart-обёртку.
+# Иначе 4 видео по 10 МБ не влезли бы в общий лимит 31 МБ.
+# Периодические файлы всё равно проверяются в save_media:
+# картинка > MAX_UPLOAD, видео > MAX_VIDEO_UPLOAD — отклонится.
+_BODY_LIMIT = 4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
 app.add_middleware(
     BodySizeLimitMiddleware,
     max_bytes=_BODY_LIMIT,
