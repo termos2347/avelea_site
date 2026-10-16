@@ -707,21 +707,56 @@
     })();
 
     // ============================================================
+    // ВАРИАНТЫ ТОВАРА: добавить/удалить строку
+    // ============================================================
+    (function initVariants() {
+
+        function makeRow() {
+            var row = document.createElement('div');
+            row.className = 'adm-variant-row';
+            row.innerHTML =
+                '<input type="number" name="variant_volume_amount" step="0.1" min="0" ' +
+                    'class="adm-input" placeholder="10">' +
+                '<select name="variant_volume_unit" class="adm-select">' +
+                    '<option value="мл">мл</option>' +
+                    '<option value="г">г</option>' +
+                '</select>' +
+                '<input type="number" name="variant_price" min="0" ' +
+                    'class="adm-input" placeholder="500">' +
+                '<button type="button" class="adm-variant-remove" ' +
+                    'data-remove-variant aria-label="Удалить вариант">' +
+                    '<i class="fas fa-times"></i>' +
+                '</button>';
+            return row;
+        }
+
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('[data-add-variant]')) {
+                var wrap = e.target.closest('[data-variants]');
+                if (!wrap) return;
+                var list = wrap.querySelector('[data-variant-rows]');
+                if (!list) return;
+                if (list.children.length >= 10) return;
+                list.appendChild(makeRow());
+                return;
+            }
+
+            if (e.target.closest('[data-remove-variant]')) {
+                var row = e.target.closest('.adm-variant-row');
+                if (row) row.remove();
+            }
+        });
+
+    })();
+
+    // ============================================================
     // ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
-    // ------------------------------------------------------------
-    // Показ плавный (CSS transition 160ms). Чтобы transition успел
-    // отрисоваться ДО ухода формы, отправляем форму с задержкой
-    // 200 мс — этого достаточно, чтобы анимация завершилась и
-    // пользователь увидел полноценный оверлей.
     // ============================================================
     (function () {
         const overlay = document.getElementById('adm-saving-overlay');
         const textEl  = document.getElementById('adm-saving-text');
         if (!overlay) return;
 
-        // Сколько держать оверлей до отправки. Должно быть чуть больше
-        // длительности CSS-transition (у нас 160ms), чтобы анимация
-        // успела доиграть до ухода страницы.
         const SHOW_BEFORE_SUBMIT = 220;
 
         let hideTimer = null;
@@ -747,15 +782,13 @@
         function show(message) {
             if (textEl) textEl.textContent = message || 'Сохраняем…';
 
-            // Сброс класса + форс reflow, чтобы transition точно
-            // запустился с opacity:0 → 1 (а не применился мгновенно).
             overlay.classList.remove('is-visible');
             void overlay.offsetHeight;
             overlay.classList.add('is-visible');
             overlay.setAttribute('aria-hidden', 'false');
 
             clearTimeout(hideTimer);
-            hideTimer = setTimeout(hide, 60000);
+            hideTimer = setTimeout(hide, 15000);
         }
 
         function hide() {
@@ -773,7 +806,6 @@
                 return;
             }
 
-            // Защита от повторной отправки, пока идёт анимация.
             if (pendingForm === form) {
                 e.preventDefault();
                 return;
@@ -782,14 +814,10 @@
             e.preventDefault();
             pendingForm = form;
 
-            // Показываем оверлей — transition стартует.
             show(pickMsg(form));
 
-            // И только через SHOW_BEFORE_SUBMIT мс реально отправляем.
-            // HTMLFormElement.prototype.submit.call — отправка «в обход»
-            // события submit, чтобы не поймать себя же в этом же обработчике.
             setTimeout(() => {
-                if (pendingForm !== form) return;   // отменили/перезапустили
+                if (pendingForm !== form) return;
                 pendingForm = null;
                 HTMLFormElement.prototype.submit.call(form);
             }, SHOW_BEFORE_SUBMIT);
@@ -797,8 +825,6 @@
 
         document.body.addEventListener('htmx:afterRequest', hide);
         document.body.addEventListener('htmx:responseError', hide);
-
-        //window.addEventListener('beforeunload', hide);
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') hide();

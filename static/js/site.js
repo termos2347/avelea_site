@@ -5,19 +5,13 @@
 
     let hideTimer = null;
 
-        // ============================================================
+    // ============================================================
     // СКЕЛЕТОН ПРИ HTMX-ПЕРЕХОДАХ
-    // ------------------------------------------------------------
-    // Показываем оверлей только если запрос длится >150ms,
-    // иначе на быстрых переходах будет раздражающее мигание.
-    // Вариант скелетона выбирается по URL кликнутой ссылки.
     // ============================================================
     const SKELETON_DELAY = 150;
     let skeletonTimer = null;
     let lastClickedHref = null;
 
-    // Запоминаем, куда пользователь кликнул, чтобы понять,
-    // какой скелетон показывать.
     document.addEventListener('click', (e) => {
         const a = e.target.closest('a[href]');
         if (!a) return;
@@ -27,30 +21,23 @@
         lastClickedHref = href;
     }, true);
 
-    // Определяем, какой вариант скелетона показать по URL.
     function pickSkeletonVariant(href) {
-        if (!href) return 'catalog';              // дефолт
-
-        const path = href.split('?')[0];          // отбрасываем query string
-
+        if (!href) return 'catalog';
+        const path = href.split('?')[0];
         if (path === '/' || path === '') return 'home';
         if (path.startsWith('/catalog')) return 'catalog';
         if (path.startsWith('/product/')) return 'product';
         if (path.startsWith('/about')) return 'about';
-
-        return 'catalog';                          // фолбэк
+        return 'catalog';
     }
 
     function showSkeleton() {
         const overlay = document.getElementById('skeleton-overlay');
         if (!overlay) return;
-
         const variant = pickSkeletonVariant(lastClickedHref);
-
         overlay.querySelectorAll('.sk-variant').forEach(v => {
             v.classList.toggle('is-active', v.dataset.sk === variant);
         });
-
         overlay.classList.add('is-visible');
     }
 
@@ -71,7 +58,6 @@
     document.body.addEventListener('htmx:afterRequest', hideSkeleton);
     document.body.addEventListener('htmx:responseError', hideSkeleton);
 
-    // ===== HTMX: прогресс-бар =====
     document.body.addEventListener('htmx:beforeRequest', () => {
         const bar = document.getElementById('htmx-progress');
         if (!bar) return;
@@ -91,13 +77,11 @@
         }, 150);
     });
 
-    // ===== Скролл наверх после перехода (кроме каталога) =====
     document.body.addEventListener('htmx:afterSettle', () => {
         if (window.location.pathname.startsWith('/catalog')) return;
         window.scrollTo({ top: 0, behavior: 'instant' });
     });
 
-    // ===== Не дёргать запрос по клику на активную ссылку =====
     document.addEventListener('click', (e) => {
         const a = e.target.closest('a[href]');
         if (!a) return;
@@ -171,15 +155,10 @@
 
         root.addEventListener('click', (e) => {
             if (e.target.closest('a, button, input, select, textarea')) return;
-
             const rect = root.getBoundingClientRect();
             const pct = (e.clientX - rect.left) / rect.width;
-
-            if (pct < EDGE) {
-                goTo(current - 1);
-            } else if (pct > 1 - EDGE) {
-                goTo(current + 1);
-            }
+            if (pct < EDGE) goTo(current - 1);
+            else if (pct > 1 - EDGE) goTo(current + 1);
         });
 
         root.addEventListener('mousemove', (e) => {
@@ -202,20 +181,10 @@
         });
         root.addEventListener('touchcancel', () => { x0 = null; });
 
-        // --- Клавиатурная навигация ---
-        // Делаем root фокусируемым, чтобы стрелки работали после клика
-        // по карусели. Outline убран в CSS — визуально он тут лишний.
-        if (!root.hasAttribute('tabindex')) {
-            root.setAttribute('tabindex', '0');
-        }
+        if (!root.hasAttribute('tabindex')) root.setAttribute('tabindex', '0');
         root.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                goTo(current - 1);
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                goTo(current + 1);
-            }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(current - 1); }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); goTo(current + 1); }
         });
 
         render();
@@ -231,10 +200,9 @@
     } else {
         scanCarousels();
     }
-
     document.body.addEventListener('htmx:afterSettle', scanCarousels);
 
-    // ===== Горизонтальные рейлы карточек (Популярное и т.д.) =====
+    // ===== Горизонтальные рейлы карточек =====
     function initRails() {
         document.querySelectorAll('.product-rail-wrap').forEach((wrap) => {
             if (wrap.hasAttribute('data-ready')) return;
@@ -270,11 +238,7 @@
     document.body.addEventListener('htmx:afterSettle', initRails);
 
     // ============================================================
-    // SCROLL REVEAL — элементы плавно появляются при прокрутке
-    // ------------------------------------------------------------
-    // Работает через IntersectionObserver, без библиотек.
-    // Если у пользователя включён prefers-reduced-motion, класс
-    // html.rv не ставится, и блок молча выходит по return.
+    // SCROLL REVEAL
     // ============================================================
     (function initScrollReveal() {
         if (!document.documentElement.classList.contains('rv')) return;
@@ -286,13 +250,9 @@
                     entry.target.classList.add('rv-in');
                     io.unobserve(entry.target);
                 });
-            }, {
-                rootMargin: '0px 0px -8% 0px',
-                threshold: 0.01
-            })
+            }, { rootMargin: '0px 0px -8% 0px', threshold: 0.01 })
             : null;
 
-        // Не трогаем hero-карусель — там своя анимация слайдов.
         function inCarousel(el) {
             return !!el.closest('[data-carousel]');
         }
@@ -301,7 +261,6 @@
             const nodes = document.querySelectorAll(
                 'section, .product-grid > a, .product-rail > a'
             );
-
             nodes.forEach((el) => {
                 if (inCarousel(el)) return;
                 if (el.hasAttribute('data-rv')) return;
@@ -321,14 +280,11 @@
 
         function scan() {
             tagTargets();
-
             const targets = document.querySelectorAll('[data-rv]:not(.rv-in)');
-
             if (!io) {
                 targets.forEach((el) => el.classList.add('rv-in'));
                 return;
             }
-
             targets.forEach((el) => io.observe(el));
         }
 
@@ -337,16 +293,11 @@
         } else {
             scan();
         }
-
         document.body.addEventListener('htmx:afterSettle', scan);
     })();
 
     // ============================================================
     // АККОРДЕОН в карточке товара
-    // ------------------------------------------------------------
-    // Раскрытие через класс is-open. Высота анимируется CSS-ом
-    // через grid-template-rows: 0fr → 1fr. Один обработчик на
-    // весь документ — работает и после HTMX-переходов.
     // ============================================================
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-acc-toggle]');
@@ -354,6 +305,26 @@
         var item = btn.closest('[data-acc]');
         if (!item) return;
         item.classList.toggle('is-open');
+    });
+
+    // ============================================================
+    // ВЫБОР ВАРИАНТА ТОВАРА (объём / цена)
+    // ============================================================
+    document.addEventListener('change', function (e) {
+        var sel = e.target.closest('[data-variant-select]');
+        if (!sel) return;
+
+        var opt = sel.options[sel.selectedIndex];
+        if (!opt) return;
+
+        var price  = opt.dataset.price  || '';
+        var volume = opt.dataset.volume || '';
+
+        var priceEl  = document.querySelector('[data-variant-price]');
+        var volumeEl = document.querySelector('[data-variant-volume]');
+
+        if (priceEl)  priceEl.textContent  = price;
+        if (volumeEl) volumeEl.textContent = volume;
     });
 
 })();

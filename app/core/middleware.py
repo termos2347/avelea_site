@@ -24,7 +24,6 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     def _render_413(self, request):
-        # Локальный импорт — чтобы не ловить циклический импорт на старте.
         from app.core.rendering import admin_templates, site_templates
 
         is_admin = request.url.path.startswith("/admin")
@@ -70,8 +69,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy",
             "geolocation=(), microphone=(), camera=()",
         )
-        # COOP: изолирует browsing context от чужого opener.
-        # Защита от Spectre-подобных атак и «window.opener»-манипуляций.
         response.headers.setdefault(
             "Cross-Origin-Opener-Policy", "same-origin",
         )
@@ -80,6 +77,29 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "Strict-Transport-Security",
                 "max-age=31536000; includeSubDomains",
             )
+        return response
+
+
+class StaticCacheMiddleware(BaseHTTPMiddleware):
+    """Долгий Cache-Control на /static/uploads/*.
+
+    Файлы в uploads/ имеют уникальные имена (uuid), поэтому их
+    кеширование безопасно — один и тот же URL всегда отдаёт один
+    и тот же файл. Браузер один раз скачает картинку и будет
+    использовать её из локального кеша 30 дней.
+
+    CSS/JS не трогаем — они могут обновляться при разработке,
+    и хочется, чтобы браузер подтягивал свежие версии.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+
+        if request.url.path.startswith("/static/uploads/"):
+            response.headers["Cache-Control"] = (
+                "public, max-age=2592000, immutable"
+            )
+
         return response
 
 
@@ -127,17 +147,14 @@ class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
 
-        # Обрабатываем только /admin/*
         is_admin = (path == "/admin" or path.startswith("/admin/"))
         if not is_admin:
             return await call_next(request)
 
-        # Открыто: /admin/login и всё под ним
         if path == "/admin/login" or path.startswith("/admin/login/"):
             response = await call_next(request)
             return self._add_noindex(response)
 
-        # Закрыто: любой другой /admin или /admin/* без сессии
         if not request.session.get("admin"):
             from starlette.responses import HTMLResponse
             response = HTMLResponse(
@@ -146,7 +163,6 @@ class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
             )
             return self._add_noindex(response)
 
-        # Залогинен — пропускаем дальше, но noindex всё равно ставим
         response = await call_next(request)
         return self._add_noindex(response)
 

@@ -114,23 +114,64 @@
             {% endif %}
         </div>
 
+        {# ============ ЦЕНА и БАЗОВЫЙ ОБЪЁМ ============ #}
         <div>
             <label class="adm-label">Цена, ₽ *</label>
             <input type="number" name="price" required min="0"
                    value="{{ product.price if product else '' }}"
                    class="adm-input" placeholder="0">
+            <div class="adm-hint">
+                Если ниже добавишь варианты — здесь будет минимальная
+                цена из них. Это поле — запасное.
+            </div>
         </div>
 
-        {# ============ ОБЪЁМ ============ #}
         <div>
-            <label class="adm-label">Объём *</label>
+            <label class="adm-label">Базовый объём</label>
             <div class="adm-volume-row">
-                <input type="number" name="volume_amount" required min="0" step="0.1"
-                       value="{{ volume_amount }}" class="adm-input" placeholder="50">
+                <input type="number" name="volume_amount" min="0" step="0.1"
+                       value="{{ volume_amount }}"
+                       class="adm-input" placeholder="50">
                 <input type="hidden" name="volume_unit" value="{{ volume_unit }}" data-unit-input>
                 <div class="adm-unit-switch" role="group" aria-label="Единица измерения">
                     <button type="button" data-unit="мл" class="{% if volume_unit == 'мл' %}is-active{% endif %}">мл</button>
                     <button type="button" data-unit="г" class="{% if volume_unit == 'г' %}is-active{% endif %}">г</button>
+                </div>
+            </div>
+            <div class="adm-hint">Используется, только если нет вариантов.</div>
+        </div>
+
+        {# ============ ВАРИАНТЫ ОБЪЁМА ============ #}
+        <div class="adm-col-full">
+            <label class="adm-label">Варианты объёма</label>
+            <div class="adm-variants" data-variants>
+                <div class="adm-variant-rows" data-variant-rows>
+                    {% if product and product.variants %}
+                        {% for v in product.variants %}
+                        <div class="adm-variant-row">
+                            <input type="number" name="variant_volume_amount" step="0.1" min="0"
+                                   value="{{ v.volume_amount }}" class="adm-input" placeholder="10">
+                            <select name="variant_volume_unit" class="adm-select">
+                                <option value="мл" {% if v.volume_unit == 'мл' %}selected{% endif %}>мл</option>
+                                <option value="г" {% if v.volume_unit == 'г' %}selected{% endif %}>г</option>
+                            </select>
+                            <input type="number" name="variant_price" min="0"
+                                   value="{{ v.price }}" class="adm-input" placeholder="500">
+                            <button type="button" class="adm-variant-remove" data-remove-variant
+                                    aria-label="Удалить вариант">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <button type="button" class="adm-btn adm-btn-secondary" data-add-variant>
+                    <i class="fas fa-plus"></i> Добавить вариант
+                </button>
+                <div class="adm-hint">
+                    Если вариантов нет — используется цена и объём сверху.
+                    Если есть — в каталоге покажется минимальная цена,
+                    а в карточке товара появится выбор объёма.
                 </div>
             </div>
         </div>

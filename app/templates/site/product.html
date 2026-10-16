@@ -156,7 +156,37 @@
         </div>
         {% endif %}
 
-        {# --- Цена --- #}
+        {# --- Цена + объём --- #}
+        {% if product.variants %}
+        <div class="mb-5 pb-5 border-b border-pink-100">
+
+            <div class="flex items-end gap-3 mb-4">
+                <span class="text-3xl md:text-4xl font-semibold text-gray-900">
+                    <span data-variant-price>{{ product.variants[0].price }}</span> ₽
+                </span>
+                <span class="text-sm text-pink-500 mb-1.5 flex items-center gap-1">
+                    <i class="fas fa-flask text-xs"></i>
+                    <span data-variant-volume>{{ product.variants[0].volume_label }}</span>
+                </span>
+            </div>
+
+            <label class="block text-[10px] uppercase tracking-[0.2em] text-pink-500 font-semibold mb-2">
+                Объём
+            </label>
+            <select data-variant-select
+                    class="w-full border border-pink-200 rounded-full px-4 py-2.5 text-sm
+                           text-gray-900 bg-white focus:outline-none focus:ring-2
+                           focus:ring-pink-400 focus:border-pink-400 cursor-pointer">
+                {% for v in product.variants %}
+                <option value="{{ v.id }}"
+                        data-price="{{ v.price }}"
+                        data-volume="{{ v.volume_label }}">
+                    {{ v.volume_label }} — {{ v.price }} ₽
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% else %}
         <div class="flex items-end gap-3 mb-5 pb-5 border-b border-pink-100">
             <span class="text-3xl md:text-4xl font-semibold text-gray-900">{{ product.price|int }} ₽</span>
             {% if product.volume %}
@@ -166,6 +196,7 @@
             </span>
             {% endif %}
         </div>
+        {% endif %}
 
         {# ================= СЕКЦИИ ================= #}
         <div class="space-y-1">

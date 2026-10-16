@@ -9,18 +9,6 @@
   - /robots.txt и /sitemap.xml.
 
 Вся бизнес-логика — в app/routers/*, app/utils/helpers.py, app/data/migrations.py.
-
-Про страницы ошибок:
-    Все коды отдают один универсальный шаблон на секцию —
-    templates/site/error.html и templates/admin/error.html.
-    Текст выбирается функцией _pick_error_preset: сначала
-    смотрит на URL (например, /product/* — «Товар не найден»),
-    потом — на общий пресет из _ERROR_PAGES.
-
-Про логирование:
-    Консоль + файл с ротацией (instance/logs/avelea.log).
-    Uvicorn-логгеры перенастроены, чтобы писать через наш формат.
-    httpx приглушён до WARNING — иначе Telegram-токен светится в URL.
 """
 import logging
 from contextlib import asynccontextmanager
@@ -55,6 +43,7 @@ from app.core.middleware import (
     AdminAuthGuardMiddleware,
     BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
+    StaticCacheMiddleware,
 )
 from app.core.rendering import admin_templates, site_templates
 from app.data import cache
@@ -77,11 +66,9 @@ _formatter = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-# Консоль.
 _console = logging.StreamHandler()
 _console.setFormatter(_formatter)
 
-# Файл — с ротацией: 5 МБ, 5 архивов. Старше — удаляются.
 _file = RotatingFileHandler(
     _LOG_DIR / "avelea.log",
     maxBytes=5 * 1024 * 1024,
@@ -92,17 +79,11 @@ _file.setFormatter(_formatter)
 
 logging.basicConfig(level=logging.INFO, handlers=[_console, _file])
 
-# --- Унификация логов uvicorn ---
-# Uvicorn при старте создаёт собственные обработчики со своим форматом
-# и не даёт записям идти через root. Очищаем их и включаем propagate —
-# теперь uvicorn пишет через наш handler, в нашем формате, в тот же файл.
 for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "uvicorn.asgi"):
     _uv = logging.getLogger(_name)
     _uv.handlers.clear()
     _uv.propagate = True
 
-# httpx на INFO печатает URL каждого запроса — включая наш Telegram-токен
-# в path. Заглушаем, чтобы токен не светился в логах.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
@@ -112,15 +93,10 @@ log = logging.getLogger("avelea")
 # ============== LIFESPAN ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- startup ---
     if UVICORN_WORKERS > 1:
         log.warning(
             "⚠️  UVICORN_WORKERS=%d. In-memory кэш и rate-limiter работают "
-            "только в одном процессе. При нескольких воркерах: "
-            "(1) воркеры держат разные копии кэша — invalidate() не "
-            "синхронизирует их, сайт может показывать старое; "
-            "(2) rate-limit логина обходится (5 попыток на воркер). "
-            "Для продакшена — либо один воркер, либо Redis.",
+            "только в одном процессе. Для продакшена — один воркер или Redis.",
             UVICORN_WORKERS,
         )
 
@@ -133,28 +109,17 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    # Прогреваем кэш — чтобы первый публичный запрос уже был быстрым.
     cache.reload_all()
     log.info("Кэш прогрет. Приложение готово")
 
     yield
-    # --- shutdown ---
     log.info("Остановка")
 
 
 # ============== APP ==============
 app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 
-# Порядок middleware в Starlette: тот, кого добавили последним —
-# оказывается самым внешним и выполняется первым на запрос.
-#
-# Итоговый порядок выполнения: SecurityHeaders → BodySize → Session →
-# AdminGuard → GZip → ExceptionMiddleware → роутер.
-#
-# AdminGuard специально ПОСЛЕ Session — иначе request.session
-# внутри guard упадёт с AssertionError (session ещё не создан).
 app.add_middleware(GZipMiddleware, minimum_size=800)
-
 app.add_middleware(AdminAuthGuardMiddleware)
 
 app.add_middleware(
@@ -165,17 +130,13 @@ app.add_middleware(
     max_age=SESSION_MAX_AGE,
 )
 
-# BodySizeLimit — защита от слишком больших тел запроса.
-# Лимит = 4 слота × лимит на файл + запас 1 МБ на multipart-обёртку.
-# Иначе 4 видео по 10 МБ не влезли бы в общий лимит 31 МБ.
-# Периодические файлы всё равно проверяются в save_media:
-# картинка > MAX_UPLOAD, видео > MAX_VIDEO_UPLOAD — отклонится.
 _BODY_LIMIT = 4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
 app.add_middleware(
     BodySizeLimitMiddleware,
     max_bytes=_BODY_LIMIT,
 )
 
+app.add_middleware(StaticCacheMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.mount(
@@ -188,20 +149,12 @@ app.mount(
 # ============== HEALTHCHECK ==============
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
-    """Простейший liveness-чек для балансировщика / k8s."""
     return {"ok": True}
 
 
 # ============== SEO: robots.txt и sitemap.xml ==============
 @app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
 async def robots_txt(request: Request):
-    """Подсказки для поисковых роботов.
-
-    Не перечисляем /admin/ явно: robots.txt публичен, и такая строка
-    была бы подсказкой «здесь есть админка». От индексации /admin/*
-    защищает AdminAuthGuardMiddleware (отдаёт 404) плюс заголовок
-    X-Robots-Tag: noindex, который ставится там же.
-    """
     base = str(request.base_url).rstrip("/")
     return PlainTextResponse(
         "User-agent: *\n"
@@ -212,10 +165,6 @@ async def robots_txt(request: Request):
 
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap_xml(request: Request):
-    """Карта сайта со всеми публичными страницами и товарами.
-
-    Читаем из кэша — то есть без запросов в БД.
-    """
     base = str(request.base_url).rstrip("/")
 
     urls = [
@@ -224,7 +173,7 @@ async def sitemap_xml(request: Request):
         f"{base}/about",
     ]
     for p in cache.get_products():
-        urls.append(f"{base}/product/{p.id}")
+        urls.append(f"{base}/product/{p.slug or p.id}")
 
     body = '<?xml version="1.0" encoding="UTF-8"?>\n'
     body += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -236,14 +185,6 @@ async def sitemap_xml(request: Request):
 
 
 # ============== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==============
-#
-# Все страницы ошибок живут в одном шаблоне на секцию:
-#   templates/admin/error.html
-#   templates/site/error.html
-#
-# Текст подбирается в _pick_error_preset: сначала контекст (URL),
-# потом — общий пресет по коду.
-#
 _ERROR_PAGES: dict[int, dict] = {
     400: {
         "title": "Некорректный запрос",
@@ -284,14 +225,6 @@ _ERROR_PAGES: dict[int, dict] = {
 
 
 def _pick_error_preset(status_code: int, path: str) -> dict:
-    """Подбирает текст для страницы ошибки.
-
-    Сначала проверяет контекст URL — если путь характерный
-    (например, /product/*), даём специфичное сообщение. Иначе —
-    общий пресет из _ERROR_PAGES. Совсем незнакомые коды получают
-    нейтральную заглушку.
-    """
-    # --- Контекстные уточнения ---
     if status_code == 404:
         if path.startswith("/product/"):
             return {
@@ -303,8 +236,7 @@ def _pick_error_preset(status_code: int, path: str) -> dict:
         if path.startswith("/catalog"):
             return {
                 "title":   "Страница каталога не найдена",
-                "message": "Такой страницы каталога нет. "
-                           "Откройте каталог заново.",
+                "message": "Такой страницы каталога нет. Откройте каталог заново.",
                 "icon":    "fa-bag-shopping",
             }
 
@@ -316,7 +248,6 @@ def _pick_error_preset(status_code: int, path: str) -> dict:
             "icon":    "fa-triangle-exclamation",
         }
 
-    # --- Общий пресет ---
     return _ERROR_PAGES.get(status_code, {
         "title":   f"Ошибка {status_code}",
         "message": "Что-то пошло не так.",
@@ -330,11 +261,6 @@ def _render_error(
     *,
     force_admin: bool = False,
 ) -> HTMLResponse:
-    """Единая точка рендера страниц ошибок.
-
-    Выбирает шаблон (admin/site) по URL, подставляет пресет
-    из _pick_error_preset.
-    """
     preset = _pick_error_preset(status_code, request.url.path)
 
     is_admin = force_admin or request.url.path.startswith("/admin")
@@ -360,7 +286,6 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # /product/{id} с нечисловым id → 404 (товар не найден), а не 400.
     if request.url.path.startswith("/product/"):
         return _render_error(request, 404)
     return _render_error(request, 400)
@@ -368,15 +293,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Ловит всё, что не поймали предыдущие handler'ы.
-
-    Логируем полный traceback, пользователю показываем нейтральную
-    страницу без внутренних деталей.
-
-    Если сам шаблон error.html почему-то упадёт (например, из-за
-    опечатки), отдаём голый текст — этого достаточно, чтобы
-    не оставить пользователя с пустым ответом.
-    """
     log.exception("Необработанная ошибка на %s", request.url.path)
     try:
         return _render_error(request, 500)

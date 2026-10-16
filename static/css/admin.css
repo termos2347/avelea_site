@@ -1589,3 +1589,59 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     font-size: 0.8rem;
     pointer-events: none;
 }
+
+/* ============================================================
+   Варианты товара в форме
+   ============================================================ */
+.adm-variants {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.adm-variant-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.adm-variant-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.adm-variant-row .adm-input,
+.adm-variant-row .adm-select {
+    min-width: 0;
+}
+
+.adm-variant-row .adm-select {
+    width: auto;
+    min-width: 4.5rem;
+}
+
+.adm-variant-remove {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--adm-radius-sm);
+    border: 1px solid var(--adm-border);
+    background: var(--adm-surface);
+    color: var(--adm-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.adm-variant-remove:hover {
+    background: var(--adm-danger-soft);
+    color: var(--adm-danger);
+    border-color: #fecaca;
+}
+.adm-variant-remove i {
+    font-size: 0.75rem;
+    pointer-events: none;
+}

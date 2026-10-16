@@ -1,5 +1,6 @@
+from slugify import slugify
 from sqlalchemy import (
-    Column, Integer, String, Boolean, Text, Table, ForeignKey, event,
+    Column, Integer, String, Boolean, Text, Table, ForeignKey, event, text as sa_text,
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -20,29 +21,24 @@ class Product(Base):
     name = Column(String(200), nullable=False)
     name_lower = Column(String(200), nullable=False, default="", index=True)
 
-    # Бренд — FK. Строка переехала в миграцию (см. _migrate_brand_to_fk).
+    # slug — человекочитаемая часть URL. Генерируется из name один раз
+    # и НЕ меняется при переименовании, чтобы не ломать внешние ссылки.
+    slug = Column(String(250), unique=True, index=True, nullable=True)
+
     brand_id = Column(
         Integer, ForeignKey("brands.id"), nullable=True, index=True,
     )
-    # lazy="joined": многие-к-одному — один LEFT JOIN вместо N+1
     brand_ref = relationship("Brand", backref="products", lazy="joined")
 
     price = Column(Integer, nullable=False)
     popular = Column(Boolean, default=False)
 
-    # Секции карточки товара. В БД — сырой текст.
-    description = Column(Text, nullable=True)   # «Описание»
-    composition = Column(Text, nullable=True)   # «Состав»
-    usage       = Column(Text, nullable=True)   # «Применение»
+    description = Column(Text, nullable=True)
+    composition = Column(Text, nullable=True)
+    usage       = Column(Text, nullable=True)
 
     volume = Column(String(50), nullable=True)
 
-    # Всегда четыре картинки. Сетка 2×2 на сайте.
-    # В БД — ИМЕНА файлов, не URL.
-    #   image   — верхняя левая
-    #   image_2 — верхняя правая
-    #   image_3 — нижняя левая
-    #   image_4 — нижняя правая
     image   = Column(String(200), nullable=True)
     image_2 = Column(String(200), nullable=True)
     image_3 = Column(String(200), nullable=True)
@@ -55,25 +51,34 @@ class Product(Base):
         lazy="selectin",
     )
 
-    # Удобное свойство для шаблонов и Jinja — читается как раньше,
-    # но под капотом это FK-связь.
+    variants = relationship(
+        "ProductVariant",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductVariant.sort_order, ProductVariant.price",
+        lazy="selectin",
+    )
+
+    @property
+    def url(self) -> str:
+        """URL товара для шаблонов. Использует slug, если он есть,
+        иначе — id (страховка на случай, если slug не сгенерился)."""
+        return f"/product/{self.slug or self.id}"
+
     @property
     def brand(self) -> str | None:
         return self.brand_ref.name if self.brand_ref else None
 
     @property
     def brand_description(self) -> str | None:
-        """Описание бренда — для раскрывающегося блока под названием."""
         if not self.brand_ref:
             return None
         desc = (self.brand_ref.description or "").strip()
         return desc or None
 
-    # ---- Публичные URL картинок (собираются под текущий бэкенд) ----
     def _url(self, filename: str | None) -> str | None:
         if not filename:
             return None
-        # Локальный импорт — чтобы не ловить циклический импорт.
         from app.services.storage import public_url
         return public_url(filename)
 
@@ -94,6 +99,31 @@ class Product(Base):
         return self._url(self.image_4)
 
 
+class ProductVariant(Base):
+    """Вариант товара — например, объём 10 мл по одной цене,
+    20 мл по другой. У одного товара может быть до 10 вариантов.
+    """
+    __tablename__ = "product_variants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    volume_amount = Column(String(20), nullable=False)
+    volume_unit = Column(String(10), nullable=False, default="мл")
+    price = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+
+    product = relationship("Product", back_populates="variants")
+
+    @property
+    def volume_label(self) -> str:
+        return f"{self.volume_amount} {self.volume_unit}".strip()
+
+
 class Brand(Base):
     __tablename__ = "brands"
 
@@ -110,18 +140,42 @@ class Category(Base):
 
 
 class Setting(Base):
-    """Key-value хранилище для служебных флагов.
-
-    Сейчас используется только для флага «сид выполнен», чтобы демо-товары
-    не возвращались после того, как админ их удалил.
-    """
     __tablename__ = "settings"
 
     key = Column(String(50), primary_key=True)
     value = Column(String(200), nullable=True)
 
 
+# ============================================================
+# События Product
+# ============================================================
+
 @event.listens_for(Product, "before_insert")
 @event.listens_for(Product, "before_update")
 def _sync_product_name_lower(mapper, connection, target):  # noqa: ARG001
     target.name_lower = (target.name or "").strip().lower()
+
+
+def _make_unique_slug(connection, name: str) -> str:
+    """Генерирует slug из имени, гарантированно уникальный.
+
+    Если `uvlazhnyayushchiy-krem` занят, добавляет -2, -3, ...
+    """
+    base = slugify(name, max_length=200, word_boundary=True) or "product"
+    candidate = base
+    n = 1
+    while True:
+        row = connection.execute(
+            sa_text("SELECT 1 FROM products WHERE slug = :s LIMIT 1"),
+            {"s": candidate},
+        ).first()
+        if row is None:
+            return candidate
+        n += 1
+        candidate = f"{base}-{n}"
+
+
+@event.listens_for(Product, "before_insert")
+def _generate_slug_on_insert(mapper, connection, target):  # noqa: ARG001
+    if not target.slug:
+        target.slug = _make_unique_slug(connection, target.name or "")

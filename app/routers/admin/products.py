@@ -16,17 +16,17 @@ from app.utils.helpers import (
     resolve_categories,
     validate_price,
 )
-from app.data.models import Product, Brand, Category
+from app.data.models import Product, ProductVariant, Brand, Category
 from app.services.storage import save_media, delete_media
 from app.core.rendering import admin_templates
 
 router = APIRouter(prefix="/admin/products", tags=["admin-products"])
 
 ADMIN_PRODUCTS_PER_PAGE = 50
+MAX_VARIANTS = 10
 
 
 def _product_form_context(db: Session, product: Product | None):
-    """Единый контекст для _product_form.html (и create, и edit)."""
     volume_amount, volume_unit = parse_volume(product.volume if product else None)
     return {
         "product": product,
@@ -44,11 +44,6 @@ def _apply_image_slot(
     new_file: UploadFile | None,
     remove_flag: str | None,
 ) -> str | None:
-    """Единая логика для одного слота галереи.
-
-    Приоритет: новый файл > удаление > оставить как было.
-    Старый файл удаляется, если перестал использоваться.
-    """
     new_filename, err = (None, None)
     if new_file is not None and getattr(new_file, "filename", ""):
         new_filename, err = save_media(new_file)
@@ -66,6 +61,44 @@ def _apply_image_slot(
         delete_media(old_filename)
 
     return final
+
+
+def _save_variants(product: Product, amounts: list[str], units: list[str], prices: list[str]):
+    """Пересобирает варианты товара из данных формы.
+
+    Логика простая: удаляем все старые, создаём новые.
+    Пустые строки игнорируются. Ограничение MAX_VARIANTS.
+    """
+    product.variants.clear()
+
+    rows = []
+    for i, (amount, unit, price_str) in enumerate(zip(amounts, units, prices)):
+        if i >= MAX_VARIANTS:
+            break
+        amount = (amount or "").strip()
+        unit = (unit or "мл").strip()
+        price_str = (price_str or "").strip()
+        if not amount or not price_str:
+            continue
+        try:
+            price = int(price_str)
+        except ValueError:
+            continue
+        if price < 0:
+            continue
+        rows.append(ProductVariant(
+            volume_amount=amount,
+            volume_unit=unit,
+            price=price,
+            sort_order=i,
+        ))
+
+    product.variants = rows
+
+    # Если варианты есть — price = минимальная цена из вариантов.
+    if rows:
+        product.price = min(v.price for v in rows)
+        product.volume = None
 
 
 # ============================================================
@@ -156,8 +189,8 @@ async def admin_product_create(
     categories: list[str] = Form([]),
     brand_id: str = Form(None),
     price: int = Form(...),
-    volume_amount: str = Form(...),
-    volume_unit: str = Form(...),
+    volume_amount: str = Form(""),
+    volume_unit: str = Form("мл"),
     description: str = Form(""),
     composition: str = Form(""),
     usage: str = Form(""),
@@ -166,15 +199,16 @@ async def admin_product_create(
     image_2: UploadFile = File(None),
     image_3: UploadFile = File(None),
     image_4: UploadFile = File(None),
+    variant_volume_amount: list[str] = Form([]),
+    variant_volume_unit:   list[str] = Form([]),
+    variant_price:         list[str] = Form([]),
 ):
     if (err := validate_price(price)) is not None:
         request.session["flash_error"] = err
         return RedirectResponse(url="/admin/products", status_code=303)
 
     if not categories and db.query(Category).count() > 0:
-        request.session["flash_error"] = (
-            "Выберите хотя бы одну категорию — товар не создан."
-        )
+        request.session["flash_error"] = "Выберите хотя бы одну категорию — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
     if (not brand_id or not brand_id.strip()) and db.query(Brand).count() > 0:
@@ -204,16 +238,14 @@ async def admin_product_create(
         composition=composition.strip() or None,
         usage=usage.strip() or None,
         popular=bool(popular),
-        image=f1,
-        image_2=f2,
-        image_3=f3,
-        image_4=f4,
+        image=f1, image_2=f2, image_3=f3, image_4=f4,
     )
     product.categories = resolve_categories(db, categories)
 
+    _save_variants(product, variant_volume_amount, variant_volume_unit, variant_price)
+
     db.add(product)
     db.commit()
-
     cache.invalidate()
 
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -253,8 +285,8 @@ async def admin_product_update(
     categories: list[str] = Form([]),
     brand_id: str = Form(None),
     price: int = Form(...),
-    volume_amount: str = Form(...),
-    volume_unit: str = Form(...),
+    volume_amount: str = Form(""),
+    volume_unit: str = Form("мл"),
     description: str = Form(""),
     composition: str = Form(""),
     usage: str = Form(""),
@@ -267,6 +299,9 @@ async def admin_product_update(
     remove_image_2: str = Form(None),
     remove_image_3: str = Form(None),
     remove_image_4: str = Form(None),
+    variant_volume_amount: list[str] = Form([]),
+    variant_volume_unit:   list[str] = Form([]),
+    variant_price:         list[str] = Form([]),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
@@ -277,15 +312,11 @@ async def admin_product_update(
         return RedirectResponse(url="/admin/products", status_code=303)
 
     if not categories and db.query(Category).count() > 0:
-        request.session["flash_error"] = (
-            "Выберите хотя бы одну категорию — изменения не сохранены."
-        )
+        request.session["flash_error"] = "Выберите хотя бы одну категорию — изменения не сохранены."
         return RedirectResponse(url="/admin/products", status_code=303)
 
     if (not brand_id or not brand_id.strip()) and db.query(Brand).count() > 0:
-        request.session["flash_error"] = (
-            "Выберите бренд — изменения не сохранены."
-        )
+        request.session["flash_error"] = "Выберите бренд — изменения не сохранены."
         return RedirectResponse(url="/admin/products", status_code=303)
 
     product.name = name.strip()
@@ -302,18 +333,12 @@ async def admin_product_update(
 
     product.categories = resolve_categories(db, categories)
 
-    product.image = _apply_image_slot(
-        request, product.image, image_1, remove_image,
-    )
-    product.image_2 = _apply_image_slot(
-        request, product.image_2, image_2, remove_image_2,
-    )
-    product.image_3 = _apply_image_slot(
-        request, product.image_3, image_3, remove_image_3,
-    )
-    product.image_4 = _apply_image_slot(
-        request, product.image_4, image_4, remove_image_4,
-    )
+    product.image = _apply_image_slot(request, product.image, image_1, remove_image)
+    product.image_2 = _apply_image_slot(request, product.image_2, image_2, remove_image_2)
+    product.image_3 = _apply_image_slot(request, product.image_3, image_3, remove_image_3)
+    product.image_4 = _apply_image_slot(request, product.image_4, image_4, remove_image_4)
+
+    _save_variants(product, variant_volume_amount, variant_volume_unit, variant_price)
 
     db.commit()
     cache.invalidate()
@@ -334,10 +359,7 @@ async def admin_product_delete(
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if product:
-        files = [
-            product.image, product.image_2,
-            product.image_3, product.image_4,
-        ]
+        files = [product.image, product.image_2, product.image_3, product.image_4]
         db.delete(product)
         db.commit()
         for f in files:

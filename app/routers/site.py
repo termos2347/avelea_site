@@ -1,6 +1,6 @@
 """Публичные страницы: главная, каталог, карточка товара, о нас."""
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.data import cache
 from app.utils.helpers import (
@@ -13,7 +13,6 @@ from app.core.rendering import site_templates
 
 router = APIRouter(tags=["site"])
 
-# Сколько товаров показывать на одной странице каталога.
 PER_PAGE = 12
 
 
@@ -52,7 +51,6 @@ async def catalog(request: Request):
     all_categories = cache.get_categories()
     all_brands_used = cache.get_brand_names()
 
-    # ---------- Фильтрация ----------
     filtered = []
     for p in all_products:
         if q and q not in p.name_lower:
@@ -83,7 +81,6 @@ async def catalog(request: Request):
 
         filtered.append(p)
 
-    # ---------- Сортировка ----------
     if sort == "price_asc":
         filtered.sort(key=lambda p: p.price)
     elif sort == "price_desc":
@@ -95,7 +92,6 @@ async def catalog(request: Request):
     else:
         filtered.sort(key=lambda p: p.id)
 
-    # ---------- Пагинация ----------
     total_count = len(filtered)
     total_pages = max(1, (total_count + PER_PAGE - 1) // PER_PAGE)
     if page > total_pages:
@@ -107,7 +103,6 @@ async def catalog(request: Request):
 
     category_names = [c.name for c in all_categories]
 
-    # ---------- Чипы активных фильтров ----------
     active_filters = []
     if q:
         active_filters.append({
@@ -159,15 +154,28 @@ async def catalog(request: Request):
     })
 
 
-@router.get("/product/{product_id}", response_class=HTMLResponse)
-async def product_page(request: Request, product_id: int):
+@router.get("/product/{slug_or_id}")
+async def product_page(request: Request, slug_or_id: str):
     all_products = cache.get_products()
 
-    product = next((p for p in all_products if p.id == product_id), None)
+    # 1. Ищем по slug — основной путь.
+    product = next((p for p in all_products if p.slug == slug_or_id), None)
+
+    # 2. Если не нашли и это число — ищем по id и редиректим на slug.
+    #    Это страховка для старых ссылок и для товаров, у которых
+    #    slug ещё не сгенерился.
+    if product is None and slug_or_id.isdigit():
+        product = next(
+            (p for p in all_products if p.id == int(slug_or_id)),
+            None,
+        )
+        if product and product.slug:
+            return RedirectResponse(
+                url=f"/product/{product.slug}",
+                status_code=301,
+            )
+
     if not product:
-        # Отдаём через глобальный обработчик — он сам выберет шаблон,
-        # пресет и иконку. Раньше тут был прямой рендер "error.html",
-        # но после унификации страниц ошибок его больше нет.
         raise HTTPException(status_code=404)
 
     cat_names = {c.name for c in product.categories}
