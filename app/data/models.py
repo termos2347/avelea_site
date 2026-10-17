@@ -33,6 +33,10 @@ class Product(Base):
     price = Column(Integer, nullable=False)
     popular = Column(Boolean, default=False)
 
+    # is_active — показывать ли товар на публичном сайте.
+    # Скрытые товары видны только в админке.
+    is_active = Column(Boolean, default=True, nullable=False, server_default="true")
+
     description = Column(Text, nullable=True)
     composition = Column(Text, nullable=True)
     usage       = Column(Text, nullable=True)

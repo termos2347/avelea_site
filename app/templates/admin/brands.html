@@ -71,6 +71,7 @@
                     </button>
                     <form method="post" action="/admin/brands/{{ b.id }}/delete"
                           data-confirm="Удалить бренд «{{ b.name }}»?{% if counts.get(b.id) %} У {{ counts.get(b.id) }} товар(ов) очистится бренд.{% endif %}"
+                          hx-boost="false"
                           style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit" class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
@@ -107,7 +108,7 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <form method="post" action="/admin/brands/new" autocomplete="off">
+        <form method="post" action="/admin/brands/new" autocomplete="off" hx-boost="false">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
             <div class="adm-dialog-body">
                 <label class="adm-label">Название *</label>

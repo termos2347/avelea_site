@@ -580,3 +580,166 @@ html.rv .skeleton-overlay {
     .acc-body { transition: none; }
     .acc-head i, .acc-head-brand i { transition: none; }
 }
+
+/* ============================================================
+   Кастомный dropdown выбора варианта товара (объём / цена)
+   ============================================================ */
+.variant-picker {
+    position: relative;
+}
+
+.variant-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+
+    padding: 0.75rem 1.25rem;
+    border: 1px solid #fbcfe8;
+    border-radius: 9999px;
+    background: #ffffff;
+
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #111827;
+
+    cursor: pointer;
+    transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        background 160ms ease;
+}
+
+.variant-trigger:hover {
+    border-color: #f9a8d4;
+    background: #fdf2f8;
+}
+
+.variant-trigger[aria-expanded="true"] {
+    border-color: #ec4899;
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.12);
+}
+
+.variant-trigger-text {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.variant-trigger-text > span:first-child {
+    color: #111827;
+    font-weight: 500;
+}
+
+.variant-trigger-text > span:last-child {
+    color: #ec4899;
+    font-weight: 600;
+}
+
+.variant-trigger-dot {
+    color: #fbcfe8;
+}
+
+.variant-trigger-arrow {
+    font-size: 0.65rem;
+    color: #f472b6;
+    transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.variant-trigger[aria-expanded="true"] .variant-trigger-arrow {
+    transform: rotate(180deg);
+}
+
+/* --- Меню опций --- */
+.variant-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+
+    background: #ffffff;
+    border: 1px solid #fbcfe8;
+    border-radius: 1rem;
+    box-shadow: 0 12px 32px rgba(236, 72, 153, 0.14);
+
+    padding: 0.4rem;
+
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    transform-origin: top center;
+    pointer-events: none;
+
+    transition:
+        opacity 180ms ease,
+        transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.variant-picker.is-open .variant-menu {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.variant-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+
+    padding: 0.65rem 0.9rem;
+    border: 0;
+    border-radius: 0.65rem;
+    background: transparent;
+
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    color: #111827;
+
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+.variant-option:hover {
+    background: #fdf2f8;
+}
+
+.variant-option-volume {
+    flex: 1;
+    min-width: 0;
+}
+
+.variant-option-price {
+    color: #ec4899;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.variant-option-check {
+    font-size: 0.7rem;
+    color: #ec4899;
+    opacity: 0;
+    flex-shrink: 0;
+    width: 1rem;
+    text-align: center;
+}
+
+.variant-option.is-active .variant-option-check {
+    opacity: 1;
+}
+
+.variant-option.is-active .variant-option-volume {
+    font-weight: 600;
+    color: #be185d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .variant-trigger,
+    .variant-trigger-arrow,
+    .variant-menu { transition: none; }
+}

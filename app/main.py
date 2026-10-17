@@ -173,6 +173,8 @@ async def sitemap_xml(request: Request):
         f"{base}/about",
     ]
     for p in cache.get_products():
+        if not p.is_active:
+            continue
         urls.append(f"{base}/product/{p.slug or p.id}")
 
     body = '<?xml version="1.0" encoding="UTF-8"?>\n'

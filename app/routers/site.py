@@ -18,7 +18,7 @@ PER_PAGE = 12
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    products = cache.get_products()
+    products = [p for p in cache.get_products() if p.is_active]
     categories = cache.get_categories()
 
     popular = [p for p in products if p.popular][:6]
@@ -47,7 +47,8 @@ async def catalog(request: Request):
     if page < 1:
         page = 1
 
-    all_products = cache.get_products()
+    # Только активные товары видны клиентам.
+    all_products = [p for p in cache.get_products() if p.is_active]
     all_categories = cache.get_categories()
     all_brands_used = cache.get_brand_names()
 
@@ -158,12 +159,10 @@ async def catalog(request: Request):
 async def product_page(request: Request, slug_or_id: str):
     all_products = cache.get_products()
 
-    # 1. Ищем по slug — основной путь.
+    # 1. Ищем по slug.
     product = next((p for p in all_products if p.slug == slug_or_id), None)
 
     # 2. Если не нашли и это число — ищем по id и редиректим на slug.
-    #    Это страховка для старых ссылок и для товаров, у которых
-    #    slug ещё не сгенерился.
     if product is None and slug_or_id.isdigit():
         product = next(
             (p for p in all_products if p.id == int(slug_or_id)),
@@ -175,13 +174,16 @@ async def product_page(request: Request, slug_or_id: str):
                 status_code=301,
             )
 
-    if not product:
+    # 3. Скрытые товары на публичной стороне → 404.
+    if not product or not product.is_active:
         raise HTTPException(status_code=404)
 
     cat_names = {c.name for c in product.categories}
     similar = [
         p for p in all_products
-        if p.id != product.id and ({c.name for c in p.categories} & cat_names)
+        if p.id != product.id
+        and p.is_active
+        and ({c.name for c in p.categories} & cat_names)
     ][:6]
 
     return site_templates.TemplateResponse(request, "product.html", {

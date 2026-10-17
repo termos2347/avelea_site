@@ -71,7 +71,7 @@ MAX_VIDEO_UPLOAD_MB    = _int("MAX_VIDEO_UPLOAD_MB", 30)
 MAX_VIDEO_UPLOAD_BYTES = MAX_VIDEO_UPLOAD_MB * 1024 * 1024
 
 # Максимальная длина большей стороны картинки.
-MAX_IMAGE_DIMENSION = _int("MAX_IMAGE_DIMENSION", 2000)
+MAX_IMAGE_DIMENSION = _int("MAX_IMAGE_DIMENSION", 1200)
 
 # --- Хранилище картинок ---
 STORAGE_BACKEND = _str("STORAGE_BACKEND", "local")   # "local" или "s3"

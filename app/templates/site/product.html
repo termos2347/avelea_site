@@ -173,18 +173,36 @@
             <label class="block text-[10px] uppercase tracking-[0.2em] text-pink-500 font-semibold mb-2">
                 Объём
             </label>
-            <select data-variant-select
-                    class="w-full border border-pink-200 rounded-full px-4 py-2.5 text-sm
-                           text-gray-900 bg-white focus:outline-none focus:ring-2
-                           focus:ring-pink-400 focus:border-pink-400 cursor-pointer">
-                {% for v in product.variants %}
-                <option value="{{ v.id }}"
-                        data-price="{{ v.price }}"
-                        data-volume="{{ v.volume_label }}">
-                    {{ v.volume_label }} — {{ v.price }} ₽
-                </option>
-                {% endfor %}
-            </select>
+
+            <div class="variant-picker" data-variant-picker>
+                <button type="button"
+                        class="variant-trigger"
+                        data-variant-trigger
+                        aria-haspopup="listbox"
+                        aria-expanded="false">
+                    <span class="variant-trigger-text">
+                        <span data-variant-trigger-volume>{{ product.variants[0].volume_label }}</span>
+                        <span class="variant-trigger-dot">·</span>
+                        <span data-variant-trigger-price>{{ product.variants[0].price }} ₽</span>
+                    </span>
+                    <i class="fas fa-chevron-down variant-trigger-arrow"></i>
+                </button>
+
+                <div class="variant-menu" data-variant-menu role="listbox">
+                    {% for v in product.variants %}
+                    <button type="button"
+                            class="variant-option {% if loop.first %}is-active{% endif %}"
+                            data-variant-option
+                            data-price="{{ v.price }}"
+                            data-volume="{{ v.volume_label }}"
+                            role="option">
+                        <span class="variant-option-volume">{{ v.volume_label }}</span>
+                        <span class="variant-option-price">{{ v.price }} ₽</span>
+                        <i class="fas fa-check variant-option-check"></i>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
         {% else %}
         <div class="flex items-end gap-3 mb-5 pb-5 border-b border-pink-100">

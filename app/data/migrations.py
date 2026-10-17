@@ -15,12 +15,7 @@ log = logging.getLogger(__name__)
 
 
 def _migrate_add_slug_column(db: Session) -> None:
-    """Добавляет products.slug для человекочитаемых URL.
-
-    ВАЖНО: вызывается ПЕРВОЙ — до любых ORM-запросов к Product.
-    Иначе SQLAlchemy сгенерит SELECT с products.slug, которого
-    в старой схеме ещё нет, и упадёт с UndefinedColumn.
-    """
+    """Добавляет products.slug для человекочитаемых URL."""
     insp = inspect(engine)
     try:
         product_cols = {c["name"] for c in insp.get_columns("products")}
@@ -87,6 +82,25 @@ def _migrate_add_brand_description(db: Session) -> None:
             "ALTER TABLE brands ADD COLUMN description TEXT"
         ))
     log.info("Добавлено поле brands.description")
+
+
+def _migrate_add_is_active(db: Session) -> None:
+    """Добавляет products.is_active для скрытия товара без удаления."""
+    insp = inspect(engine)
+    try:
+        product_cols = {c["name"] for c in insp.get_columns("products")}
+    except NoSuchTableError:
+        return
+
+    if "is_active" in product_cols:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE products "
+            "ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true"
+        ))
+    log.info("Добавлена колонка products.is_active")
 
 
 def _migrate_drop_layout_column(db: Session) -> None:
@@ -274,6 +288,7 @@ def run_startup_migrations(db: Session) -> None:
     _migrate_add_slug_column(db)
     _migrate_add_gallery_and_sections(db)
     _migrate_add_brand_description(db)
+    _migrate_add_is_active(db)
     _migrate_drop_layout_column(db)
 
     _migrate_brand_to_fk(db)

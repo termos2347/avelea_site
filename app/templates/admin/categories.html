@@ -65,6 +65,7 @@
                     </button>
                     <form method="post" action="/admin/categories/{{ c.id }}/delete"
                           data-confirm="Удалить категорию «{{ c.name }}»?{% if counts.get(c.id) %} Она исчезнет у {{ counts.get(c.id) }} товар(ов).{% endif %}"
+                          hx-boost="false"
                           style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                         <button type="submit" class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
@@ -100,7 +101,7 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <form method="post" action="/admin/categories/new" autocomplete="off">
+        <form method="post" action="/admin/categories/new" autocomplete="off" hx-boost="false">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
             <div class="adm-dialog-body">
                 <label class="adm-label">Название</label>

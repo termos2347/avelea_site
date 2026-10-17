@@ -1,7 +1,8 @@
 <form method="post"
       enctype="multipart/form-data"
       action="{% if product %}/admin/products/{{ product.id }}/edit{% else %}/admin/products/new{% endif %}"
-      autocomplete="off">
+      autocomplete="off"
+      hx-boost="false">
 
     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
@@ -244,7 +245,7 @@
 
             </div>
             <div class="adm-hint">
-                jpg, png, webp, gif, mp4, webm, mov. Можно смешивать картинки и видео. Слоты необязательные.
+                jpg, png, webp, gif, mp4, webm, mov. Можно смешивать картинки и видео.
             </div>
         </div>
 
@@ -254,6 +255,18 @@
                        {% if product and product.popular %}checked{% endif %}>
                 Показывать на главной как популярное
             </label>
+        </div>
+
+        <div class="adm-col-full">
+            <label class="adm-checkbox-row">
+                <input type="checkbox" name="is_active" value="1"
+                       {% if not product or product.is_active %}checked{% endif %}>
+                Показывать на сайте
+            </label>
+            <div class="adm-hint">
+                Сними галочку, чтобы скрыть товар от клиентов.
+                В админке он останется.
+            </div>
         </div>
     </div>
 

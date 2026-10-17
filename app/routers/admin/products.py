@@ -95,7 +95,6 @@ def _save_variants(product: Product, amounts: list[str], units: list[str], price
 
     product.variants = rows
 
-    # Если варианты есть — price = минимальная цена из вариантов.
     if rows:
         product.price = min(v.price for v in rows)
         product.volume = None
@@ -195,6 +194,7 @@ async def admin_product_create(
     composition: str = Form(""),
     usage: str = Form(""),
     popular: str = Form(None),
+    is_active: str = Form(None),
     image_1: UploadFile = File(None),
     image_2: UploadFile = File(None),
     image_3: UploadFile = File(None),
@@ -238,6 +238,7 @@ async def admin_product_create(
         composition=composition.strip() or None,
         usage=usage.strip() or None,
         popular=bool(popular),
+        is_active=bool(is_active),
         image=f1, image_2=f2, image_3=f3, image_4=f4,
     )
     product.categories = resolve_categories(db, categories)
@@ -291,6 +292,7 @@ async def admin_product_update(
     composition: str = Form(""),
     usage: str = Form(""),
     popular: str = Form(None),
+    is_active: str = Form(None),
     image_1: UploadFile = File(None),
     image_2: UploadFile = File(None),
     image_3: UploadFile = File(None),
@@ -330,6 +332,7 @@ async def admin_product_update(
     product.composition = composition.strip() or None
     product.usage = usage.strip() or None
     product.popular = bool(popular)
+    product.is_active = bool(is_active)
 
     product.categories = resolve_categories(db, categories)
 
