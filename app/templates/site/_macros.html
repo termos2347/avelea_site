@@ -6,28 +6,35 @@
 
 {% macro product_card(product) %}
 <a href="{{ product.url }}"
-   class="group border border-pink-100 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-pink-200/60 hover:border-pink-300 transition-all bg-white p-3 flex flex-col">
-    <div class="aspect-square w-full rounded-xl mb-3 overflow-hidden flex items-center justify-center
-                bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
+   class="group block">
+    <div class="aspect-square w-full rounded-xl overflow-hidden bg-[var(--bg-soft)]
+                flex items-center justify-center text-2xl font-bold text-[var(--ink-muted)] mb-3">
         {% if product.image_url %}
             {% if is_video(product.image) %}
                 <video src="{{ product.image_url }}"
                        autoplay muted loop playsinline
-                       class="w-full h-full object-cover group-hover:scale-105 transition duration-500"></video>
+                       class="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"></video>
             {% else %}
                 <img src="{{ product.image_url }}" alt="{{ product.name }}"
                      loading="lazy" decoding="async"
-                     class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                     class="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500">
             {% endif %}
         {% else %}
         {{ product.name[:2].upper() }}
         {% endif %}
     </div>
-    <h3 class="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{{ product.name }}</h3>
-    <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">
-        {{ product.categories|map(attribute='name')|join(', ') }}
+
+    <h3 class="text-sm font-medium text-[var(--ink)] leading-snug line-clamp-2">
+        {{ product.name }}
+    </h3>
+
+    {% if product.brand %}
+    <p class="text-[11px] uppercase tracking-[0.08em] text-[var(--ink-muted)] mt-1 line-clamp-1">
+        {{ product.brand }}
     </p>
-    <p class="text-base font-semibold mt-auto pt-1 text-pink-600">
+    {% endif %}
+
+    <p class="text-sm font-semibold text-[var(--ink)] mt-1.5 tabular">
         {% if product.variants %}от {% endif %}{{ product.price|int }} ₽
     </p>
 </a>

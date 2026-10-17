@@ -10,13 +10,10 @@
 
     <title>{% block title %}Avelea — Натуральная косметика{% endblock %}</title>
 
-    {# Favicon: розовая точка с буквой «a». Inline-SVG — без файла на диске.
-       %23 — это URL-encoded #, иначе # воспримется как fragment data-URI. #}
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23ec4899'/><text x='50' y='68' font-size='60' font-family='-apple-system,sans-serif' font-weight='600' fill='white' text-anchor='middle'>a</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23111827'/><text x='50' y='68' font-size='60' font-family='-apple-system,sans-serif' font-weight='600' fill='white' text-anchor='middle'>a</text></svg>">
 
     <meta name="description" content="{% block description %}Натуральная косметика для бережного ухода. Без парабенов, без сульфатов, без жестокости.{% endblock %}">
 
-    {# Open Graph — превью при шаринге в мессенджерах и соцсетях. #}
     <meta property="og:title" content="{% block og_title %}Avelea — Натуральная косметика{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Натуральная косметика для бережного ухода. Без парабенов, без сульфатов.{% endblock %}">
     <meta property="og:type" content="website">
@@ -26,16 +23,40 @@
 
     <meta name="twitter:card" content="summary_large_image">
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
     <link rel="stylesheet" href="/static/css/site.css">
+
+    <style>
+        :root {
+            --ink:         #0a0a0a;
+            --ink-soft:    #404040;
+            --ink-muted:   #737373;
+            --line:        #e8e8e8;
+            --line-soft:   #f2f2f2;
+            --bg:          #ffffff;
+            --bg-soft:     #fafafa;
+            --accent:      #ec4899;
+            --accent-soft: #fdf2f8;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            letter-spacing: -0.011em;
+        }
+    </style>
 </head>
 <body class="bg-gray-50 overflow-x-hidden flex flex-col min-h-screen" hx-boost="true">
 
     <!-- Прогресс-полоска сверху -->
     <div id="htmx-progress"
-         class="fixed top-0 left-0 h-0.5 bg-black w-0 transition-all duration-200 z-50 opacity-0"></div>
+         class="fixed top-0 left-0 h-0.5 bg-[var(--ink)] w-0 transition-all duration-200 z-50 opacity-0"></div>
 
     {# ============================================================
        СКЕЛЕТОН-ОКНО
@@ -119,19 +140,18 @@
         </div>
     </div>
 
-    {# Контейнер: на широких экранах занимает ~80% ширины окна,
-       но не больше 1536px (screen-2xl). На мобилке — вся ширина. #}
+    {# Контейнер #}
     <div class="mx-auto px-4 md:px-6 max-w-screen-2xl w-full flex flex-col flex-1">
-        <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-4 border-b border-pink-200">
+        <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-5 border-b border-[var(--line)]">
 
             {# Слева — подпись студии #}
             <div class="text-[9px] md:text-[10px] uppercase tracking-[0.15em] font-medium whitespace-nowrap">
-                <span class="hidden sm:inline text-pink-400">prod by </span>
-                <span class="text-pink-500 font-semibold">96 team</span>
+                <span class="hidden sm:inline text-[var(--ink-muted)]">prod by </span>
+                <span class="text-[var(--ink)] font-semibold">96 team</span>
             </div>
 
             {# Центр — название бренда #}
-            <a href="/" class="text-xl md:text-2xl font-semibold tracking-tight hover:opacity-80 text-center whitespace-nowrap text-gray-900">
+            <a href="/" class="text-xl md:text-2xl font-semibold tracking-[-0.03em] hover:opacity-70 text-center whitespace-nowrap text-[var(--ink)]">
                 avelea
             </a>
 
@@ -141,62 +161,62 @@
                 <a href="/"
                    title="Главная"
                    aria-label="Главная"
-                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-pink-700 hover:bg-pink-100 hover:text-pink-600 transition">
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] transition">
                     <i class="fas fa-house text-base md:text-lg"></i>
                 </a>
 
                 <a href="/catalog"
                    title="Каталог"
                    aria-label="Каталог"
-                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-pink-700 hover:bg-pink-100 hover:text-pink-600 transition">
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] transition">
                     <i class="fas fa-bag-shopping text-base md:text-lg"></i>
                 </a>
 
                 <a href="/about"
                    title="О нас"
                    aria-label="О нас"
-                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-pink-700 hover:bg-pink-100 hover:text-pink-600 transition">
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] transition">
                     <i class="fas fa-circle-info text-base md:text-lg"></i>
                 </a>
 
             </div>
         </nav>
 
-        <main class="{% block main_class %}pt-4 pb-6{% endblock %} flex-1">
+        <main class="{% block main_class %}pt-6 pb-6{% endblock %} flex-1">
             {% block content %}{% endblock %}
         </main>
     </div>
 
     {# ================= ФУТЕР ================= #}
-    <footer class="mt-12 bg-gradient-to-br from-pink-50 via-pink-100 to-fuchsia-50 border-t border-pink-200">
-        <div class="mx-auto px-4 md:px-6 max-w-screen-2xl py-10 md:py-14">
+    <footer class="mt-16 bg-[var(--bg-soft)] border-t border-[var(--line)]">
+        <div class="mx-auto px-4 md:px-6 max-w-screen-2xl py-12 md:py-16">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 mb-10">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10 md:gap-12 mb-10">
 
                 {# Бренд #}
                 <div class="sm:col-span-2 lg:col-span-1">
-                    <a href="/" class="text-2xl font-semibold tracking-tight text-gray-900 hover:opacity-80">
+                    <a href="/" class="text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)] hover:opacity-70">
                         avelea
                     </a>
-                    <p class="text-sm text-gray-600 mt-3 leading-relaxed max-w-xs">
+                    <p class="text-sm text-[var(--ink-muted)] mt-3 leading-relaxed max-w-xs">
                         Натуральная косметика для бережного ухода. Без парабенов, без сульфатов, без жестокости.
                     </p>
 
                     <div class="flex gap-2 mt-5">
                         <a href="#" aria-label="Telegram"
-                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
                             <i class="fab fa-telegram-plane"></i>
                         </a>
                         <a href="#" aria-label="Instagram"
-                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
                             <i class="fab fa-instagram"></i>
                         </a>
                         <a href="#" aria-label="VK"
-                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
                             <i class="fab fa-vk"></i>
                         </a>
                         <a href="#" aria-label="WhatsApp"
-                        class="w-9 h-9 rounded-full bg-white border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-600 hover:text-white transition">
+                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
                             <i class="fab fa-whatsapp"></i>
                         </a>
                     </div>
@@ -204,44 +224,44 @@
 
                 {# Навигация #}
                 <div>
-                    <h4 class="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wider">Навигация</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="/" class="text-gray-600 hover:text-pink-600 transition">Главная</a></li>
-                        <li><a href="/catalog" class="text-gray-600 hover:text-pink-600 transition">Каталог</a></li>
-                        <li><a href="/about" class="text-gray-600 hover:text-pink-600 transition">О нас</a></li>
+                    <h4 class="font-semibold text-[var(--ink)] mb-4 text-xs uppercase tracking-[0.12em]">Навигация</h4>
+                    <ul class="space-y-2.5 text-sm">
+                        <li><a href="/" class="text-[var(--ink-muted)] hover:text-[var(--ink)] transition">Главная</a></li>
+                        <li><a href="/catalog" class="text-[var(--ink-muted)] hover:text-[var(--ink)] transition">Каталог</a></li>
+                        <li><a href="/about" class="text-[var(--ink-muted)] hover:text-[var(--ink)] transition">О нас</a></li>
                     </ul>
                 </div>
 
                 {# Контакты #}
                 <div>
-                    <h4 class="font-semibold text-gray-900 mb-4 text-sm uppercase tracking-wider">Контакты</h4>
+                    <h4 class="font-semibold text-[var(--ink)] mb-4 text-xs uppercase tracking-[0.12em]">Контакты</h4>
                     <ul class="space-y-3 text-sm">
-                        <li class="flex items-start gap-2 text-gray-600">
-                            <i class="fas fa-phone text-pink-500 mt-0.5"></i>
-                            <a href="tel:+70000009696" class="hover:text-pink-600 transition">+7 (000) 000-96-96</a>
+                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
+                            <i class="fas fa-phone text-[10px] mt-1.5 opacity-60"></i>
+                            <a href="tel:+70000009696" class="hover:text-[var(--ink)] transition">+7 (000) 000-96-96</a>
                         </li>
-                        <li class="flex items-start gap-2 text-gray-600">
-                            <i class="fas fa-envelope text-pink-500 mt-0.5"></i>
-                            <a href="mailto:info@avelea.ru" class="hover:text-pink-600 transition">info@avelea.ru</a>
+                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
+                            <i class="fas fa-envelope text-[10px] mt-1.5 opacity-60"></i>
+                            <a href="mailto:info@avelea.ru" class="hover:text-[var(--ink)] transition">info@avelea.ru</a>
                         </li>
-                        <li class="flex items-start gap-2 text-gray-600">
-                            <i class="fas fa-location-dot text-pink-500 mt-0.5"></i>
+                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
+                            <i class="fas fa-location-dot text-[10px] mt-1.5 opacity-60"></i>
                             <span>Москва, ул. Примерная, 1</span>
                         </li>
-                        <li class="flex items-start gap-2 text-gray-600">
-                            <i class="fas fa-clock text-pink-500 mt-0.5"></i>
+                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
+                            <i class="fas fa-clock text-[10px] mt-1.5 opacity-60"></i>
                             <span>Пн–Пт, 10:00–19:00</span>
                         </li>
                     </ul>
                 </div>
             </div>
 
-            <div class="pt-6 border-t border-pink-200 flex flex-col md:flex-row items-center justify-between gap-3">
-                <p class="text-xs text-gray-500">
+            <div class="pt-6 border-t border-[var(--line)] flex flex-col md:flex-row items-center justify-between gap-3">
+                <p class="text-xs text-[var(--ink-muted)]">
                     © 2026 avelea. Все права защищены.
                 </p>
-                <p class="text-xs text-gray-400">
-                    prod by <span class="text-pink-500 font-medium">96 team</span>
+                <p class="text-xs text-[var(--ink-muted)]">
+                    prod by <span class="text-[var(--ink)] font-medium">96 team</span>
                 </p>
             </div>
 
