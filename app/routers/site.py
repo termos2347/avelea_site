@@ -1,4 +1,13 @@
-"""Публичные страницы: главная, каталог, карточка товара, бренды, о нас."""
+"""Публичные страницы: главная, каталог, карточка товара, бренды, о нас.
+
+Все роутеры, кроме about, объявлены `def` (не `async def`). Причина:
+внутри синхронный доступ к кэшу (cache.get_products()), который при
+холодном кэше дёргает SQLAlchemy → блокирует event loop. FastAPI
+автоматически выносит `def`-роутеры в threadpool, event loop остаётся
+свободным для других запросов.
+
+about — чистый шаблон без I/O, оставлен `async def`.
+"""
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -17,7 +26,7 @@ PER_PAGE = 12
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
     products = [p for p in cache.get_products() if p.is_active]
     categories = cache.get_categories()
 
@@ -30,7 +39,7 @@ async def index(request: Request):
 
 
 @router.get("/catalog", response_class=HTMLResponse)
-async def catalog(request: Request):
+def catalog(request: Request):
     params = request.query_params
 
     q = (params.get("q") or "").strip().lower()
@@ -56,16 +65,10 @@ async def catalog(request: Request):
     for p in all_products:
         if q:
             # Ищем по p.name.lower(), а не по p.name_lower.
-            #
-            # Почему: name_lower — денормализованная колонка для
-            # индексируемого SQL-поиска (используется в админке).
-            # На сайте у нас 10-100 товаров, уже загруженных в память
-            # через кэш — разница в производительности нулевая.
-            #
-            # А p.name — источник правды. Python .lower() корректно
-            # работает с кириллицей (в отличие от SQLite LOWER()).
-            # Это надёжнее, чем доверять name_lower, который может
-            # оказаться пустым/несинхронизированным.
+            # name_lower — денормализованная колонка для индексируемого
+            # SQL-поиска (админка). На сайте товаров немного, кэш уже
+            # в памяти — p.name надёжнее (источник правды, .lower()
+            # в Python корректно работает с кириллицей).
             if q not in (p.name or "").lower():
                 continue
 
@@ -168,7 +171,7 @@ async def catalog(request: Request):
 
 
 @router.get("/product/{slug_or_id}")
-async def product_page(request: Request, slug_or_id: str):
+def product_page(request: Request, slug_or_id: str):
     all_products = cache.get_products()
 
     # 1. Ищем по slug.
@@ -206,7 +209,7 @@ async def product_page(request: Request, slug_or_id: str):
 
 
 @router.get("/brands", response_class=HTMLResponse)
-async def brands_page(request: Request):
+def brands_page(request: Request):
     """Страница всех брендов с алфавитным указателем (только A-Z, 0-9)."""
     brands = cache.get_brands()
 
@@ -223,9 +226,9 @@ async def brands_page(request: Request):
     for brand in brands:
         if not brand.name:
             continue
-        
+
         first_char = brand.name.strip()[0].upper()
-        
+
         # Определяем ключ группы
         if first_char.isdigit():
             key = "0 - 9"
@@ -264,5 +267,5 @@ async def brands_page(request: Request):
 
 
 @router.get("/about", response_class=HTMLResponse)
-async def about(request: Request):
+def about(request: Request):
     return site_templates.TemplateResponse(request, "about.html")

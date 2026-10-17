@@ -1,16 +1,4 @@
-"""Точка сборки приложения.
-
-Здесь только:
-  - создание FastAPI();
-  - подключение middleware;
-  - lifespan (миграции Alembic → seed → прогрев кэша);
-  - глобальные exception handlers;
-  - регистрация роутеров;
-  - /robots.txt и /sitemap.xml.
-
-Вся бизнес-логика — в app/routers/*, app/utils/helpers.py.
-Схема БД — в app/data/models.py + миграции в migrations/versions/.
-"""
+"""Точка сборки приложения."""
 import logging
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
@@ -55,14 +43,12 @@ from app.data.seed import seed_database
 from app.routers import site
 from app.routers.admin import auth, catalog, products
 
-# Папки, без которых приложение не стартует.
 (BASE_DIR / "instance").mkdir(exist_ok=True)
 (BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
 
 _ALEMBIC_INI = BASE_DIR / "alembic.ini"
 
 
-# ============== ЛОГИРОВАНИЕ ==============
 _LOG_DIR = BASE_DIR / "instance" / "logs"
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -95,7 +81,6 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("avelea")
 
 
-# ============== LIFESPAN ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if UVICORN_WORKERS > 1:
@@ -107,8 +92,6 @@ async def lifespan(app: FastAPI):
 
     log.info("Запуск: миграции Alembic + seed")
 
-    # Alembic сам создаст таблицу alembic_version и всю схему на пустой БД,
-    # либо догонит до head на уже существующей. На актуальной схеме — no-op.
     alembic_cfg = Config(str(_ALEMBIC_INI))
     command.upgrade(alembic_cfg, "head")
 
@@ -125,7 +108,6 @@ async def lifespan(app: FastAPI):
     log.info("Остановка")
 
 
-# ============== APP ==============
 app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 
 app.add_middleware(GZipMiddleware, minimum_size=800)
@@ -139,16 +121,8 @@ app.add_middleware(
     max_age=SESSION_MAX_AGE,
 )
 
-# BodySizeLimit — защита от слишком больших тел запроса.
-# Лимит = 4 слота × лимит на файл + запас 1 МБ на multipart-обёртку.
-# Иначе 4 видео по 10 МБ не влезли бы в общий лимит 31 МБ.
-# Периодические файлы всё равно проверяются в save_media:
-# картинка > MAX_UPLOAD, видео > MAX_VIDEO_UPLOAD — отклонится.
 _BODY_LIMIT = 4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
-app.add_middleware(
-    BodySizeLimitMiddleware,
-    max_bytes=_BODY_LIMIT,
-)
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=_BODY_LIMIT)
 
 app.add_middleware(StaticCacheMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -160,13 +134,11 @@ app.mount(
 )
 
 
-# ============== HEALTHCHECK ==============
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
     return {"ok": True}
 
 
-# ============== SEO: robots.txt и sitemap.xml ==============
 @app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
 async def robots_txt(request: Request):
     base = str(request.base_url).rstrip("/")
@@ -178,7 +150,9 @@ async def robots_txt(request: Request):
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
-async def sitemap_xml(request: Request):
+def sitemap_xml(request: Request):
+    # def, не async def: cache.get_products() синхронный, при холодном
+    # кэше дёргает SQLAlchemy. В threadpool — event loop свободен.
     base = str(request.base_url).rstrip("/")
 
     urls = [
@@ -201,7 +175,6 @@ async def sitemap_xml(request: Request):
     return Response(content=body, media_type="application/xml")
 
 
-# ============== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==============
 _ERROR_PAGES: dict[int, dict] = {
     400: {
         "title": "Некорректный запрос",
@@ -298,14 +271,6 @@ def _render_error(
 
 @app.exception_handler(NotAuthenticated)
 async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
-    """Сессия не содержит admin-флага — отправляем на форму логина.
-
-    На практике до этого обработчика дело не доходит: middleware
-    AdminAuthGuardMiddleware отдаёт обычную 404 раньше, чем запрос
-    попадёт в роутер. Обработчик — страховка на случай, если
-    появится роут с require_admin вне /admin/* (например, API
-    под другим префиксом).
-    """
     return RedirectResponse(url="/admin/login", status_code=303)
 
 
@@ -334,7 +299,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         )
 
 
-# ============== РОУТЕРЫ ==============
 app.include_router(site.router)
 app.include_router(auth.router)
 app.include_router(catalog.router)

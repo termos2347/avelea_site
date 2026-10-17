@@ -1,4 +1,9 @@
-"""Админка: бренды и категории."""
+"""Админка: бренды и категории.
+
+Все роутеры объявлены `def` (не `async def`), потому что внутри
+синхронные db.query(...) к SQLAlchemy. FastAPI выносит их в
+threadpool — event loop не блокируется.
+"""
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
@@ -18,7 +23,7 @@ router = APIRouter(prefix="/admin", tags=["admin-catalog"])
 # ============================================================
 
 @router.get("/categories", response_class=HTMLResponse)
-async def admin_categories(
+def admin_categories(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
@@ -44,7 +49,7 @@ async def admin_categories(
 
 
 @router.post("/categories/new")
-async def admin_category_create(
+def admin_category_create(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
@@ -63,7 +68,7 @@ async def admin_category_create(
 
 
 @router.post("/categories/{category_id}/edit")
-async def admin_category_edit(
+def admin_category_edit(
     request: Request,
     category_id: int,
     db: Session = Depends(get_db),
@@ -91,7 +96,7 @@ async def admin_category_edit(
 
 
 @router.post("/categories/{category_id}/delete")
-async def admin_category_delete(
+def admin_category_delete(
     request: Request,
     category_id: int,
     db: Session = Depends(get_db),
@@ -110,7 +115,7 @@ async def admin_category_delete(
 # ============================================================
 
 @router.get("/brands", response_class=HTMLResponse)
-async def admin_brands(
+def admin_brands(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
@@ -134,7 +139,7 @@ async def admin_brands(
 
 
 @router.post("/brands/new")
-async def admin_brand_create(
+def admin_brand_create(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
@@ -156,7 +161,7 @@ async def admin_brand_create(
 
 
 @router.post("/brands/{brand_id}/edit")
-async def admin_brand_edit(
+def admin_brand_edit(
     request: Request,
     brand_id: int,
     db: Session = Depends(get_db),
@@ -197,7 +202,7 @@ async def admin_brand_edit(
 
 
 @router.post("/brands/{brand_id}/delete")
-async def admin_brand_delete(
+def admin_brand_delete(
     request: Request,
     brand_id: int,
     db: Session = Depends(get_db),

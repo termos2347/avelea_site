@@ -266,7 +266,7 @@ async def admin_login_2fa_form(request: Request):
 # ============================================================
 
 @router.post("/login/2fa", dependencies=[Depends(check_csrf)])
-async def admin_login_2fa_submit(request: Request, code: str = Form(...)):
+def admin_login_2fa_submit(request: Request, code: str = Form(...)):
     if request.session.get("admin"):
         return RedirectResponse(url="/admin/products", status_code=303)
 

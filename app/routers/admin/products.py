@@ -1,4 +1,10 @@
-"""Админка: CRUD товаров."""
+"""Админка: CRUD товаров.
+
+Все роутеры объявлены `def` (не `async def`), потому что внутри
+синхронные db.query(...) и save_media(...) (последний использует
+UploadFile.file.read() — синхронный). FastAPI выносит `def`-роутеры
+в threadpool, event loop не блокируется.
+"""
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
 )
@@ -123,7 +129,7 @@ def _save_variants(product: Product, amounts: list[str], units: list[str], price
 # ============================================================
 
 @router.get("", response_class=HTMLResponse)
-async def admin_products(
+def admin_products(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
@@ -193,12 +199,12 @@ async def admin_products(
 # ============================================================
 
 @router.get("/new", response_class=HTMLResponse)
-async def admin_product_new(request: Request, _: bool = Depends(require_admin)):
+def admin_product_new(request: Request, _: bool = Depends(require_admin)):
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
 @router.post("/new")
-async def admin_product_create(
+def admin_product_create(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
@@ -275,7 +281,7 @@ async def admin_product_create(
 # ============================================================
 
 @router.get("/{product_id}/edit", response_class=HTMLResponse)
-async def admin_product_edit(
+def admin_product_edit(
     request: Request,
     product_id: int,
     db: Session = Depends(get_db),
@@ -295,7 +301,7 @@ async def admin_product_edit(
 
 
 @router.post("/{product_id}/edit")
-async def admin_product_update(
+def admin_product_update(
     request: Request,
     product_id: int,
     db: Session = Depends(get_db),
@@ -372,7 +378,7 @@ async def admin_product_update(
 # ============================================================
 
 @router.post("/{product_id}/delete")
-async def admin_product_delete(
+def admin_product_delete(
     request: Request,
     product_id: int,
     db: Session = Depends(get_db),
