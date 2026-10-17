@@ -21,4 +21,5 @@ venv/
 migrations
 
 # Пользовательские загрузки (в проде — отдельное хранилище)
-static/uploads/
+static/uploads
+static/site

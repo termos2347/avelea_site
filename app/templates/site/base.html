@@ -229,29 +229,31 @@
                         <div class="h-px bg-[#3f1d24]/20 flex-1"></div>
                     </div>
                     <ul class="flex flex-col gap-4 text-[15px] text-[#3f1d24]">
+                        {% set phone = site_text('footer_phone', '+7 962 573 0996') %}
                         <li class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
                                 <i class="fas fa-phone-alt text-xs"></i>
                             </div>
-                            <a href="tel:+79625730996" class="hover:opacity-70 transition">+7 962 573 0996</a>
+                            <a href="tel:{{ phone }}" class="hover:opacity-70 transition">{{ phone }}</a>
                         </li>
+                        {% set email = site_text('footer_email', 'avelea_store@gmail.com') %}
                         <li class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
                                 <i class="fas fa-envelope text-xs"></i>
                             </div>
-                            <a href="mailto:avelea_store@gmail.com" class="hover:opacity-70 transition">avelea_store@gmail.com</a>
+                            <a href="mailto:{{ email }}" class="hover:opacity-70 transition">{{ email }}</a>
                         </li>
                         <li class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
                                 <i class="fas fa-map-marker-alt text-xs"></i>
                             </div>
-                            <span>г. Нижнекамск</span>
+                            <span>{{ site_text('footer_address', 'г. Нижнекамск') }}</span>
                         </li>
                         <li class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
                                 <i class="fas fa-clock text-xs"></i>
                             </div>
-                            <span>Пн–Пт, 10:00–19:00</span>
+                            <span>{{ site_text('footer_hours', 'Пн–Пт, 10:00–19:00') }}</span>
                         </li>
                     </ul>
                 </div>
@@ -260,7 +262,7 @@
             <div class="w-full max-w-2xl pt-8 border-t border-[#3f1d24]/10 flex flex-col items-center text-center">
                 <div class="brand-logo text-[#3f1d24] mb-1">AVELEA</div>
                 <div class="text-[9px] tracking-[0.4em] text-[#3f1d24]/60 uppercase mb-4">Beauty Store</div>
-                <p class="text-xs text-[#3f1d24]/50">© 2026 avelea. Все права защищены.</p>
+                <p class="text-xs text-[#3f1d24]/50">{{ site_text('footer_copyright', '© 2026 avelea. Все права защищены.') }}</p>
                 <p class="text-xs text-[#3f1d24]/50 mt-2">prod by <span class="text-[#3f1d24]/80 font-medium">96 team</span></p>
             </div>
 
@@ -295,22 +297,57 @@
         </div>
     </div>
 
-    <div id="search-overlay" class="fixed inset-0 z-[100] bg-white/95 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
-        <div class="max-w-3xl mx-auto px-6 pt-24 pb-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-semibold text-[var(--ink)]">Поиск</h2>
-                <button type="button" id="close-search" class="w-10 h-10 -mr-2 flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] rounded-full transition">
-                    <i class="fas fa-times text-xl"></i>
+    {# ============================================================
+       ПОИСКОВЫЙ ОВЕРЛЕЙ
+       ============================================================ #}
+    <div id="search-overlay" class="search-overlay" aria-hidden="true">
+        <div class="search-overlay__backdrop" data-search-close></div>
+
+        <div class="search-overlay__inner" role="dialog" aria-modal="true" aria-labelledby="search-title">
+            <div class="search-overlay__header">
+                <span class="search-overlay__eyebrow">Поиск по каталогу</span>
+                <button type="button" id="close-search"
+                        class="search-overlay__close"
+                        aria-label="Закрыть поиск">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
-            <form action="/catalog" method="get" class="relative">
-                <input type="search" name="q" placeholder="Что вы ищете?"
-                       class="w-full text-2xl md:text-4xl bg-transparent border-b-2 border-[var(--ink)] pb-4 outline-none placeholder:text-[var(--ink-muted)]"
-                       autocomplete="off">
-                <button type="submit" class="absolute right-0 bottom-4 text-xl md:text-2xl text-[var(--ink)] hover:opacity-60">
+
+            <h2 class="search-overlay__title" id="search-title">Что вы ищете?</h2>
+
+            <form action="/catalog" method="get" class="search-overlay__form">
+                <input type="search"
+                       name="q"
+                       placeholder="Крем, сыворотка, парфюм…"
+                       autocomplete="off"
+                       class="search-overlay__input">
+                <button type="submit"
+                        class="search-overlay__submit"
+                        aria-label="Искать">
                     <i class="fas fa-arrow-right"></i>
                 </button>
             </form>
+
+            {% set cats = nav_categories() %}
+            {% if cats %}
+            <div class="search-overlay__section">
+                <div class="search-overlay__section-label">Популярные категории</div>
+                <div class="search-overlay__chips">
+                    {% for c in cats %}
+                    <a href="/catalog?category={{ c }}" class="search-overlay__chip">
+                        <i class="fas fa-tag"></i>
+                        <span>{{ c }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="search-overlay__footer">
+                <span class="search-overlay__hint">
+                    Нажмите <kbd>Esc</kbd> чтобы закрыть
+                </span>
+            </div>
         </div>
     </div>
 

@@ -274,13 +274,20 @@
         function openSearch() {
             const search = document.getElementById('search-overlay');
             if (!search) return;
-            search.classList.remove('opacity-0', 'pointer-events-none');
+            search.classList.add('is-open');
+            search.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
             const input = search.querySelector('input[name="q"]');
-            if (input) setTimeout(() => input.focus(), 100);
+            // Задержка совпадает с началом анимации (inner появляется
+            // через 320ms, но фокус лучше ставить пораньше — 180ms).
+            if (input) setTimeout(() => input.focus(), 180);
         }
         function closeSearch() {
             const search = document.getElementById('search-overlay');
-            if (search) search.classList.add('opacity-0', 'pointer-events-none');
+            if (!search) return;
+            search.classList.remove('is-open');
+            search.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
         }
 
         document.addEventListener('click', function (e) {
@@ -288,16 +295,20 @@
             if (e.target.closest('#open-menu')) { openMenu(); return; }
             if (e.target.closest('#close-menu')) { closeMenu(); return; }
             if (e.target.closest('#menu-backdrop')) { closeMenu(); return; }
-            
+
             // Поиск
             if (e.target.closest('#open-search')) { openSearch(); return; }
             if (e.target.closest('#close-search')) { closeSearch(); return; }
-            
-            // Закрытие поиска по клику на фон
-            if (e.target.id === 'search-overlay') { closeSearch(); return; }
+            if (e.target.closest('[data-search-close]')) { closeSearch(); return; }
 
             // Закрыть меню при клике по ссылке внутри него
             if (e.target.closest('#mobile-menu a')) { closeMenu(); }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            const search = document.getElementById('search-overlay');
+            if (search && search.classList.contains('is-open')) closeSearch();
         });
     })();
 

@@ -1,0 +1,148 @@
+"""Админка: контент статичных страниц (картинки + тексты)."""
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.deps import require_admin
+from app.core.rendering import admin_templates
+from app.data import cache
+from app.data.settings import (
+    SITE_CONTENT_GROUPS,
+    SITE_CONTENT_KEYS,
+    get_setting,
+    set_setting,
+)
+from app.services.storage import (
+    delete_site_image,
+    save_site_image,
+    site_image_info,
+    site_image_public_url,
+)
+
+router = APIRouter(prefix="/admin/site", tags=["admin-site"])
+
+
+def _is_ajax(request: Request) -> bool:
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+@router.get("", response_class=HTMLResponse)
+def admin_site_content(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+):
+    groups = []
+    for group in SITE_CONTENT_GROUPS:
+        items = []
+        for item in group["items"]:
+            key = item["key"]
+            value = get_setting(db, key)
+
+            if item["type"] == "image":
+                info = site_image_info(value)
+                items.append({
+                    **item,
+                    "url": site_image_public_url(value),
+                    "info": info,
+                })
+            else:
+                items.append({**item, "value": value or ""})
+        groups.append({"title": group["title"], "items": items})
+
+    flash_error = request.session.pop("flash_error", None)
+
+    return admin_templates.TemplateResponse(request, "site_content.html", {
+        "groups": groups,
+        "flash_error": flash_error,
+    })
+
+
+@router.post("/{key}/image")
+def admin_site_image_upload(
+    request: Request,
+    key: str,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    image: UploadFile = File(None),
+    remove: str = Form(None),
+):
+    ajax = _is_ajax(request)
+
+    item = SITE_CONTENT_KEYS.get(key)
+    if not item or item["type"] != "image":
+        if ajax:
+            return JSONResponse({"ok": False, "error": "Неизвестный ключ."}, status_code=400)
+        return RedirectResponse(url="/admin/site", status_code=303)
+
+    old_filename = get_setting(db, key)
+
+    if remove:
+        set_setting(db, key, None)
+        db.commit()
+        delete_site_image(old_filename)
+        cache.invalidate()
+        if ajax:
+            return JSONResponse({"ok": True, "removed": True, "url": None})
+        return RedirectResponse(url="/admin/site", status_code=303)
+
+    if image is None or not image.filename:
+        if ajax:
+            return JSONResponse({"ok": False, "error": "Файл не выбран."}, status_code=400)
+        return RedirectResponse(url="/admin/site", status_code=303)
+
+    # key уходит в save_site_image как prefix имени файла
+    new_filename, err = save_site_image(image, key)
+    if err:
+        if ajax:
+            return JSONResponse({"ok": False, "error": err}, status_code=400)
+        request.session["flash_error"] = err
+        return RedirectResponse(url="/admin/site", status_code=303)
+
+    if new_filename:
+        set_setting(db, key, new_filename)
+        db.commit()
+        if old_filename and old_filename != new_filename:
+            delete_site_image(old_filename)
+        cache.invalidate()
+
+    info = site_image_info(new_filename)
+
+    if ajax:
+        return JSONResponse({
+            "ok": True,
+            "removed": False,
+            "url": site_image_public_url(new_filename),
+            "info": info,
+        })
+    return RedirectResponse(url="/admin/site", status_code=303)
+
+
+@router.post("/{key}/text")
+def admin_site_text_save(
+    request: Request,
+    key: str,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    value: str = Form(""),
+):
+    ajax = _is_ajax(request)
+
+    item = SITE_CONTENT_KEYS.get(key)
+    if not item or item["type"] != "text":
+        if ajax:
+            return JSONResponse({"ok": False, "error": "Неизвестный ключ."}, status_code=400)
+        return RedirectResponse(url="/admin/site", status_code=303)
+
+    cleaned = value.strip() or None
+    if cleaned and len(cleaned) > 200:
+        cleaned = cleaned[:200]
+
+    set_setting(db, key, cleaned)
+    db.commit()
+    cache.invalidate()
+
+    if ajax:
+        return JSONResponse({"ok": True, "value": cleaned or ""})
+    return RedirectResponse(url="/admin/site", status_code=303)

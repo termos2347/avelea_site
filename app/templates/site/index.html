@@ -5,12 +5,9 @@
 
 {% block content %}
 
-{# ================= HERO: фото-фоны + текст поверх ================= #}
 <section class="relative w-screen ml-[calc(50%-50vw)] mb-10 md:mb-16">
-
     <div class="relative overflow-hidden" data-carousel>
 
-        {# Мини-прогресс-бар сверху слева #}
         <div class="absolute top-4 left-0 right-0 z-30 px-4 md:px-6 pointer-events-none">
             <div class="mx-auto max-w-screen-2xl">
                 <div class="w-20 md:w-28">
@@ -21,36 +18,37 @@
             </div>
         </div>
 
-        {# Слайды #}
         <div class="relative overflow-hidden">
             <div class="flex transition-transform duration-700 ease-out" data-track>
 
                 {# ---------- Слайд 1 ---------- #}
                 <div class="w-full flex-shrink-0 relative" data-slide>
                     <div class="absolute inset-0">
-                        <img src="https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=1920&q=80&auto=format&fit=crop"
-                            alt="Натуральная косметика Avelea"
-                            fetchpriority="high"
-                            class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
+                        {% set hero_img = site_image('home_hero_1_image', '') %}
+                        {% if hero_img %}
+                            <img src="{{ hero_img }}" alt="" fetchpriority="high"
+                                 class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
+                        {% else %}
+                            <div class="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700"></div>
+                        {% endif %}
                     </div>
 
                     <div class="relative px-4 md:px-6">
                         <div class="mx-auto max-w-screen-2xl py-20 md:py-32 pb-24 md:pb-36">
                             <div class="max-w-xl">
                                 <span class="inline-block text-[10px] md:text-[11px] font-semibold tracking-[0.2em] uppercase text-white/70 mb-3">
-                                    Новая коллекция
+                                    {{ site_text('home_hero_1_eyebrow', 'Новая коллекция') }}
                                 </span>
                                 <h1 class="text-3xl sm:text-4xl md:text-6xl font-semibold leading-[1.05] text-white tracking-[-0.03em]">
-                                    Натуральная косметика<br>
-                                    для вашей кожи
+                                    {{ site_text('home_hero_1_title', 'Натуральная косметика\nдля вашей кожи') }}
                                 </h1>
                                 <p class="text-white/80 mt-4 md:mt-5 max-w-md text-sm md:text-base font-light">
-                                    Подобранные средства из чистых ингредиентов. Без парабенов, без жестокости, с любовью.
+                                    {{ site_text('home_hero_1_subtitle', 'Подобранные средства из чистых ингредиентов. Без парабенов, без жестокости, с любовью.') }}
                                 </p>
                                 <a href="/catalog"
                                    class="inline-flex items-center gap-2 mt-6 md:mt-8 bg-white text-black hover:bg-white/90 px-6 py-3 rounded-full text-sm md:text-base font-medium transition">
-                                    Смотреть каталог
+                                    {{ site_text('home_hero_1_button', 'Смотреть каталог') }}
                                     <i class="fas fa-arrow-right text-xs"></i>
                                 </a>
                             </div>
@@ -61,29 +59,31 @@
                 {# ---------- Слайд 2 ---------- #}
                 <div class="w-full flex-shrink-0 relative" data-slide>
                     <div class="absolute inset-0">
-                        <img src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=1920&q=80&auto=format&fit=crop"
-                            alt="Специальное предложение"
-                            loading="lazy" decoding="async"
-                            class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
+                        {% set hero_img = site_image('home_hero_2_image', '') %}
+                        {% if hero_img %}
+                            <img src="{{ hero_img }}" alt="" loading="lazy" decoding="async"
+                                 class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
+                        {% else %}
+                            <div class="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700"></div>
+                        {% endif %}
                     </div>
 
                     <div class="relative px-4 md:px-6">
                         <div class="mx-auto max-w-screen-2xl py-20 md:py-32 pb-24 md:pb-36">
                             <div class="max-w-xl">
                                 <span class="inline-block text-[10px] md:text-[11px] font-semibold tracking-[0.2em] uppercase text-white/70 mb-3">
-                                    Специальное предложение
+                                    {{ site_text('home_hero_2_eyebrow', 'Специальное предложение') }}
                                 </span>
                                 <h1 class="text-3xl sm:text-4xl md:text-6xl font-semibold leading-[1.05] text-white tracking-[-0.03em]">
-                                    −20% на первый<br>
-                                    заказ
+                                    {{ site_text('home_hero_2_title', '−20% на первый\nзаказ') }}
                                 </h1>
                                 <p class="text-white/80 mt-4 md:mt-5 max-w-md text-sm md:text-base font-light">
-                                    Подберите уход и получите скидку на всё. Доставка по России — бесплатно от 3000 ₽.
+                                    {{ site_text('home_hero_2_subtitle', 'Подберите уход и получите скидку на всё. Доставка по России — бесплатно от 3000 ₽.') }}
                                 </p>
                                 <a href="/catalog"
                                    class="inline-flex items-center gap-2 mt-6 md:mt-8 bg-white text-black hover:bg-white/90 px-6 py-3 rounded-full text-sm md:text-base font-medium transition">
-                                    За покупками
+                                    {{ site_text('home_hero_2_button', 'За покупками') }}
                                     <i class="fas fa-arrow-right text-xs"></i>
                                 </a>
                             </div>
@@ -94,29 +94,31 @@
                 {# ---------- Слайд 3 ---------- #}
                 <div class="w-full flex-shrink-0 relative" data-slide>
                     <div class="absolute inset-0">
-                        <img src="https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=1920&q=80&auto=format&fit=crop"
-                            alt="Новинки сезона"
-                            loading="lazy" decoding="async"
-                            class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
+                        {% set hero_img = site_image('home_hero_3_image', '') %}
+                        {% if hero_img %}
+                            <img src="{{ hero_img }}" alt="" loading="lazy" decoding="async"
+                                 class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
+                        {% else %}
+                            <div class="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700"></div>
+                        {% endif %}
                     </div>
 
                     <div class="relative px-4 md:px-6">
                         <div class="mx-auto max-w-screen-2xl py-20 md:py-32 pb-24 md:pb-36">
                             <div class="max-w-xl">
                                 <span class="inline-block text-[10px] md:text-[11px] font-semibold tracking-[0.2em] uppercase text-white/70 mb-3">
-                                    Новинки сезона
+                                    {{ site_text('home_hero_3_eyebrow', 'Новинки сезона') }}
                                 </span>
                                 <h1 class="text-3xl sm:text-4xl md:text-6xl font-semibold leading-[1.05] text-white tracking-[-0.03em]">
-                                    Уход, который<br>
-                                    влюбляет
+                                    {{ site_text('home_hero_3_title', 'Уход, который\nвлюбляет') }}
                                 </h1>
                                 <p class="text-white/80 mt-4 md:mt-5 max-w-md text-sm md:text-base font-light">
-                                    Свежие формулы с витаминами и растительными маслами. Уже в каталоге.
+                                    {{ site_text('home_hero_3_subtitle', 'Свежие формулы с витаминами и растительными маслами. Уже в каталоге.') }}
                                 </p>
                                 <a href="/catalog?sort=popular"
                                    class="inline-flex items-center gap-2 mt-6 md:mt-8 bg-white text-black hover:bg-white/90 px-6 py-3 rounded-full text-sm md:text-base font-medium transition">
-                                    Узнать больше
+                                    {{ site_text('home_hero_3_button', 'Узнать больше') }}
                                     <i class="fas fa-arrow-right text-xs"></i>
                                 </a>
                             </div>
@@ -127,7 +129,6 @@
             </div>
         </div>
 
-        {# Полоски-индикаторы снизу #}
         <div class="absolute bottom-0 left-0 right-0 z-30 px-4 md:px-6 pb-4 md:pb-5 pointer-events-none">
             <div class="mx-auto max-w-screen-2xl">
                 <div class="flex gap-1.5 md:gap-2 pointer-events-auto" data-dots></div>
@@ -141,19 +142,26 @@
 {% if categories %}
 <section class="mb-10 md:mb-14">
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
-        {% set meta = {
-            'Лицо':    {'img': 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&q=80&auto=format&fit=crop'},
-            'Макияж':  {'img': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&q=80&auto=format&fit=crop'},
-            'Тело':    {'img': 'https://images.unsplash.com/photo-1571875257727-256c39da42af?w=600&q=80&auto=format&fit=crop'},
-            'Парфюм':  {'img': 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=600&q=80&auto=format&fit=crop'},
+        {% set cat_meta = {
+            'Лицо':   'home_category_face_image',
+            'Макияж': 'home_category_makeup_image',
+            'Тело':   'home_category_body_image',
+            'Парфюм': 'home_category_perfume_image',
         } %}
         {% for c in categories %}
-        {% set m = meta.get(c.name, {'img': 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600&q=80&auto=format&fit=crop'}) %}
+        {% set img_key = cat_meta.get(c.name, '') %}
+        {% set img_src = site_image(img_key, '') if img_key else '' %}
         <a href="/catalog?category={{ c.name }}"
            class="group relative rounded-2xl overflow-hidden h-40 md:h-56 block">
-            <img src="{{ m.img }}" alt="{{ c.name }}"
-                loading="lazy" decoding="async"
-                class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+            {% if img_src %}
+                <img src="{{ img_src }}" alt="{{ c.name }}"
+                     loading="lazy" decoding="async"
+                     class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+            {% else %}
+                <div class="absolute inset-0 bg-gradient-to-br from-pink-100 to-fuchsia-100 flex items-center justify-center">
+                    <i class="fas fa-tag text-pink-300 text-5xl opacity-50"></i>
+                </div>
+            {% endif %}
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent"></div>
             <div class="relative h-full flex flex-col justify-end p-5 text-white">
                 <h3 class="text-lg md:text-xl font-medium tracking-tight">{{ c.name }}</h3>
@@ -164,7 +172,7 @@
 </section>
 {% endif %}
 
-{# ================= ПОПУЛЯРНОЕ — горизонтальный рейл ================= #}
+{# ================= ПОПУЛЯРНОЕ ================= #}
 <section class="mb-6 md:mb-8">
     <div class="flex items-end justify-between mb-4 md:mb-6">
         <div>
@@ -182,13 +190,11 @@
                 data-rail-prev aria-label="Прокрутить влево">
             <i class="fas fa-chevron-left"></i>
         </button>
-
         <div class="product-rail">
             {% for product in popular %}
                 {{ product_card(product) }}
             {% endfor %}
         </div>
-
         <button type="button" class="product-rail-btn product-rail-btn-next"
                 data-rail-next aria-label="Прокрутить вправо">
             <i class="fas fa-chevron-right"></i>

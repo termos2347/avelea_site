@@ -6,9 +6,15 @@
 {# ================= БАННЕР КАТАЛОГА ================= #}
 <section class="relative mb-6 md:mb-8 rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
     <div class="absolute inset-0">
-        <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80&auto=format&fit=crop"
-             alt="Каталог Avelea" class="w-full h-full object-cover">
-        <div class="absolute inset-0 bg-gradient-to-r from-pink-100/95 via-pink-50/90 to-fuchsia-100/70"></div>
+        {% set catalog_banner = site_image('catalog_banner_image', '') %}
+        {% if catalog_banner %}
+            <img src="{{ catalog_banner }}"
+                 alt="Каталог Avelea"
+                 class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-r from-pink-100/95 via-pink-50/90 to-fuchsia-100/70"></div>
+        {% else %}
+            <div class="absolute inset-0 bg-gradient-to-br from-pink-50 via-pink-100 to-fuchsia-50"></div>
+        {% endif %}
     </div>
 
     <div class="relative px-5 py-8 md:px-12 md:py-12">
@@ -131,10 +137,14 @@
         {% else %}
         <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200 py-16 md:py-20 text-center">
             <div class="absolute inset-0">
-                <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1600&q=80&auto=format&fit=crop"
-                     alt="" loading="lazy" decoding="async"
-                     class="w-full h-full object-cover">
-                <div class="absolute inset-0 bg-gradient-to-b from-pink-50/95 to-pink-100/95"></div>
+                {% set catalog_banner = site_image('catalog_banner_image', '') %}
+                {% if catalog_banner %}
+                    <img src="{{ catalog_banner }}" alt="" loading="lazy" decoding="async"
+                         class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-b from-pink-50/95 to-pink-100/95"></div>
+                {% else %}
+                    <div class="absolute inset-0 bg-gradient-to-b from-pink-50/95 to-pink-100/95"></div>
+                {% endif %}
             </div>
             <div class="relative px-6">
                 <div class="w-16 h-16 mx-auto rounded-full bg-pink-100 flex items-center justify-center mb-4">
@@ -157,13 +167,12 @@
     </div>
 
     {# ============================================================
-       МОДАЛ ФИЛЬТРОВ — большое окно по центру экрана
+       МОДАЛ ФИЛЬТРОВ
        ============================================================ #}
     <div id="filters-backdrop" aria-hidden="true"></div>
 
     <aside id="filters-panel" role="dialog" aria-modal="true" aria-labelledby="filters-title">
 
-        {# Шапка #}
         <header class="filters-header">
             <h2 id="filters-title" class="text-lg md:text-xl font-semibold text-pink-900">
                 Фильтры
@@ -175,7 +184,6 @@
             </button>
         </header>
 
-        {# Тело #}
         <div class="filters-body">
             <div class="space-y-3">
 
@@ -257,7 +265,6 @@
             </div>
         </div>
 
-        {# Подвал #}
         <footer class="filters-footer">
             <button type="button" id="filters-cancel"
                     class="px-6 py-2.5 rounded-full border border-pink-200 text-pink-700 hover:bg-pink-50 text-sm font-medium transition">

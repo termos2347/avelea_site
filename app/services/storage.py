@@ -1,13 +1,5 @@
-"""Абстракция хранилища медиафайлов (картинки + видео).
-
-Все картинки автоматически конвертируются в WebP (кроме GIF —
-у них сохраняется анимация). Это даёт 30-70% экономии места
-при том же визуальном качестве. Видео сохраняется как есть.
-
-В БД лежит только имя файла ("abc123.webp" или "video.mp4").
-Публичный URL собирается здесь, под текущий бэкенд — поэтому
-переключение local↔S3 не требует правки БД.
-"""
+"""Абстракция хранилища медиафайлов (картинки + видео)."""
+import hashlib
 import io
 import logging
 import uuid
@@ -32,17 +24,10 @@ from app.core.config import (
 log = logging.getLogger(__name__)
 
 
-# Качество WebP при сохранении. 85 — визуально неотличимо от оригинала
-# для фото, но даёт 30-50% экономии. Можно поднять до 90, если захочешь
-# идеальное качество ценой размера файла.
 WEBP_QUALITY = 85
-# method=6 — максимальное сжатие (медленнее на 50-100 мс, но файл меньше).
 WEBP_METHOD = 6
 
 
-# ============================================================
-# Определение типа файла по magic bytes
-# ============================================================
 _MAGIC = (
     (b"\xff\xd8\xff",          ".jpg"),
     (b"\x89PNG\r\n\x1a\n",     ".png"),
@@ -51,12 +36,7 @@ _MAGIC = (
     (b"\x1a\x45\xdf\xa3",      ".webm"),
 )
 
-# Только те форматы, для которых есть magic-bytes в _MAGIC.
-# .ogv (Ogg Video) здесь НЕ упомянут: у него нет magic в _MAGIC,
-# поэтому _sniff_ext его не пропустит — и держать его в списке
-# «разрешённых» означает врать пользователю в сообщении об ошибке.
 _VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
-
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 
@@ -68,30 +48,20 @@ _RESAMPLE = (
 
 
 def _sniff_ext(head: bytes) -> tuple[str | None, bool]:
-    """Определяет расширение и является ли файл видео.
-
-    Возвращает (ext, is_video).
-    """
     for magic, ext in _MAGIC:
         if head.startswith(magic):
             return ext, ext in _VIDEO_EXTS
-
-    # WEBP: RIFF....WEBP
     if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
         return ".webp", False
-
-    # MP4/MOV: байты 4-8 == 'ftyp'
     if len(head) >= 12 and head[4:8] == b"ftyp":
         brand = head[8:12]
         if brand == b"qt  ":
             return ".mov", True
         return ".mp4", True
-
     return None, False
 
 
 def is_video(filename: str | None) -> bool:
-    """True, если имя файла соответствует видео-формату."""
     if not filename:
         return False
     return Path(filename).suffix.lower() in _VIDEO_EXTS
@@ -111,15 +81,6 @@ def _read_limited(file, limit: int) -> tuple[bytes, bool]:
 
 
 def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | None]:
-    """Обрабатывает картинку.
-
-    Возвращает (new_content, new_ext, error):
-      - GIF: сохраняется как есть (сохраняет анимацию) → (bytes, ".gif", None)
-      - WebP и не превышает MAX_IMAGE_DIMENSION: как есть → (bytes, ".webp", None)
-      - Всё остальное: ресайз (если нужен) + конвертация в WebP.
-      - Ошибка: (None, None, "текст")
-    """
-    # Первый проход — валидация формата и целостности.
     try:
         with Image.open(io.BytesIO(content)) as img:
             fmt = img.format
@@ -130,22 +91,16 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
                 )
             img.verify()
     except (UnidentifiedImageError, OSError, ValueError):
-        return None, None, (
-            "Файл повреждён или не является изображением — файл не сохранён."
-        )
+        return None, None, "Файл повреждён или не является изображением."
 
-    # GIF не трогаем — ресайз и конвертация сломают анимацию.
     with Image.open(io.BytesIO(content)) as img:
         if img.format == "GIF":
             return content, ".gif", None
-
-        # Уже WebP и в пределах лимита — не пере-сжимаем повторно.
         if img.format == "WEBP" and (
             MAX_IMAGE_DIMENSION <= 0 or max(img.size) <= MAX_IMAGE_DIMENSION
         ):
             return content, ".webp", None
 
-    # Основная обработка: ресайз + WebP.
     try:
         with Image.open(io.BytesIO(content)) as img:
             if MAX_IMAGE_DIMENSION > 0 and max(img.size) > MAX_IMAGE_DIMENSION:
@@ -153,9 +108,6 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
                     (MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION),
                     _RESAMPLE,
                 )
-
-            # WebP не любит некоторые режимы Pillow (P, LA, I, F).
-            # Приводим к RGB или RGBA — от этого зависит прозрачность.
             if img.mode not in ("RGB", "RGBA"):
                 if img.mode in ("P", "LA") or "transparency" in img.info:
                     img = img.convert("RGBA")
@@ -163,26 +115,16 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
                     img = img.convert("RGB")
 
             buf = io.BytesIO()
-            img.save(
-                buf,
-                format="WEBP",
-                quality=WEBP_QUALITY,
-                method=WEBP_METHOD,
-            )
+            img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=WEBP_METHOD)
             return buf.getvalue(), ".webp", None
     except (OSError, ValueError) as e:
         log.warning("WebP-конвертация не удалась: %s", e)
-        return None, None, (
-            "Не удалось обработать изображение — попробуйте другой файл."
-        )
+        return None, None, "Не удалось обработать изображение."
 
 
-# ============================================================
-# Интерфейс бэкенда
-# ============================================================
 class StorageBackend(ABC):
     @abstractmethod
-    def save(self, content: bytes, ext: str) -> str: ...
+    def save(self, content: bytes, ext: str, prefix: str = "") -> str: ...
     @abstractmethod
     def delete(self, filename: str) -> None: ...
     @abstractmethod
@@ -191,14 +133,30 @@ class StorageBackend(ABC):
     def public_url(self, filename: str) -> str: ...
 
 
+def _make_filename(content: bytes, ext: str, prefix: str) -> str:
+    """Собирает имя файла.
+
+    С prefix: `<prefix>_<hash8><ext>` — например `about_hero_image_a1b2c3d4.webp`.
+    Читаемо, кэш безопасен (хэш меняется → URL меняется).
+    Без prefix: `<uuid><ext>` — для товаров (4 слота × N, ключ не подходит).
+    """
+    if prefix:
+        h = hashlib.sha1(content).hexdigest()[:8]
+        safe_prefix = "".join(
+            c for c in prefix if c.isalnum() or c in "_-"
+        )[:40]
+        return f"{safe_prefix}_{h}{ext}"
+    return f"{uuid.uuid4().hex}{ext}"
+
+
 class LocalStorage(StorageBackend):
     def __init__(self, folder: Path, url_prefix: str):
         self.folder = folder
         self.url_prefix = url_prefix
         self.folder.mkdir(parents=True, exist_ok=True)
 
-    def save(self, content: bytes, ext: str) -> str:
-        name = f"{uuid.uuid4().hex}{ext}"
+    def save(self, content: bytes, ext: str, prefix: str = "") -> str:
+        name = _make_filename(content, ext, prefix)
         (self.folder / name).write_bytes(content)
         return name
 
@@ -224,9 +182,7 @@ class S3Storage(StorageBackend):
         try:
             import boto3
         except ImportError:
-            raise RuntimeError(
-                "STORAGE_BACKEND=s3, но boto3 не установлен."
-            )
+            raise RuntimeError("STORAGE_BACKEND=s3, но boto3 не установлен.")
         self.bucket = bucket
         self.base_url = (base_url or "").rstrip("/")
         self.client = boto3.client(
@@ -236,8 +192,8 @@ class S3Storage(StorageBackend):
             aws_secret_access_key=secret_key,
         )
 
-    def save(self, content: bytes, ext: str) -> str:
-        name = f"{uuid.uuid4().hex}{ext}"
+    def save(self, content: bytes, ext: str, prefix: str = "") -> str:
+        name = _make_filename(content, ext, prefix)
         content_type = {
             ".mp4":  "video/mp4",
             ".webm": "video/webm",
@@ -249,7 +205,6 @@ class S3Storage(StorageBackend):
             ".gif":  "image/gif",
             ".webp": "image/webp",
         }.get(ext, "application/octet-stream")
-
         self.client.put_object(
             Bucket=self.bucket, Key=name,
             Body=content, ContentType=content_type,
@@ -296,23 +251,9 @@ _backend = _make_backend()
 
 
 # ============================================================
-# Публичный API
+# Товары
 # ============================================================
 def save_media(file) -> tuple[str | None, str | None]:
-    """Сохраняет картинку или видео.
-
-    Картинки автоматически конвертируются в WebP (кроме GIF).
-    Возвращает (filename, error):
-      - (filename, None) — успех;
-      - (None, None)     — файла не было / пустой (не ошибка);
-      - (None, "...")    — отклонён с причиной.
-
-    Поддерживаемые форматы (определяются по magic-bytes, не по
-    расширению):
-
-    Картинки: jpg, png, gif, webp.
-    Видео:    mp4, webm, mov (включая m4v — тот же контейнер).
-    """
     if not file or not file.filename:
         return None, None
 
@@ -343,7 +284,6 @@ def save_media(file) -> tuple[str | None, str | None]:
     if is_vid:
         return _backend.save(content, ext), None
 
-    # Картинка — оптимизация + WebP.
     new_content, new_ext, err = _optimize_image(content)
     if err is not None:
         return None, err
@@ -368,6 +308,73 @@ def file_exists(filename: str | None) -> bool:
     return _backend.exists(filename)
 
 
-# Обратная совместимость со старым кодом.
 save_image = save_media
 delete_image = delete_media
+
+
+# ============================================================
+# Картинки сайта (about, hero и т.п.)
+# ============================================================
+_site_backend = LocalStorage(
+    folder=BASE_DIR / "static" / "site",
+    url_prefix="/static/site",
+)
+
+
+def save_site_image(file, key: str) -> tuple[str | None, str | None]:
+    """Сохраняет картинку сайта с именем `<key>_<hash8>.webp`.
+
+    key передаётся из роутера — например `about_hero_image`.
+    Хэш от содержимого → браузер не закэширует старую версию.
+    """
+    if not file or not file.filename:
+        return None, None
+
+    head = file.file.read(16)
+    if not head:
+        return None, None
+
+    ext, is_vid = _sniff_ext(head)
+    if ext is None or is_vid:
+        return None, "Поддерживаются только картинки: jpg, png, gif, webp."
+
+    file.file.seek(0)
+
+    content, too_large = _read_limited(file, MAX_UPLOAD_BYTES)
+    if too_large:
+        mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+        return None, f"Файл больше {mb} МБ — не сохранён."
+    if not content:
+        return None, None
+
+    new_content, new_ext, err = _optimize_image(content)
+    if err is not None:
+        return None, err
+
+    return _site_backend.save(new_content, new_ext, prefix=key), None
+
+
+def delete_site_image(filename: str | None) -> None:
+    if filename:
+        _site_backend.delete(filename)
+
+
+def site_image_public_url(filename: str | None) -> str | None:
+    if not filename:
+        return None
+    return _site_backend.public_url(filename)
+
+
+def site_image_info(filename: str | None) -> dict | None:
+    """Размер и путь файла — для отображения в админке."""
+    if not filename:
+        return None
+    path = BASE_DIR / "static" / "site" / filename
+    if not path.exists():
+        return {"filename": filename, "size_kb": 0, "missing": True}
+    size = path.stat().st_size
+    return {
+        "filename": filename,
+        "size_kb": round(size / 1024, 1),
+        "missing": False,
+    }

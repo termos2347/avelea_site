@@ -101,6 +101,8 @@ class StaticCacheMiddleware(BaseHTTPMiddleware):
 
     3. Остальное (/static/favicon.ico и т.п.) — без Cache-Control,
        поведение по умолчанию от StaticFiles (ETag).
+
+    /static/site/* — как uploads: uuid-имена, 30 дней immutable.
     """
 
     async def dispatch(self, request, call_next):
@@ -108,7 +110,10 @@ class StaticCacheMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
 
-        if path.startswith("/static/uploads/"):
+        if (
+            path.startswith("/static/uploads/")
+            or path.startswith("/static/site/")
+        ):
             response.headers["Cache-Control"] = (
                 "public, max-age=2592000, immutable"
             )

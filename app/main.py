@@ -43,10 +43,11 @@ from app.core.rendering import admin_templates, site_templates
 from app.data import cache
 from app.data.seed import seed_database
 from app.routers import site
-from app.routers.admin import auth, catalog, products
+from app.routers.admin import auth, catalog, products, site_content
 
 (BASE_DIR / "instance").mkdir(exist_ok=True)
 (BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
+(BASE_DIR / "static" / "site").mkdir(parents=True, exist_ok=True)
 
 _ALEMBIC_INI = BASE_DIR / "alembic.ini"
 
@@ -105,8 +106,6 @@ async def lifespan(app: FastAPI):
 
     cache.reload_all()
 
-    # Фоновая чистка протухших 2FA-кодов. Только если 2FA включён —
-    # иначе коды не создаются, чистить нечего.
     purge_task: asyncio.Task | None = None
     if TELEGRAM_2FA_ENABLED:
         purge_task = asyncio.create_task(auth.purge_loop())
@@ -321,3 +320,4 @@ app.include_router(site.router)
 app.include_router(auth.router)
 app.include_router(catalog.router)
 app.include_router(products.router)
+app.include_router(site_content.router)
