@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Бренды — Avelea{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto py-8 md:py-12">
+    
+    {# Хлебные крошки #}
+    <nav class="text-xs text-[var(--ink-muted)] mb-4 flex flex-wrap items-center gap-1.5">
+        <a href="/" class="hover:text-[var(--ink)] transition">Главная</a>
+        <i class="fas fa-chevron-right text-[8px] opacity-50"></i>
+        <span class="text-[var(--ink)]">Бренды</span>
+    </nav>
+
+    {# Заголовок #}
+    <h1 class="text-3xl md:text-4xl font-semibold tracking-[-0.02em] text-[var(--ink)] mb-8 md:mb-12 uppercase">
+        Бренды
+    </h1>
+
+    {# Алфавитный указатель (только A-Z и 0-9) #}
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm tracking-[0.15em] text-[var(--ink-muted)] font-medium mb-12 border-b border-[var(--line)] pb-6">
+        {% for letter in alphabet %}
+            {% if letter in existing_keys %}
+                <a href="#{{ letter | replace(' ', '') }}" class="hover:text-[var(--ink)] transition">{{ letter }}</a>
+            {% else %}
+                <span class="opacity-30 cursor-default">{{ letter }}</span>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    {# Список брендов по группам #}
+    {% if grouped_brands %}
+        <div class="space-y-12">
+            {% for letter, brands_in_group in grouped_brands %}
+            <div id="{{ letter | replace(' ', '') }}">
+                <h2 class="text-xl font-semibold text-[var(--ink)] mb-4">{{ letter }}</h2>
+                <ul class="space-y-3 text-[15px] text-[var(--ink-muted)]">
+                    {% for brand in brands_in_group %}
+                    <li>
+                        <a href="/catalog?brand={{ brand.name }}" class="hover:text-[var(--ink)] transition-colors">
+                            {{ brand.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-20">
+            <p class="text-[var(--ink-muted)]">Брендов пока нет</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

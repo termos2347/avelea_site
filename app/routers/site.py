@@ -1,4 +1,4 @@
-"""Публичные страницы: главная, каталог, карточка товара, о нас."""
+"""Публичные страницы: главная, каталог, карточка товара, бренды, о нас."""
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -54,8 +54,20 @@ async def catalog(request: Request):
 
     filtered = []
     for p in all_products:
-        if q and q not in p.name_lower:
-            continue
+        if q:
+            # Ищем по p.name.lower(), а не по p.name_lower.
+            #
+            # Почему: name_lower — денормализованная колонка для
+            # индексируемого SQL-поиска (используется в админке).
+            # На сайте у нас 10-100 товаров, уже загруженных в память
+            # через кэш — разница в производительности нулевая.
+            #
+            # А p.name — источник правды. Python .lower() корректно
+            # работает с кириллицей (в отличие от SQLite LOWER()).
+            # Это надёжнее, чем доверять name_lower, который может
+            # оказаться пустым/несинхронизированным.
+            if q not in (p.name or "").lower():
+                continue
 
         if selected_categories:
             p_cats = {c.name for c in p.categories}
@@ -190,6 +202,64 @@ async def product_page(request: Request, slug_or_id: str):
         "product": product,
         "product_categories": [c.name for c in product.categories],
         "similar": similar,
+    })
+
+
+@router.get("/brands", response_class=HTMLResponse)
+async def brands_page(request: Request):
+    """Страница всех брендов с алфавитным указателем (только A-Z, 0-9)."""
+    brands = cache.get_brands()
+
+    # Простая транслитерация первой буквы на случай кириллицы
+    cyr_to_lat = {
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E',
+        'Ж': 'Z', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+        'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+        'Ф': 'F', 'Х': 'H', 'Ц': 'T', 'Ч': 'C', 'Ш': 'S', 'Щ': 'S', 'Ъ': 'Z',
+        'Ы': 'Y', 'Ь': 'Z', 'Э': 'E', 'Ю': 'Y', 'Я': 'Y'
+    }
+
+    grouped = {}
+    for brand in brands:
+        if not brand.name:
+            continue
+        
+        first_char = brand.name.strip()[0].upper()
+        
+        # Определяем ключ группы
+        if first_char.isdigit():
+            key = "0 - 9"
+        elif first_char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            key = first_char
+        else:
+            # Пробуем транслитерировать
+            lat_char = cyr_to_lat.get(first_char)
+            if lat_char and lat_char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                key = lat_char
+            else:
+                # Всё остальное (символы и т.д.) кидаем в цифры
+                key = "0 - 9"
+
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(brand)
+
+    # Сортируем: сначала цифры, потом буквы по алфавиту
+    def sort_key(k):
+        if k == "0 - 9":
+            return "0"
+        return k
+
+    sorted_grouped = sorted(grouped.items(), key=lambda x: sort_key(x[0]))
+
+    # Алфавит только английский + цифры
+    alphabet = ["0 - 9"] + list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    existing_keys = {k for k, v in sorted_grouped}
+
+    return site_templates.TemplateResponse(request, "brands.html", {
+        "grouped_brands": sorted_grouped,
+        "existing_keys": existing_keys,
+        "alphabet": alphabet,
     })
 
 

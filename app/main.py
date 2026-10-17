@@ -3,18 +3,21 @@
 Здесь только:
   - создание FastAPI();
   - подключение middleware;
-  - lifespan (create_all → миграции → seed → прогрев кэша);
+  - lifespan (миграции Alembic → seed → прогрев кэша);
   - глобальные exception handlers;
   - регистрация роутеров;
   - /robots.txt и /sitemap.xml.
 
-Вся бизнес-логика — в app/routers/*, app/utils/helpers.py, app/data/migrations.py.
+Вся бизнес-логика — в app/routers/*, app/utils/helpers.py.
+Схема БД — в app/data/models.py + миграции в migrations/versions/.
 """
 import logging
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from xml.sax.saxutils import escape
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
@@ -38,7 +41,8 @@ from app.core.config import (
     SESSION_SAME_SITE,
     UVICORN_WORKERS,
 )
-from app.core.database import Base, SessionLocal, engine
+from app.core.database import SessionLocal
+from app.core.deps import NotAuthenticated
 from app.core.middleware import (
     AdminAuthGuardMiddleware,
     BodySizeLimitMiddleware,
@@ -47,7 +51,6 @@ from app.core.middleware import (
 )
 from app.core.rendering import admin_templates, site_templates
 from app.data import cache
-from app.data.migrations import run_startup_migrations
 from app.data.seed import seed_database
 from app.routers import site
 from app.routers.admin import auth, catalog, products
@@ -55,6 +58,8 @@ from app.routers.admin import auth, catalog, products
 # Папки, без которых приложение не стартует.
 (BASE_DIR / "instance").mkdir(exist_ok=True)
 (BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
+
+_ALEMBIC_INI = BASE_DIR / "alembic.ini"
 
 
 # ============== ЛОГИРОВАНИЕ ==============
@@ -100,11 +105,15 @@ async def lifespan(app: FastAPI):
             UVICORN_WORKERS,
         )
 
-    log.info("Запуск: миграции + seed")
+    log.info("Запуск: миграции Alembic + seed")
+
+    # Alembic сам создаст таблицу alembic_version и всю схему на пустой БД,
+    # либо догонит до head на уже существующей. На актуальной схеме — no-op.
+    alembic_cfg = Config(str(_ALEMBIC_INI))
+    command.upgrade(alembic_cfg, "head")
+
     db = SessionLocal()
     try:
-        Base.metadata.create_all(bind=engine)
-        run_startup_migrations(db)
         seed_database(db)
     finally:
         db.close()
@@ -130,6 +139,11 @@ app.add_middleware(
     max_age=SESSION_MAX_AGE,
 )
 
+# BodySizeLimit — защита от слишком больших тел запроса.
+# Лимит = 4 слота × лимит на файл + запас 1 МБ на multipart-обёртку.
+# Иначе 4 видео по 10 МБ не влезли бы в общий лимит 31 МБ.
+# Периодические файлы всё равно проверяются в save_media:
+# картинка > MAX_UPLOAD, видео > MAX_VIDEO_UPLOAD — отклонится.
 _BODY_LIMIT = 4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
 app.add_middleware(
     BodySizeLimitMiddleware,
@@ -170,6 +184,7 @@ async def sitemap_xml(request: Request):
     urls = [
         f"{base}/",
         f"{base}/catalog",
+        f"{base}/brands",
         f"{base}/about",
     ]
     for p in cache.get_products():
@@ -279,6 +294,19 @@ def _render_error(
         },
         status_code=status_code,
     )
+
+
+@app.exception_handler(NotAuthenticated)
+async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
+    """Сессия не содержит admin-флага — отправляем на форму логина.
+
+    На практике до этого обработчика дело не доходит: middleware
+    AdminAuthGuardMiddleware отдаёт обычную 404 раньше, чем запрос
+    попадёт в роутер. Обработчик — страховка на случай, если
+    появится роут с require_admin вне /admin/* (например, API
+    под другим префиксом).
+    """
+    return RedirectResponse(url="/admin/login", status_code=303)
 
 
 @app.exception_handler(StarletteHTTPException)

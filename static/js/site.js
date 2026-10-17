@@ -255,70 +255,50 @@
     document.body.addEventListener('htmx:afterSettle', initRails);
 
     // ============================================================
-    // SCROLL REVEAL — элементы плавно появляются при прокрутке
+    // МЕНЮ И ПОИСК (с делегированием для работы после HTMX)
     // ============================================================
-    (function initScrollReveal() {
-        if (!document.documentElement.classList.contains('rv')) return;
-
-        const io = ('IntersectionObserver' in window)
-            ? new IntersectionObserver((entries) => {
-                entries.forEach((entry) => {
-                    if (!entry.isIntersecting) return;
-                    entry.target.classList.add('rv-in');
-                    io.unobserve(entry.target);
-                });
-            }, {
-                rootMargin: '0px 0px -8% 0px',
-                threshold: 0.01
-            })
-            : null;
-
-        function inCarousel(el) {
-            return !!el.closest('[data-carousel]');
+    (function initHeaderInteractions() {
+        function openMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const backdrop = document.getElementById('menu-backdrop');
+            if (menu) menu.classList.remove('-translate-x-full');
+            if (backdrop) backdrop.classList.remove('opacity-0', 'pointer-events-none');
+        }
+        function closeMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const backdrop = document.getElementById('menu-backdrop');
+            if (menu) menu.classList.add('-translate-x-full');
+            if (backdrop) backdrop.classList.add('opacity-0', 'pointer-events-none');
         }
 
-        function tagTargets() {
-            const nodes = document.querySelectorAll(
-                'section, .product-grid > a, .product-rail > a'
-            );
-
-            nodes.forEach((el) => {
-                if (inCarousel(el)) return;
-                if (el.hasAttribute('data-rv')) return;
-                el.setAttribute('data-rv', '');
-
-                const parent = el.parentElement;
-                if (!parent) return;
-
-                const siblings = Array.from(parent.children)
-                    .filter((c) => c.hasAttribute('data-rv'));
-                const i = siblings.indexOf(el);
-                if (i > 0) {
-                    el.style.transitionDelay = Math.min(i * 45, 360) + 'ms';
-                }
-            });
+        function openSearch() {
+            const search = document.getElementById('search-overlay');
+            if (!search) return;
+            search.classList.remove('opacity-0', 'pointer-events-none');
+            const input = search.querySelector('input[name="q"]');
+            if (input) setTimeout(() => input.focus(), 100);
+        }
+        function closeSearch() {
+            const search = document.getElementById('search-overlay');
+            if (search) search.classList.add('opacity-0', 'pointer-events-none');
         }
 
-        function scan() {
-            tagTargets();
+        document.addEventListener('click', function (e) {
+            // Меню
+            if (e.target.closest('#open-menu')) { openMenu(); return; }
+            if (e.target.closest('#close-menu')) { closeMenu(); return; }
+            if (e.target.closest('#menu-backdrop')) { closeMenu(); return; }
+            
+            // Поиск
+            if (e.target.closest('#open-search')) { openSearch(); return; }
+            if (e.target.closest('#close-search')) { closeSearch(); return; }
+            
+            // Закрытие поиска по клику на фон
+            if (e.target.id === 'search-overlay') { closeSearch(); return; }
 
-            const targets = document.querySelectorAll('[data-rv]:not(.rv-in)');
-
-            if (!io) {
-                targets.forEach((el) => el.classList.add('rv-in'));
-                return;
-            }
-
-            targets.forEach((el) => io.observe(el));
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', scan);
-        } else {
-            scan();
-        }
-
-        document.body.addEventListener('htmx:afterSettle', scan);
+            // Закрыть меню при клике по ссылке внутри него
+            if (e.target.closest('#mobile-menu a')) { closeMenu(); }
+        });
     })();
 
     // ============================================================

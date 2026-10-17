@@ -26,6 +26,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
@@ -52,7 +53,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 overflow-x-hidden flex flex-col min-h-screen" hx-boost="true">
+<body class="bg-[var(--bg-soft)] overflow-x-hidden flex flex-col min-h-screen" hx-boost="true">
 
     <!-- Прогресс-полоска сверху -->
     <div id="htmx-progress"
@@ -63,8 +64,6 @@
        ============================================================ #}
     <div id="skeleton-overlay" class="skeleton-overlay" aria-hidden="true">
         <div class="skeleton-container">
-
-            {# ---------- ГЛАВНАЯ ---------- #}
             <div class="sk-variant" data-sk="home">
                 <div class="sk-block sk-hero"></div>
                 <div class="sk-cats">
@@ -85,8 +84,6 @@
                     {% endfor %}
                 </div>
             </div>
-
-            {# ---------- КАТАЛОГ ---------- #}
             <div class="sk-variant" data-sk="catalog">
                 <div class="sk-block sk-banner"></div>
                 <div class="sk-toolbar">
@@ -105,8 +102,6 @@
                     {% endfor %}
                 </div>
             </div>
-
-            {# ---------- КАРТОЧКА ТОВАРА ---------- #}
             <div class="sk-variant" data-sk="product">
                 <div class="sk-block sk-crumbs"></div>
                 <div class="sk-product">
@@ -121,8 +116,6 @@
                     </div>
                 </div>
             </div>
-
-            {# ---------- О НАС ---------- #}
             <div class="sk-variant" data-sk="about">
                 <div class="sk-block sk-hero-about"></div>
                 <div class="sk-about">
@@ -136,137 +129,190 @@
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 
-    {# Контейнер #}
+    {# ============================================================
+       ОСНОВНОЙ КОНТЕЙНЕР
+       ============================================================ #}
     <div class="mx-auto px-4 md:px-6 max-w-screen-2xl w-full flex flex-col flex-1">
+
+        {# ================= ШАПКА ================= #}
         <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-5 border-b border-[var(--line)]">
 
-            {# Слева — подпись студии #}
-            <div class="text-[9px] md:text-[10px] uppercase tracking-[0.15em] font-medium whitespace-nowrap">
-                <span class="hidden sm:inline text-[var(--ink-muted)]">prod by </span>
-                <span class="text-[var(--ink)] font-semibold">96 team</span>
+            {# Слева — Бургер и Поиск #}
+            <div class="flex items-center justify-start gap-1">
+                <button type="button" id="open-menu" class="w-10 h-10 -ml-2 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
+                    <i class="fas fa-bars text-lg"></i>
+                </button>
+                <button type="button" id="open-search" class="w-10 h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
+                    <i class="fas fa-search text-lg"></i>
+                </button>
             </div>
 
-            {# Центр — название бренда #}
-            <a href="/" class="text-xl md:text-2xl font-semibold tracking-[-0.03em] hover:opacity-70 text-center whitespace-nowrap text-[var(--ink)]">
+            {# Центр — Логотип #}
+            <a href="/" class="brand-logo text-center text-[var(--ink)] hover:opacity-70 transition-opacity">
                 avelea
             </a>
 
-            {# Справа — навигация иконками #}
-            <div class="flex gap-1 items-center justify-end">
-
-                <a href="/"
-                   title="Главная"
-                   aria-label="Главная"
-                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] transition">
+            {# Справа — Иконки навигации #}
+            <div class="flex items-center justify-end gap-1">
+                <a href="/" title="Главная" aria-label="Главная"
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
                     <i class="fas fa-house text-base md:text-lg"></i>
                 </a>
-
-                <a href="/catalog"
-                   title="Каталог"
-                   aria-label="Каталог"
-                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] transition">
+                <a href="/catalog" title="Каталог" aria-label="Каталог"
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
                     <i class="fas fa-bag-shopping text-base md:text-lg"></i>
                 </a>
-
-                <a href="/about"
-                   title="О нас"
-                   aria-label="О нас"
-                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] transition">
+                <a href="/about" title="О нас" aria-label="О нас"
+                   class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
                     <i class="fas fa-circle-info text-base md:text-lg"></i>
                 </a>
-
             </div>
         </nav>
 
+        {# ================= КОНТЕНТ СТРАНИЦЫ ================= #}
         <main class="{% block main_class %}pt-6 pb-6{% endblock %} flex-1">
             {% block content %}{% endblock %}
         </main>
+
     </div>
 
     {# ================= ФУТЕР ================= #}
-    <footer class="mt-16 bg-[var(--bg-soft)] border-t border-[var(--line)]">
-        <div class="mx-auto px-4 md:px-6 max-w-screen-2xl py-12 md:py-16">
+    <footer class="mt-16 bg-gradient-to-br from-pink-50 via-pink-100 to-pink-200/60 border-t border-pink-200">
+        <div class="mx-auto px-6 max-w-screen-xl py-16 md:py-20 flex flex-col items-center">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10 md:gap-12 mb-10">
+            <div class="text-center mb-10">
+                <div class="brand-logo brand-logo-xl text-[#3f1d24]">AVELEA</div>
+                <div class="text-[10px] md:text-[11px] tracking-[0.5em] text-[#3f1d24]/70 mt-2 uppercase">Beauty Store</div>
+            </div>
 
-                {# Бренд #}
-                <div class="sm:col-span-2 lg:col-span-1">
-                    <a href="/" class="text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)] hover:opacity-70">
-                        avelea
-                    </a>
-                    <p class="text-sm text-[var(--ink-muted)] mt-3 leading-relaxed max-w-xs">
-                        Натуральная косметика для бережного ухода. Без парабенов, без сульфатов, без жестокости.
-                    </p>
+            <p class="text-sm md:text-base text-[#3f1d24]/80 text-center max-w-md leading-relaxed mb-8">
+                Селективная косметика и парфюмерия<br>
+                для вашей красоты. Оригинальная продукция<br>
+                от мировых брендов. Доставка 5–10 дней.
+            </p>
 
-                    <div class="flex gap-2 mt-5">
-                        <a href="#" aria-label="Telegram"
-                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
-                            <i class="fab fa-telegram-plane"></i>
-                        </a>
-                        <a href="#" aria-label="Instagram"
-                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
-                            <i class="fab fa-instagram"></i>
-                        </a>
-                        <a href="#" aria-label="VK"
-                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
-                            <i class="fab fa-vk"></i>
-                        </a>
-                        <a href="#" aria-label="WhatsApp"
-                        class="w-9 h-9 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--ink-muted)] hover:bg-[var(--ink)] hover:text-white hover:border-[var(--ink)] transition">
-                            <i class="fab fa-whatsapp"></i>
-                        </a>
+            <div class="flex gap-4 mb-12">
+                <a href="#" aria-label="Instagram" class="w-11 h-11 rounded-full border border-[#3f1d24]/30 flex items-center justify-center text-[#3f1d24] hover:bg-[#3f1d24] hover:text-white transition-colors">
+                    <i class="fab fa-instagram text-lg"></i>
+                </a>
+                <a href="#" aria-label="Telegram" class="w-11 h-11 rounded-full border border-[#3f1d24]/30 flex items-center justify-center text-[#3f1d24] hover:bg-[#3f1d24] hover:text-white transition-colors">
+                    <i class="fab fa-telegram-plane text-lg"></i>
+                </a>
+                <a href="#" aria-label="WhatsApp" class="w-11 h-11 rounded-full border border-[#3f1d24]/30 flex items-center justify-center text-[#3f1d24] hover:bg-[#3f1d24] hover:text-white transition-colors">
+                    <i class="fab fa-whatsapp text-lg"></i>
+                </a>
+                <a href="#" aria-label="VK" class="w-11 h-11 rounded-full border border-[#3f1d24]/30 flex items-center justify-center text-[#3f1d24] hover:bg-[#3f1d24] hover:text-white transition-colors">
+                    <i class="fab fa-vk text-lg"></i>
+                </a>
+            </div>
+
+            <div class="w-full max-w-2xl flex flex-col gap-10 mb-14">
+                <div class="w-full">
+                    <div class="flex items-center gap-4 mb-5">
+                        <h4 class="text-sm font-semibold tracking-wider text-[#3f1d24] uppercase">Навигация</h4>
+                        <div class="h-px bg-[#3f1d24]/20 flex-1"></div>
                     </div>
-                </div>
-
-                {# Навигация #}
-                <div>
-                    <h4 class="font-semibold text-[var(--ink)] mb-4 text-xs uppercase tracking-[0.12em]">Навигация</h4>
-                    <ul class="space-y-2.5 text-sm">
-                        <li><a href="/" class="text-[var(--ink-muted)] hover:text-[var(--ink)] transition">Главная</a></li>
-                        <li><a href="/catalog" class="text-[var(--ink-muted)] hover:text-[var(--ink)] transition">Каталог</a></li>
-                        <li><a href="/about" class="text-[var(--ink-muted)] hover:text-[var(--ink)] transition">О нас</a></li>
+                    <ul class="flex flex-col gap-3.5 text-[15px] text-[#3f1d24]/80">
+                        <li><a href="/" class="hover:text-[#3f1d24] transition-colors">Главная</a></li>
+                        <li><a href="/catalog" class="hover:text-[#3f1d24] transition-colors">Каталог</a></li>
+                        <li><a href="/brands" class="hover:text-[#3f1d24] transition-colors">Бренды</a></li>
+                        <li><a href="/about" class="hover:text-[#3f1d24] transition-colors">О нас</a></li>
                     </ul>
                 </div>
 
-                {# Контакты #}
-                <div>
-                    <h4 class="font-semibold text-[var(--ink)] mb-4 text-xs uppercase tracking-[0.12em]">Контакты</h4>
-                    <ul class="space-y-3 text-sm">
-                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
-                            <i class="fas fa-phone text-[10px] mt-1.5 opacity-60"></i>
-                            <a href="tel:+70000009696" class="hover:text-[var(--ink)] transition">+7 (000) 000-96-96</a>
+                <div class="w-full">
+                    <div class="flex items-center gap-4 mb-5">
+                        <h4 class="text-sm font-semibold tracking-wider text-[#3f1d24] uppercase">Контакты</h4>
+                        <div class="h-px bg-[#3f1d24]/20 flex-1"></div>
+                    </div>
+                    <ul class="flex flex-col gap-4 text-[15px] text-[#3f1d24]">
+                        <li class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
+                                <i class="fas fa-phone-alt text-xs"></i>
+                            </div>
+                            <a href="tel:+79625730996" class="hover:opacity-70 transition">+7 962 573 0996</a>
                         </li>
-                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
-                            <i class="fas fa-envelope text-[10px] mt-1.5 opacity-60"></i>
-                            <a href="mailto:info@avelea.ru" class="hover:text-[var(--ink)] transition">info@avelea.ru</a>
+                        <li class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
+                                <i class="fas fa-envelope text-xs"></i>
+                            </div>
+                            <a href="mailto:avelea_store@gmail.com" class="hover:opacity-70 transition">avelea_store@gmail.com</a>
                         </li>
-                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
-                            <i class="fas fa-location-dot text-[10px] mt-1.5 opacity-60"></i>
-                            <span>Москва, ул. Примерная, 1</span>
+                        <li class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
+                                <i class="fas fa-map-marker-alt text-xs"></i>
+                            </div>
+                            <span>г. Нижнекамск</span>
                         </li>
-                        <li class="flex items-start gap-2.5 text-[var(--ink-muted)]">
-                            <i class="fas fa-clock text-[10px] mt-1.5 opacity-60"></i>
+                        <li class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[#e8b4b8]/50 flex items-center justify-center shrink-0">
+                                <i class="fas fa-clock text-xs"></i>
+                            </div>
                             <span>Пн–Пт, 10:00–19:00</span>
                         </li>
                     </ul>
                 </div>
             </div>
 
-            <div class="pt-6 border-t border-[var(--line)] flex flex-col md:flex-row items-center justify-between gap-3">
-                <p class="text-xs text-[var(--ink-muted)]">
-                    © 2026 avelea. Все права защищены.
-                </p>
-                <p class="text-xs text-[var(--ink-muted)]">
-                    prod by <span class="text-[var(--ink)] font-medium">96 team</span>
-                </p>
+            <div class="w-full max-w-2xl pt-8 border-t border-[#3f1d24]/10 flex flex-col items-center text-center">
+                <div class="brand-logo text-[#3f1d24] mb-1">AVELEA</div>
+                <div class="text-[9px] tracking-[0.4em] text-[#3f1d24]/60 uppercase mb-4">Beauty Store</div>
+                <p class="text-xs text-[#3f1d24]/50">© 2026 avelea. Все права защищены.</p>
+                <p class="text-xs text-[#3f1d24]/50 mt-2">prod by <span class="text-[#3f1d24]/80 font-medium">96 team</span></p>
             </div>
 
         </div>
     </footer>
+
+    {# ============================================================
+       ОВЕРЛЕИ (МЕНЮ И ПОИСК)
+       ============================================================ #}
+    <div id="menu-backdrop" class="fixed inset-0 z-[90] bg-black/40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+    <div id="mobile-menu" class="fixed top-0 left-0 bottom-0 w-full max-w-[320px] z-[100] bg-[var(--bg)] transform -translate-x-full transition-transform duration-300 ease-in-out shadow-2xl">
+        <div class="p-6 flex flex-col h-full">
+            <div class="flex justify-between items-center mb-10">
+                <span class="brand-logo text-2xl text-[var(--ink)]">avelea</span>
+                <button type="button" id="close-menu" class="w-10 h-10 -mr-2 flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] rounded-full transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <ul class="flex flex-col gap-6 text-2xl font-medium text-[var(--ink)] flex-1">
+                <li><a href="/catalog" class="hover:opacity-60 transition-opacity">Каталог</a></li>
+                <li><a href="/brands" class="hover:opacity-60 transition-opacity">Бренды</a></li>
+                <li><a href="/catalog?sort=popular" class="hover:opacity-60 transition-opacity">Популярное</a></li>
+            </ul>
+
+            <div class="border-t border-[var(--line)] pt-6 mt-auto">
+                <ul class="flex flex-col gap-4 text-lg text-[var(--ink-muted)]">
+                    <li><a href="/about" class="hover:text-[var(--ink)] transition-colors">О нас</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="search-overlay" class="fixed inset-0 z-[100] bg-white/95 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="max-w-3xl mx-auto px-6 pt-24 pb-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold text-[var(--ink)]">Поиск</h2>
+                <button type="button" id="close-search" class="w-10 h-10 -mr-2 flex items-center justify-center text-[var(--ink)] hover:bg-[var(--bg-soft)] rounded-full transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form action="/catalog" method="get" class="relative">
+                <input type="search" name="q" placeholder="Что вы ищете?"
+                       class="w-full text-2xl md:text-4xl bg-transparent border-b-2 border-[var(--ink)] pb-4 outline-none placeholder:text-[var(--ink-muted)]"
+                       autocomplete="off">
+                <button type="submit" class="absolute right-0 bottom-4 text-xl md:text-2xl text-[var(--ink)] hover:opacity-60">
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+        </div>
+    </div>
 
     <script src="/static/js/site.js"></script>
 </body>

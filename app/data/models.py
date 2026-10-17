@@ -1,6 +1,7 @@
 from slugify import slugify
 from sqlalchemy import (
-    Column, Integer, String, Boolean, Text, Table, ForeignKey, event, text as sa_text,
+    Column, Integer, String, Boolean, Text, Table, ForeignKey, DateTime,
+    event, func, text as sa_text,
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -19,6 +20,11 @@ class Product(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
+
+    # name_lower — копия name в нижнем регистре. Нужна для
+    # регистронезависимого поиска: SQLite LOWER() не понимает
+    # кириллицу, а ILIKE в Postgres не всегда использует индекс.
+    # Синхронизируется автоматически через event listener ниже.
     name_lower = Column(String(200), nullable=False, default="", index=True)
 
     # slug — человекочитаемая часть URL. Генерируется из name один раз
@@ -47,6 +53,16 @@ class Product(Base):
     image_2 = Column(String(200), nullable=True)
     image_3 = Column(String(200), nullable=True)
     image_4 = Column(String(200), nullable=True)
+
+    # Аудит: когда товар создан. Значение проставляет сама БД при INSERT.
+    # current_timestamp() → CURRENT_TIMESTAMP в SQL: стандарт, работает
+    # и в Postgres, и в SQLite (в отличие от now(), который понимает
+    # только Postgres). Тесты гоняются на SQLite — это критично.
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
 
     categories = relationship(
         "Category",
@@ -135,12 +151,24 @@ class Brand(Base):
     name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
 
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
 
 class Category(Base):
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
 
 
 class Setting(Base):

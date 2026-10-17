@@ -3,11 +3,13 @@
 Каталог товаров на **Python + FastAPI** с админкой и минимальным
 JavaScript (HTMX + Tailwind). Без корзины, без оплаты, без личного
 кабинета — только публичный каталог и панель управления.
+
 ---
 
 ![Python](https://img.shields.io/badge/python-3.12-blue)
-![Tests](https://img.shields.io/badge/tests-49%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
+![Alembic](https://img.shields.io/badge/Alembic-1.14-blue)
 
 ## Запуск
 
@@ -15,13 +17,20 @@ JavaScript (HTMX + Tailwind). Без корзины, без оплаты, без
 # Перейти в папку проекта
 cd ~/avelea_site
 
-npx localtunnel --port 8000 --subdomain avelea-test
-
-# Активировать виртуальное окружение
+# Первый раз — установить зависимости и создать .venv
 ./install.sh
+
+# Скопировать шаблон и заполнить секреты
+cp .env.example .env
+# (отредактировать SECRET_KEY и ADMIN_PASSWORD)
 
 # Запустить сервер
 ./start.sh
+```
+
+## Локальный запуск
+```bash
+npx localtunnel --port 8000 --subdomain avelea-test
 ```
 
 Перед первым запуском скопируйте `.env.example` в `.env` и заполните
@@ -33,86 +42,93 @@ npx localtunnel --port 8000 --subdomain avelea-test
 
 ```
 avelea_site/
+├── alembic.ini                     # Конфиг Alembic (URL берётся из .env)
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                 # FastAPI(): middleware, lifespan, exception
-│   │                           #   handlers, /robots.txt, /sitemap.xml, роутеры
+│   ├── main.py                     # FastAPI(): middleware, lifespan, exception
+│   │                               #   handlers, /robots.txt, /sitemap.xml, роутеры
 │   │
-│   ├── core/                   # Инфраструктура (не зависит от бизнес-логики)
-│   │   ├── config.py           # Чтение .env и константы
-│   │   ├── database.py         # engine, SessionLocal, Base, get_db()
-│   │   ├── deps.py             # FastAPI-зависимости: require_admin, CSRF
-│   │   ├── middleware.py       # BodySizeLimit, SecurityHeaders, AdminAuthGuard
-│   │   ├── ratelimit.py        # In-memory rate-limiter для /admin/login
-│   │   └── rendering.py        # Jinja2-окружения + регистрация глобалов
+│   ├── core/                       # Инфраструктура (не зависит от бизнес-логики)
+│   │   ├── config.py               # Чтение .env и константы
+│   │   ├── database.py             # engine, SessionLocal, Base, get_db()
+│   │   ├── deps.py                 # FastAPI-зависимости: require_admin, CSRF
+│   │   ├── middleware.py           # BodySizeLimit, SecurityHeaders, AdminAuthGuard
+│   │   ├── ratelimit.py            # In-memory rate-limiter для /admin/login
+│   │   └── rendering.py            # Jinja2-окружения + регистрация глобалов
 │   │
-│   ├── data/                   # Всё про данные
-│   │   ├── models.py           # SQLAlchemy: Product, Brand, Category, Setting
-│   │   ├── migrations.py       # Идемпотентные миграции при старте
-│   │   ├── seed.py             # Стартовые данные (один раз, флаг в Setting)
-│   │   └── cache.py            # In-memory кэш товаров/категорий/брендов
+│   ├── data/                       # Всё про данные
+│   │   ├── models.py               # SQLAlchemy: Product, Brand, Category, Setting
+│   │   │                           #   (источник правды для схемы БД)
+│   │   ├── seed.py                 # Стартовые данные (один раз, флаг в Setting)
+│   │   └── cache.py                # In-memory кэш товаров/категорий/брендов
 │   │
-│   ├── services/               # Внешние сервисы
-│   │   └── storage.py          # Сохранение картинок (Local / S3) + ресайз
+│   ├── services/                   # Внешние сервисы
+│   │   └── storage.py              # Сохранение картинок (Local / S3) + ресайз
 │   │
-│   ├── utils/                  # Чистые функции без состояния
-│   │   └── helpers.py          # URL-билдеры, парсинг формы, resolve-хелперы
+│   ├── utils/                      # Чистые функции без состояния
+│   │   └── helpers.py              # URL-билдеры, парсинг формы, resolve-хелперы
 │   │
-│   ├── routers/                # HTTP-роуты
-│   │   ├── site.py             # /, /catalog, /product, /about
-│   │   └── admin/              # Админка
-│   │       ├── auth.py         #   /admin/login (+ Telegram 2FA), /admin/logout
-│   │       ├── products.py     #   /admin/products/*
-│   │       └── catalog.py      #   /admin/brands/*, /admin/categories/*
+│   ├── routers/                    # HTTP-роуты
+│   │   ├── site.py                 # /, /catalog, /product, /about
+│   │   └── admin/                  # Админка
+│   │       ├── auth.py             #   /admin/login (+ Telegram 2FA), /admin/logout
+│   │       ├── products.py         #   /admin/products/*
+│   │       └── catalog.py          #   /admin/brands/*, /admin/categories/*
 │   │
-│   └── templates/              # Jinja2-шаблоны
+│   └── templates/                  # Jinja2-шаблоны
 │       ├── admin/
-│       │   ├── base.html       #   Каркас: топбар, модалки, saving-overlay
-│       │   ├── login.html      #   Вход: шаг 1 — пароль, шаг 2 — код из Telegram
-│       │   ├── products.html   #   Список (таблица / карточки)
-│       │   ├── product_form.html   # Отдельная страница формы товара
-│       │   ├── _product_form.html  # Общая форма (для /new и /edit)
+│       │   ├── base.html           #   Каркас: топбар, модалки, saving-overlay
+│       │   ├── login.html          #   Вход: шаг 1 — пароль, шаг 2 — код из Telegram
+│       │   ├── products.html       #   Список (таблица / карточки)
+│       │   ├── product_form.html   #   Отдельная страница формы товара
+│       │   ├── _product_form.html  #   Общая форма (для /new и /edit)
 │       │   ├── brands.html
 │       │   ├── categories.html
-│       │   └── error.html      #   Универсальная страница (404 / 500 / 413 / …)
+│       │   └── error.html          #   Универсальная страница (404 / 500 / 413 / …)
 │       └── site/
-│           ├── _macros.html    #   Макрос product_card
-│           ├── base.html       #   Каркас: nav, footer, OG-теги, favicon, скелетон
-│           ├── index.html      #   Главная (hero-карусель, категории, популярное)
-│           ├── catalog.html    #   Каталог с фильтрами
-│           ├── product.html    #   Карточка товара
+│           ├── _macros.html        #   Макрос product_card
+│           ├── base.html           #   Каркас: nav, footer, OG-теги, favicon, скелетон
+│           ├── index.html          #   Главная (hero-карусель, категории, популярное)
+│           ├── catalog.html        #   Каталог с фильтрами
+│           ├── product.html        #   Карточка товара
 │           ├── about.html
-│           └── error.html      #   Универсальная страница ошибки
+│           └── error.html          #   Универсальная страница ошибки
 │
 ├── static/
 │   ├── css/
 │   │   ├── admin.css
 │   │   └── site.css
 │   ├── js/
-│   │   ├── admin.js            # Модалки, форма, debounce, saving-overlay
-│   │   ├── catalog.js          # Модал фильтров каталога
-│   │   └── site.js             # Скелетон, hero-карусель, рейлы карточек
-│   └── uploads/                # Загруженные картинки (в .gitignore)
+│   │   ├── admin.js                # Модалки, форма, debounce, saving-overlay
+│   │   ├── catalog.js              # Модал фильтров каталога
+│   │   └── site.js                 # Скелетон, hero-карусель, рейлы карточек
+│   └── uploads/                    # Загруженные картинки (в .gitignore)
 │
 ├── instance/
-│   └── shop.db                 # SQLite, если DATABASE_URL не задан (в .gitignore)
+│   ├── shop.db                     # SQLite, только для тестов (в .gitignore)
+│   └── logs/
+│       └── avelea.log              # Ротируемый лог приложения
+│
+├── migrations/                     # ← Alembic
+│   ├── env.py                      # Настройка: target_metadata, render_as_batch
+│   ├── script.py.mako              # Шаблон для новых миграций
+│   └── versions/
+│       └── ac7136db8fe5_initial_schema.py   # Baseline (создаёт всю схему)
 │
 ├── tests/
-│   ├── conftest.py             # Фикстуры: TestClient, admin_client, CSRF
-│   ├── test_smoke.py           # Публичные страницы, robots.txt, sitemap.xml, 404
-│   ├── test_admin.py           # Админка: логин, CSRF, 2FA, CRUD, загрузки
-│   └── test_migrations.py      # Миграции схемы на «старой» БД
+│   ├── conftest.py                 # Фикстуры: TestClient, admin_client, CSRF
+│   ├── test_smoke.py               # Публичные страницы, robots.txt, sitemap.xml, 404
+│   └── test_admin.py               # Админка: логин, CSRF, 2FA, CRUD, загрузки
 │
-├── .venv/                      # Виртуальное окружение (в .gitignore)
+├── .venv/                          # Виртуальное окружение (в .gitignore)
 ├── .gitignore
-├── .env.example                # Шаблон настроек
-├── .env                        # Боевые секреты (в .gitignore)
+├── .env.example                    # Шаблон настроек
+├── .env                            # Боевые секреты (в .gitignore)
 ├── requirements.txt
-├── run.py                      # Точка входа: uvicorn.run("app.main:app")
-├── start.sh                    # Запуск сервера
-├── install.sh                  # Создание venv + установка зависимостей
+├── run.py                          # Точка входа: uvicorn.run("app.main:app")
+├── start.sh                        # Запуск сервера (активация venv + python run.py)
+├── install.sh                      # Создание venv + установка зависимостей
 └── README.md
-```
 
 ---
 

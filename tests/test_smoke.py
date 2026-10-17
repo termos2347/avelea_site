@@ -19,16 +19,61 @@ def test_catalog_search(client):
 def test_catalog_search_cyrillic_case_insensitive(client):
     """Поиск должен работать вне зависимости от регистра для кириллицы.
 
-    Раньше поиск шёл через ilike, а SQLite LOWER() кириллицу не умеет,
-    поэтому «КРЕМ» не находил «Увлажняющий крем».
+    Не зависит от содержимого seed: создаёт свой товар с кириллицей,
+    проверяет, удаляет. Так тест не ломается, если seed изменят.
     """
-    r = client.get("/catalog?q=КРЕМ")
-    assert r.status_code == 200
-    assert "Увлажняющий крем" in r.text
+    from app.core.database import SessionLocal
+    from app.data.models import Product, Brand
+    from app.data import cache
 
-    r = client.get("/catalog?q=крем")
-    assert r.status_code == 200
-    assert "Увлажняющий крем" in r.text
+    # --- Setup: создаём тестовый товар с кириллицей в названии ---
+    db = SessionLocal()
+    try:
+        brand = db.query(Brand).first()
+        product = Product(
+            name="Тестовый Увлажняющий КРЕМ",
+            price=100,
+            brand_id=brand.id if brand else None,
+        )
+        db.add(product)
+        db.commit()
+        test_pid = product.id
+    finally:
+        db.close()
+
+    # Сбрасываем кэш, чтобы новый товар был виден сайту.
+    cache.invalidate()
+
+    try:
+        # --- Test: ищем в нижнем регистре ---
+        r = client.get("/catalog?q=крем")
+        assert r.status_code == 200
+        assert "Тестовый Увлажняющий КРЕМ" in r.text, \
+            "Поиск в нижнем регистре не нашёл товар"
+
+        # --- Test: ищем в верхнем регистре ---
+        r = client.get("/catalog?q=КРЕМ")
+        assert r.status_code == 200
+        assert "Тестовый Увлажняющий КРЕМ" in r.text, \
+            "Поиск в верхнем регистре не нашёл товар"
+
+        # --- Test: смешанный регистр тоже работает ---
+        r = client.get("/catalog?q=КрЕм")
+        assert r.status_code == 200
+        assert "Тестовый Увлажняющий КРЕМ" in r.text, \
+            "Поиск в смешанном регистре не нашёл товар"
+
+    finally:
+        # --- Teardown: удаляем тестовый товар ---
+        db = SessionLocal()
+        try:
+            p = db.query(Product).filter(Product.id == test_pid).first()
+            if p:
+                db.delete(p)
+                db.commit()
+        finally:
+            db.close()
+        cache.invalidate()
 
 
 def test_catalog_search_no_results(client):

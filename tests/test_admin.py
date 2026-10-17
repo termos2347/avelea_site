@@ -265,7 +265,15 @@ def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
 
 
 def test_upload_valid_png_is_saved(admin_client, clean_uploads):
-    """Настоящий PNG сохраняется, URL отдаётся в шаблоне."""
+    """Настоящий PNG сохраняется, URL отдаётся в шаблоне.
+
+    storage.save_media конвертирует всё, кроме GIF, в WebP
+    (см. _optimize_image в app/services/storage.py). Поэтому на диске
+    лежит .webp, а не .png — это ожидаемое поведение, а не баг.
+
+    Поле формы — image_1 (первый слот медиа). Всего слотов 4:
+    image_1..image_4, см. _product_form.html.
+    """
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -275,7 +283,7 @@ def test_upload_valid_png_is_saved(admin_client, clean_uploads):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("photo.png", png, "image/png")},
+        files={"image_1": ("photo.png", png, "image/png")},  # ← image_1
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -286,11 +294,11 @@ def test_upload_valid_png_is_saved(admin_client, clean_uploads):
 
     files = [f.name for f in UPLOADS_DIR.iterdir() if f.is_file()]
     assert len(files) == 1
-    assert files[0].endswith(".png")
+    assert files[0].endswith(".webp")
 
 
 def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
-    """Настоящий JPEG тоже сохраняется (проверяем .jpg-расширение)."""
+    """Настоящий JPEG тоже сохраняется — тоже конвертируется в WebP."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -300,19 +308,23 @@ def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("photo.jpg", jpg, "image/jpeg")},
+        files={"image_1": ("photo.jpg", jpg, "image/jpeg")},  # ← image_1
         follow_redirects=False,
     )
     assert r.status_code == 303
 
     files = [f.name for f in UPLOADS_DIR.iterdir() if f.is_file()]
     assert len(files) == 1
-    assert files[0].endswith(".jpg")
+    assert files[0].endswith(".webp")
 
 
 def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
-    """Файл, превышающий MAX_UPLOAD_BYTES, не сохраняется."""
-    monkeypatch.setattr("app.main.MAX_UPLOAD_BYTES", 100)
+    """Файл, превышающий MAX_UPLOAD_BYTES, не сохраняется.
+
+    Патчим app.services.storage.MAX_UPLOAD_BYTES (не app.main —
+    тот импортирует свою копию константы и на storage не влияет).
+    """
+    monkeypatch.setattr("app.services.storage.MAX_UPLOAD_BYTES", 100)
 
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)

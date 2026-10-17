@@ -1659,3 +1659,24 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     font-size: 0.75rem;
     pointer-events: none;
 }
+
+/* ============================================================
+   Логотип бренда (serif-шрифт)
+   ============================================================ */
+.brand-logo {
+    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    font-size: 2rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.brand-logo-xl {
+    font-size: 3rem;
+}
+@media (min-width: 768px) {
+    .brand-logo-xl {
+        font-size: 4rem;
+    }
+}

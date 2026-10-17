@@ -22,7 +22,28 @@ a:focus-visible {
 .tabular { font-variant-numeric: tabular-nums; }
 
 /* ============================================================
-   View Transitions — плавный кроссфейд между страницами сайта
+   ЛОГОТИП БРЕНДА
+   ============================================================ */
+.brand-logo {
+    font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    font-size: 2rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.brand-logo-xl {
+    font-size: 3rem;
+}
+@media (min-width: 768px) {
+    .brand-logo-xl {
+        font-size: 4rem;
+    }
+}
+
+/* ============================================================
+   View Transitions
    ============================================================ */
 @view-transition {
     navigation: auto;
@@ -50,7 +71,7 @@ a:focus-visible {
 }
 
 /* ============================================================
-   Модал фильтров — большое окно по центру экрана
+   Модал фильтров
    ============================================================ */
 #filters-backdrop {
     position: fixed;
@@ -220,7 +241,7 @@ body.filters-open {
 }
 
 /* ============================================================
-   Главная: плавающие блобы за hero-каруселью
+   Главная: плавающие блобы
    ============================================================ */
 @keyframes blob {
     0%, 100% { transform: translate(0, 0) scale(1); }
@@ -238,7 +259,7 @@ body.filters-open {
 }
 
 /* ============================================================
-   Главная: прогресс-бар над hero-каруселью
+   Прогресс-бар над hero-каруселью
    ============================================================ */
 [data-progress] {
     width: 0%;
@@ -247,7 +268,7 @@ body.filters-open {
 [data-carousel]:focus { outline: none; }
 
 /* ============================================================
-   СКЕЛЕТОН-ОКНО
+   СКЕЛЕТОН-ОКНО (Лоадер при переходах)
    ============================================================ */
 .skeleton-overlay {
     position: fixed;
@@ -489,37 +510,6 @@ body.filters-open {
 @media (prefers-reduced-motion: reduce) {
     .sk-block { animation: none; }
     .skeleton-overlay { transition: none; }
-}
-
-/* ============================================================
-   Scroll reveal — элементы плавно появляются при прокрутке
-   ============================================================ */
-html.rv [data-rv] {
-    opacity: 1;
-    transform: none;
-    transition:
-        opacity 550ms ease-out,
-        transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-html.rv [data-rv].rv-in {
-    opacity: 1;
-    transform: none;
-}
-
-html.rv #filters-backdrop,
-html.rv #filters-panel,
-html.rv .skeleton-overlay {
-    opacity: inherit;
-    transform: inherit;
-    transition: inherit;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    html.rv [data-rv] {
-        opacity: 1 !important;
-        transform: none !important;
-        transition: none !important;
-    }
 }
 
 /* ============================================================
