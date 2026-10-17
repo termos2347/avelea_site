@@ -4,9 +4,20 @@ from sqlalchemy.orm import Session
 from app.data.models import Setting
 
 
+# Каждый item — dict с полями:
+#   type: "image" | "text"
+#   key:  уникальный ключ в Setting
+#   label: подпись в админке
+#   default: (только для text) значение, если в БД пусто
+#   multiline: (только для text) True → textarea, \n рендерится как <br>
+#
+# Каждая группа имеет "page" — заголовок сворачиваемой секции в админке.
+# Группы с одинаковым "page" объединяются в один аккордеон.
 SITE_CONTENT_GROUPS: list[dict] = [
+    # ============ ГЛАВНАЯ ============
     {
-        "title": "Главная — Hero слайд 1",
+        "page": "Главная",
+        "title": "Hero слайд 1",
         "items": [
             {"type": "image", "key": "home_hero_1_image", "label": "Фон"},
             {"type": "text", "key": "home_hero_1_eyebrow", "label": "Надзаголовок",
@@ -21,7 +32,8 @@ SITE_CONTENT_GROUPS: list[dict] = [
         ],
     },
     {
-        "title": "Главная — Hero слайд 2",
+        "page": "Главная",
+        "title": "Hero слайд 2",
         "items": [
             {"type": "image", "key": "home_hero_2_image", "label": "Фон"},
             {"type": "text", "key": "home_hero_2_eyebrow", "label": "Надзаголовок",
@@ -36,7 +48,8 @@ SITE_CONTENT_GROUPS: list[dict] = [
         ],
     },
     {
-        "title": "Главная — Hero слайд 3",
+        "page": "Главная",
+        "title": "Hero слайд 3",
         "items": [
             {"type": "image", "key": "home_hero_3_image", "label": "Фон"},
             {"type": "text", "key": "home_hero_3_eyebrow", "label": "Надзаголовок",
@@ -51,7 +64,8 @@ SITE_CONTENT_GROUPS: list[dict] = [
         ],
     },
     {
-        "title": "Главная — Плитки категорий",
+        "page": "Главная",
+        "title": "Плитки категорий",
         "items": [
             {"type": "image", "key": "home_category_face_image",    "label": "Категория «Лицо»"},
             {"type": "image", "key": "home_category_makeup_image",  "label": "Категория «Макияж»"},
@@ -59,15 +73,21 @@ SITE_CONTENT_GROUPS: list[dict] = [
             {"type": "image", "key": "home_category_perfume_image", "label": "Категория «Парфюм»"},
         ],
     },
+
+    # ============ КАТАЛОГ ============
     {
-        "title": "Каталог",
+        "page": "Каталог",
+        "title": "Баннер",
         "items": [
             {"type": "image", "key": "catalog_banner_image",
              "label": "Баннер сверху (и заглушка «ничего не найдено»)"},
         ],
     },
+
+    # ============ О НАС ============
     {
-        "title": "О нас — Hero",
+        "page": "О нас",
+        "title": "Hero",
         "items": [
             {"type": "image", "key": "about_hero_image", "label": "Фон"},
             {"type": "text", "key": "about_hero_eyebrow", "label": "Надзаголовок",
@@ -80,21 +100,31 @@ SITE_CONTENT_GROUPS: list[dict] = [
         ],
     },
     {
-        "title": "О нас — Блоки",
+        "page": "О нас",
+        "title": "Блоки",
         "items": [
             {"type": "image", "key": "about_idea_image",  "label": "Картинка «Пространство красоты»"},
             {"type": "image", "key": "about_world_image", "label": "Картинка «Коллекция»"},
-            {"type": "text", "key": "about_cta_title", "label": "CTA — заголовок",
-             "default": "Готовы попробовать?"},
-            {"type": "text", "key": "about_cta_subtitle", "label": "CTA — подзаголовок",
-             "multiline": True,
-             "default": "Откройте каталог и найдите уход, который полюбит ваша кожа."},
-            {"type": "text", "key": "about_cta_button", "label": "CTA — кнопка",
-             "default": "Смотреть каталог"},
         ],
     },
     {
-        "title": "Футер",
+        "page": "О нас",
+        "title": "CTA",
+        "items": [
+            {"type": "text", "key": "about_cta_title", "label": "Заголовок",
+             "default": "Готовы попробовать?"},
+            {"type": "text", "key": "about_cta_subtitle", "label": "Подзаголовок",
+             "multiline": True,
+             "default": "Откройте каталог и найдите уход, который полюбит ваша кожа."},
+            {"type": "text", "key": "about_cta_button", "label": "Текст кнопки",
+             "default": "Смотреть каталог"},
+        ],
+    },
+
+    # ============ ФУТЕР ============
+    {
+        "page": "Футер",
+        "title": "Контакты",
         "items": [
             {"type": "text", "key": "footer_phone", "label": "Телефон",
              "default": "+7 962 573 0996"},
@@ -104,7 +134,13 @@ SITE_CONTENT_GROUPS: list[dict] = [
              "default": "г. Нижнекамск"},
             {"type": "text", "key": "footer_hours", "label": "Часы работы",
              "default": "Пн–Пт, 10:00–19:00"},
-            {"type": "text", "key": "footer_copyright", "label": "Копирайт",
+        ],
+    },
+    {
+        "page": "Футер",
+        "title": "Копирайт",
+        "items": [
+            {"type": "text", "key": "footer_copyright", "label": "Текст",
              "default": "© 2026 avelea. Все права защищены."},
         ],
     },

@@ -9,125 +9,359 @@
 </div>
 {% endif %}
 
-<p style="color: var(--adm-muted); font-size: 0.875rem; margin-bottom: 1.5rem; line-height: 1.5;">
-    Контент публичных страниц. Картинки автоматически сжимаются в WebP
-    и сохраняются в <code>static/site/</code> с читаемыми именами.
-    Тексты — в <code>Setting</code>.
-</p>
+<div class="site-cms-head">
+    <p class="site-cms-desc">
+        Контент публичных страниц. Картинки автоматически сжимаются в WebP
+        и сохраняются в <code>static/site/</code> с читаемыми именами.
+        Тексты — в <code>Setting</code>.
+    </p>
+    <div class="site-cms-actions">
+        <button type="button" class="adm-btn adm-btn-secondary" data-expand-all>
+            <i class="fas fa-angles-down"></i>
+            Развернуть всё
+        </button>
+        <button type="button" class="adm-btn adm-btn-secondary" data-collapse-all>
+            <i class="fas fa-angles-up"></i>
+            Свернуть всё
+        </button>
+    </div>
+</div>
 
 <div id="site-toast" class="site-toast" role="status" aria-live="polite"></div>
 
-{% for group in groups %}
-<div class="adm-card" style="margin-bottom: 1rem;">
-    <div style="padding: 1.25rem;">
-        <h2 style="font-size: 1rem; font-weight: 600; color: var(--adm-text); margin: 0 0 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--adm-border-soft);">
-            {{ group.title }}
-        </h2>
-
-        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
-            {% for item in group["items"] %}
-            <div>
-                <label class="adm-label">{{ item.label }}</label>
-
-                {% if item.type == "image" %}
-                <div data-site-img
-                     data-key="{{ item.key }}"
-                     data-label="{{ item.label }}"
-                     data-has-image="{{ '1' if item.url else '0' }}"
-                     style="display: flex; gap: 1rem; align-items: flex-start; margin-top: 0.5rem; flex-wrap: wrap;">
-                    <label class="site-img-drop" data-drop tabindex="0">
-                        <input type="file" name="image" accept="image/*"
-                               class="site-img-input" data-input>
-                        <div class="site-img-preview" data-preview>
-                            {% if item.url %}
-                                <img src="{{ item.url }}" alt="">
-                            {% else %}
-                                <div class="site-img-empty"><i class="fas fa-image"></i></div>
-                            {% endif %}
-                        </div>
-                        <div class="site-img-overlay">
-                            <i class="fas fa-cloud-arrow-up"></i>
-                            <span data-overlay-text>
-                                {% if item.url %}Заменить{% else %}Загрузить{% endif %}
-                            </span>
-                        </div>
-                        <div class="site-img-progress" data-progress>
-                            <div class="site-img-progress-track">
-                                <div class="site-img-progress-bar" data-progress-bar></div>
-                            </div>
-                            <span class="site-img-progress-text" data-progress-text>0%</span>
-                        </div>
-                        <div class="site-img-success" data-success>
-                            <i class="fas fa-check"></i>
-                        </div>
-                    </label>
-
-                    <div style="flex: 1; min-width: 14rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                        <button type="button" class="adm-btn adm-btn-secondary" data-trigger-input>
-                            <i class="fas fa-folder-open"></i>
-                            <span>Выбрать файл</span>
-                        </button>
-                        <button type="button" class="adm-btn adm-btn-ghost adm-btn-danger"
-                                data-remove-btn
-                                {% if not item.url %}style="display:none;"{% endif %}>
-                            <i class="fas fa-trash"></i>
-                            Удалить
-                        </button>
-
-                        <div class="site-img-meta" data-meta
-                             style="font-size: 0.72rem; color: var(--adm-muted); margin-top: 0.25rem; line-height: 1.5;">
-                            {% if item.info and not item.info.missing %}
-                                <span style="color: var(--adm-text); font-weight: 500;">WebP</span>
-                                · {{ item.info.size_kb }} KB
-                                · <code style="font-size: 0.7rem;">{{ item.info.filename }}</code>
-                            {% elif item.info and item.info.missing %}
-                                <span style="color: var(--adm-danger);">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    Файл {{ item.info.filename }} отсутствует на диске
-                                </span>
-                            {% else %}
-                                jpg, png, gif, webp — до 5 МБ. Автоконвертация в WebP.
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                {% else %}
-                <div data-site-text data-key="{{ item.key }}" data-label="{{ item.label }}"
-                     style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-width: 42rem;">
-                    {% if item.multiline %}
-                    <textarea class="adm-textarea" rows="3" data-text-input
-                              style="font-family: inherit;"
-                              maxlength="200">{{ item.value }}</textarea>
-                    {% else %}
-                    <input type="text" class="adm-input" data-text-input
-                           maxlength="200" value="{{ item.value }}">
-                    {% endif %}
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                        <div style="font-size: 0.72rem; color: var(--adm-muted);">
-                            {% if item.default %}По умолчанию: <code>{{ item.default }}</code>{% endif %}
-                            · максимум 200 символов
-                        </div>
-                        <button type="button" class="adm-btn adm-btn-primary" data-save-text>
-                            <i class="fas fa-check"></i>
-                            Сохранить
-                        </button>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </div>
+{# Плавающий счётчик несохранённых полей #}
+<div class="site-unsaved-float" data-unsaved-float style="display:none;">
+    <i class="fas fa-circle"></i>
+    <span>Не сохранено: <strong data-count>0</strong></span>
 </div>
+
+{% for page in pages %}
+<details class="site-page" data-page-slug="{{ page.slug }}" open>
+    <summary class="site-page-summary">
+        <span class="site-page-arrow"><i class="fas fa-chevron-right"></i></span>
+        <span class="site-page-title">{{ page.title }}</span>
+        <span class="site-page-count">
+            {{ page.items_count }}
+            {{ "поле" if page.items_count % 10 == 1 and page.items_count % 100 != 11
+               else ("поля" if 2 <= page.items_count % 10 <= 4 and not (12 <= page.items_count % 100 <= 14)
+               else "полей") }}
+        </span>
+    </summary>
+
+    <div class="site-page-body">
+        {% for group in page.groups %}
+        <div class="site-group">
+            <h3 class="site-group-title">{{ group.title }}</h3>
+
+            <div class="site-group-items">
+                {% for item in group["items"] %}
+                <div class="site-item">
+                    <div class="site-item-head">
+                        <label class="adm-label" style="margin-bottom:0;">{{ item.label }}</label>
+                        {% if item.type == "text" %}
+                        <span class="site-unsaved-badge" data-unsaved-badge style="display:none;">
+                            <i class="fas fa-circle"></i>
+                            Не сохранено
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    {% if item.type == "image" %}
+                    <div data-site-img
+                         data-key="{{ item.key }}"
+                         data-label="{{ item.label }}"
+                         data-has-image="{{ '1' if item.url else '0' }}"
+                         class="site-img-row">
+                        <label class="site-img-drop" data-drop tabindex="0">
+                            <input type="file" name="image" accept="image/*"
+                                   class="site-img-input" data-input>
+                            <div class="site-img-preview" data-preview>
+                                {% if item.url %}
+                                    <img src="{{ item.url }}" alt="">
+                                {% else %}
+                                    <div class="site-img-empty"><i class="fas fa-image"></i></div>
+                                {% endif %}
+                            </div>
+                            <div class="site-img-overlay">
+                                <i class="fas fa-cloud-arrow-up"></i>
+                                <span data-overlay-text>
+                                    {% if item.url %}Заменить{% else %}Загрузить{% endif %}
+                                </span>
+                            </div>
+                            <div class="site-img-progress" data-progress>
+                                <div class="site-img-progress-track">
+                                    <div class="site-img-progress-bar" data-progress-bar></div>
+                                </div>
+                                <span class="site-img-progress-text" data-progress-text>0%</span>
+                            </div>
+                            <div class="site-img-success" data-success>
+                                <i class="fas fa-check"></i>
+                            </div>
+                        </label>
+
+                        <div class="site-img-side">
+                            <button type="button" class="adm-btn adm-btn-secondary" data-trigger-input>
+                                <i class="fas fa-folder-open"></i>
+                                <span>Выбрать файл</span>
+                            </button>
+                            <button type="button" class="adm-btn adm-btn-ghost adm-btn-danger"
+                                    data-remove-btn
+                                    {% if not item.url %}style="display:none;"{% endif %}>
+                                <i class="fas fa-trash"></i>
+                                Удалить
+                            </button>
+
+                            <div class="site-img-meta" data-meta>
+                                {% if item.info and not item.info.missing %}
+                                    <span class="site-img-meta-type">WebP</span>
+                                    · {{ item.info.size_kb }} KB
+                                    · <code>{{ item.info.filename }}</code>
+                                {% elif item.info and item.info.missing %}
+                                    <span style="color: var(--adm-danger);">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Файл {{ item.info.filename }} отсутствует на диске
+                                    </span>
+                                {% else %}
+                                    jpg, png, gif, webp — до 5 МБ. Автоконвертация в WebP.
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% else %}
+                    <div data-site-text
+                         data-key="{{ item.key }}"
+                         data-label="{{ item.label }}"
+                         data-original="{{ item.value }}"
+                         class="site-text-row">
+                        {% if item.multiline %}
+                        <textarea class="adm-textarea" rows="3" data-text-input
+                                  maxlength="200">{{ item.value }}</textarea>
+                        {% else %}
+                        <input type="text" class="adm-input" data-text-input
+                               maxlength="200" value="{{ item.value }}">
+                        {% endif %}
+                        <div class="site-text-actions">
+                            <div class="site-text-hint">
+                                {% if item.default %}По умолчанию: <code>{{ item.default }}</code>{% endif %}
+                                · максимум 200 символов
+                            </div>
+                            <button type="button" class="adm-btn adm-btn-primary" data-save-text>
+                                <i class="fas fa-check"></i>
+                                Сохранить
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</details>
 {% endfor %}
 
 <style>
+/* ---------- Шапка ---------- */
+.site-cms-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+.site-cms-desc {
+    color: var(--adm-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0;
+    flex: 1;
+    min-width: 16rem;
+}
+.site-cms-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* ---------- Аккордеон ---------- */
+.site-page {
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    background: var(--adm-surface);
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    transition: border-color 140ms ease;
+}
+.site-page[open] { border-color: var(--adm-muted-soft); }
+
+.site-page-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    background: var(--adm-surface);
+    transition: background 140ms ease;
+}
+.site-page-summary::-webkit-details-marker { display: none; }
+.site-page-summary:hover { background: var(--adm-border-soft); }
+
+.site-page-arrow {
+    display: inline-flex;
+    width: 1.25rem;
+    height: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--adm-muted);
+    flex-shrink: 0;
+    transition: transform 200ms ease;
+}
+.site-page[open] .site-page-arrow { transform: rotate(90deg); }
+.site-page-arrow i { font-size: 0.7rem; }
+
+.site-page-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--adm-text);
+    flex: 1;
+}
+
+.site-page-count {
+    font-size: 0.75rem;
+    color: var(--adm-muted);
+    background: var(--adm-border-soft);
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+}
+
+.site-page-body {
+    padding: 0.5rem 1.25rem 1.25rem;
+    border-top: 1px solid var(--adm-border-soft);
+}
+
+/* ---------- Группы внутри страницы ---------- */
+.site-group {
+    padding: 1.25rem 0;
+    border-bottom: 1px dashed var(--adm-border-soft);
+}
+.site-group:last-child { border-bottom: 0; padding-bottom: 0.25rem; }
+.site-group:first-child { padding-top: 1rem; }
+
+.site-group-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--adm-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 0.75rem;
+}
+
+.site-group-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.site-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+/* ---------- Заголовок item + бейдж "не сохранено" ---------- */
+.site-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.site-unsaved-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+    animation: site-unsaved-pulse 2s ease-in-out infinite;
+}
+.site-unsaved-badge i {
+    font-size: 0.5rem;
+    color: #f59e0b;
+}
+
+@keyframes site-unsaved-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.65; }
+}
+
+/* Оранжевая рамка у грязного поля */
+.site-item.is-dirty .adm-input,
+.site-item.is-dirty .adm-textarea {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+.site-item.is-dirty .adm-input:focus,
+.site-item.is-dirty .adm-textarea:focus {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+}
+
+/* ---------- Плавающий счётчик ---------- */
+.site-unsaved-float {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1rem;
+    background: #f59e0b;
+    color: #fff;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+    z-index: 8000;
+    animation: site-unsaved-pop 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.site-unsaved-float i { font-size: 0.5rem; }
+.site-unsaved-float strong { font-weight: 700; }
+
+@keyframes site-unsaved-pop {
+    from { transform: translateY(20px) scale(0.9); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ---------- Картинки ---------- */
+.site-img-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
 .site-img-drop {
-    position: relative; width: 12rem; height: 8rem;
-    border-radius: var(--adm-radius-sm); overflow: hidden;
-    cursor: pointer; background: var(--adm-border-soft);
-    border: 1.5px dashed transparent; flex-shrink: 0;
+    position: relative;
+    width: 12rem;
+    height: 8rem;
+    border-radius: var(--adm-radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--adm-border-soft);
+    border: 1.5px dashed transparent;
+    flex-shrink: 0;
     transition: border-color 140ms ease, transform 140ms ease;
     display: block;
 }
@@ -192,6 +426,45 @@
     to   { transform: scale(1); opacity: 1; }
 }
 
+.site-img-side {
+    flex: 1;
+    min-width: 14rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.site-img-meta {
+    font-size: 0.72rem;
+    color: var(--adm-muted);
+    margin-top: 0.25rem;
+    line-height: 1.5;
+}
+.site-img-meta-type {
+    color: var(--adm-text);
+    font-weight: 500;
+}
+
+/* ---------- Тексты ---------- */
+.site-text-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 42rem;
+}
+.site-text-row .adm-textarea { font-family: inherit; }
+.site-text-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.site-text-hint {
+    font-size: 0.72rem;
+    color: var(--adm-muted);
+}
+
+/* ---------- Toast ---------- */
 .site-toast {
     position: fixed; bottom: 1.5rem; left: 50%;
     transform: translateX(-50%) translateY(100px);
@@ -228,6 +501,118 @@
         return el ? el.value : '';
     }
 
+    // ============================================================
+    // UNSAVED STATE
+    // ============================================================
+    function isDirty(root) {
+        var input = root.querySelector('[data-text-input]');
+        if (!input) return false;
+        var original = root.dataset.original || '';
+        return input.value !== original;
+    }
+
+    function getDirtyCount() {
+        return Array.from(document.querySelectorAll('[data-site-text]'))
+            .filter(isDirty).length;
+    }
+
+    function updateGlobal() {
+        var float = document.querySelector('[data-unsaved-float]');
+        if (!float) return;
+        var n = getDirtyCount();
+        if (n > 0) {
+            float.style.display = '';
+            var c = float.querySelector('[data-count]');
+            if (c) c.textContent = n;
+        } else {
+            float.style.display = 'none';
+        }
+    }
+
+    function updateDirtyState(root) {
+        var item = root.closest('.site-item');
+        if (!item) return;
+        var dirty = isDirty(root);
+        item.classList.toggle('is-dirty', dirty);
+        var badge = item.querySelector('[data-unsaved-badge]');
+        if (badge) badge.style.display = dirty ? '' : 'none';
+        updateGlobal();
+    }
+
+    // Инициализация — все поля чистые на старте
+    document.querySelectorAll('[data-site-text]').forEach(function (root) {
+        var input = root.querySelector('[data-text-input]');
+        if (!input) return;
+        input.addEventListener('input', function () { updateDirtyState(root); });
+        updateDirtyState(root);
+    });
+
+    // ============================================================
+    // Предупреждение при уходе с несохранёнными
+    // ============================================================
+    function warnIfDirty() {
+        var n = getDirtyCount();
+        if (n === 0) return true;
+        var word = n === 1 ? 'изменение' : (n < 5 ? 'изменения' : 'изменений');
+        return confirm('У вас есть несохранённые ' + word + ' (' + n + ').\nПерейти и потерять их?');
+    }
+
+    // Обычная навигация (закрытие таба, F5, ввод URL)
+    window.addEventListener('beforeunload', function (e) {
+        if (getDirtyCount() > 0) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // htmx-навигация (hx-boost на body) — перехватываем ДО запроса
+    document.body.addEventListener('htmx:confirm', function (e) {
+        if (getDirtyCount() === 0) return;
+        if (!warnIfDirty()) {
+            e.preventDefault();
+        }
+    });
+
+    // ============================================================
+    // Аккордеон: сохранение состояния
+    // ============================================================
+    var STORAGE_PREFIX = 'site_page_open_';
+
+    document.querySelectorAll('.site-page').forEach(function (details) {
+        var slug = details.dataset.pageSlug;
+        if (!slug) return;
+
+        try {
+            var stored = localStorage.getItem(STORAGE_PREFIX + slug);
+            if (stored === '0') details.open = false;
+            else if (stored === '1') details.open = true;
+        } catch (e) {}
+
+        details.addEventListener('toggle', function () {
+            try {
+                localStorage.setItem(STORAGE_PREFIX + slug, details.open ? '1' : '0');
+            } catch (e) {}
+        });
+    });
+
+    var expandBtn = document.querySelector('[data-expand-all]');
+    var collapseBtn = document.querySelector('[data-collapse-all]');
+
+    function setAll(open) {
+        document.querySelectorAll('.site-page').forEach(function (d) {
+            d.open = open;
+            try {
+                localStorage.setItem(STORAGE_PREFIX + d.dataset.pageSlug, open ? '1' : '0');
+            } catch (e) {}
+        });
+    }
+
+    if (expandBtn) expandBtn.addEventListener('click', function () { setAll(true); });
+    if (collapseBtn) collapseBtn.addEventListener('click', function () { setAll(false); });
+
+    // ============================================================
+    // КАРТИНКИ
+    // ============================================================
     function renderMeta(root, info) {
         var meta = root.querySelector('[data-meta]');
         if (!meta) return;
@@ -241,9 +626,9 @@
                 + info.filename + ' отсутствует на диске</span>';
             return;
         }
-        meta.innerHTML = '<span style="color: var(--adm-text); font-weight: 500;">WebP</span>'
+        meta.innerHTML = '<span class="site-img-meta-type">WebP</span>'
             + ' · ' + info.size_kb + ' KB'
-            + ' · <code style="font-size: 0.7rem;">' + info.filename + '</code>';
+            + ' · <code>' + info.filename + '</code>';
     }
 
     function setPreview(root, url, info) {
@@ -378,6 +763,9 @@
         }
     });
 
+    // ============================================================
+    // ТЕКСТЫ
+    // ============================================================
     document.querySelectorAll('[data-site-text]').forEach(function (root) {
         var input = root.querySelector('[data-text-input]');
         var saveBtn = root.querySelector('[data-save-text]');
@@ -401,6 +789,11 @@
                 var data = null;
                 try { data = JSON.parse(xhr.responseText); } catch (e) {}
                 if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+                    // Сервер вернул очищенное значение — синхронизируем input и original.
+                    var newVal = data.value || '';
+                    input.value = newVal;
+                    root.dataset.original = newVal;
+                    updateDirtyState(root);
                     showToast('Текст сохранён', false);
                 } else {
                     showToast((data && data.error) || 'Не удалось сохранить', true);

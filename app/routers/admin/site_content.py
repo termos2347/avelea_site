@@ -33,8 +33,12 @@ def admin_site_content(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
 ):
-    groups = []
+    # Группируем группы по page, сохраняя порядок первого появления.
+    pages_order: list[str] = []
+    pages_map: dict[str, list[dict]] = {}
+
     for group in SITE_CONTENT_GROUPS:
+        page_title = group.get("page", "Прочее")
         items = []
         for item in group["items"]:
             key = item["key"]
@@ -49,12 +53,30 @@ def admin_site_content(
                 })
             else:
                 items.append({**item, "value": value or ""})
-        groups.append({"title": group["title"], "items": items})
+
+        if page_title not in pages_map:
+            pages_map[page_title] = []
+            pages_order.append(page_title)
+
+        pages_map[page_title].append({
+            "title": group["title"],
+            "items": items,
+        })
+
+    pages = [
+        {
+            "title": title,
+            "slug": title.lower().replace(" ", "-"),
+            "groups": pages_map[title],
+            "items_count": sum(len(g["items"]) for g in pages_map[title]),
+        }
+        for title in pages_order
+    ]
 
     flash_error = request.session.pop("flash_error", None)
 
     return admin_templates.TemplateResponse(request, "site_content.html", {
-        "groups": groups,
+        "pages": pages,
         "flash_error": flash_error,
     })
 
@@ -92,7 +114,6 @@ def admin_site_image_upload(
             return JSONResponse({"ok": False, "error": "Файл не выбран."}, status_code=400)
         return RedirectResponse(url="/admin/site", status_code=303)
 
-    # key уходит в save_site_image как prefix имени файла
     new_filename, err = save_site_image(image, key)
     if err:
         if ajax:
