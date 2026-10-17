@@ -580,7 +580,7 @@
     (function initImageSlots() {
 
         function isVideoFile(name) {
-            return /\.(mp4|webm|mov|m4v|ogv)$/i.test(name || '');
+            return /\.(mp4|webm|mov|m4v)$/i.test(name || '');
         }
 
         function makePreview(fileName, url) {

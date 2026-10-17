@@ -50,7 +50,13 @@ _MAGIC = (
     (b"GIF89a",                ".gif"),
     (b"\x1a\x45\xdf\xa3",      ".webm"),
 )
-_VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v", ".ogv"}
+
+# Только те форматы, для которых есть magic-bytes в _MAGIC.
+# .ogv (Ogg Video) здесь НЕ упомянут: у него нет magic в _MAGIC,
+# поэтому _sniff_ext его не пропустит — и держать его в списке
+# «разрешённых» означает врать пользователю в сообщении об ошибке.
+_VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
+
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 
@@ -237,7 +243,6 @@ class S3Storage(StorageBackend):
             ".webm": "video/webm",
             ".mov":  "video/quicktime",
             ".m4v":  "video/x-m4v",
-            ".ogv":  "video/ogg",
             ".jpg":  "image/jpeg",
             ".jpeg": "image/jpeg",
             ".png":  "image/png",
@@ -301,6 +306,12 @@ def save_media(file) -> tuple[str | None, str | None]:
       - (filename, None) — успех;
       - (None, None)     — файла не было / пустой (не ошибка);
       - (None, "...")    — отклонён с причиной.
+
+    Поддерживаемые форматы (определяются по magic-bytes, не по
+    расширению):
+
+    Картинки: jpg, png, gif, webp.
+    Видео:    mp4, webm, mov (включая m4v — тот же контейнер).
     """
     if not file or not file.filename:
         return None, None

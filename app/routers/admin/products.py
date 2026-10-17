@@ -44,23 +44,41 @@ def _apply_image_slot(
     new_file: UploadFile | None,
     remove_flag: str | None,
 ) -> str | None:
-    new_filename, err = (None, None)
-    if new_file is not None and getattr(new_file, "filename", ""):
+    """Применяет изменения к одному слоту медиа.
+
+    Логика приоритетов:
+
+    1. Пользователь загрузил новый файл, он успешно сохранён →
+       старый удаляется с диска, возвращается новое имя.
+    2. Пользователь загрузил новый файл, но save_media вернул
+       ошибку (формат, размер, битый) → старый файл ОСТАЁТСЯ,
+       ошибка пишется во flash. remove_flag игнорируется: раз
+       человек пытался загрузить новое, значит хотел заменить,
+       а не удалить.
+    3. Файла не было и стоит remove_flag → старый удаляется,
+       возвращается None.
+    4. Иначе → старое имя без изменений.
+    """
+    had_upload = new_file is not None and getattr(new_file, "filename", "")
+
+    if had_upload:
         new_filename, err = save_media(new_file)
         if err:
             request.session["flash_error"] = err
+            return old_filename  # сохраняем старый, ничего не удаляем
+        if new_filename:
+            if old_filename and old_filename != new_filename:
+                delete_media(old_filename)
+            return new_filename
+        # save_media вернул (None, None) — файл пустой.
+        # Ведём себя как «файла не было»: смотрим remove_flag ниже.
 
-    if new_filename:
-        final = new_filename
-    elif remove_flag:
-        final = None
-    else:
-        final = old_filename
+    if remove_flag:
+        if old_filename:
+            delete_media(old_filename)
+        return None
 
-    if old_filename and old_filename != final:
-        delete_media(old_filename)
-
-    return final
+    return old_filename
 
 
 def _save_variants(product: Product, amounts: list[str], units: list[str], prices: list[str]):

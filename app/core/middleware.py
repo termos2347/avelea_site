@@ -81,23 +81,40 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class StaticCacheMiddleware(BaseHTTPMiddleware):
-    """Долгий Cache-Control на /static/uploads/*.
+    """Долгий Cache-Control для статики.
 
-    Файлы в uploads/ имеют уникальные имена (uuid), поэтому их
-    кеширование безопасно — один и тот же URL всегда отдаёт один
-    и тот же файл. Браузер один раз скачает картинку и будет
-    использовать её из локального кеша 30 дней.
+    Три группы:
 
-    CSS/JS не трогаем — они могут обновляться при разработке,
-    и хочется, чтобы браузер подтягивал свежие версии.
+    1. /static/uploads/* — 30 дней, immutable.
+       Файлы имеют уникальные имена (uuid), поэтому кеширование
+       безопасно: один и тот же URL всегда отдаёт один и тот же
+       файл. Браузер один раз скачает картинку и будет использовать
+       её из локального кеша месяц.
+
+    2. /static/css/*, /static/js/* — 1 день.
+       CSS/JS могут обновляться при разработке, и мы хотим, чтобы
+       браузер подтягивал свежие версии. 1 день — компромисс:
+       заметная скорость загрузки при повторных визитах,
+       но и обновления доходят в разумные сроки. Если понадобится
+       мгновенное обновление — добавляй ?v=<hash> в шаблоны,
+       и кэш будет сбрасываться при смене версии.
+
+    3. Остальное (/static/favicon.ico и т.п.) — без Cache-Control,
+       поведение по умолчанию от StaticFiles (ETag).
     """
 
     async def dispatch(self, request, call_next):
         response = await call_next(request)
 
-        if request.url.path.startswith("/static/uploads/"):
+        path = request.url.path
+
+        if path.startswith("/static/uploads/"):
             response.headers["Cache-Control"] = (
                 "public, max-age=2592000, immutable"
+            )
+        elif path.startswith("/static/css/") or path.startswith("/static/js/"):
+            response.headers["Cache-Control"] = (
+                "public, max-age=86400"
             )
 
         return response
