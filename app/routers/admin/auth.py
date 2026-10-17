@@ -8,7 +8,15 @@
 
 Если TELEGRAM_2FA_ENABLED=False (нет токена или admin_id в .env) —
 шаг с кодом пропускается, логин работает как раньше.
+
+Тип роутеров:
+    - admin_login_submit — async def, потому что await _send_telegram_code
+      (httpx.AsyncClient — реальный async I/O).
+    - admin_login_2fa_submit — def, потому что _verify_code синхронный,
+      без I/O. В threadpool не блокирует event loop.
+    - Остальные — async def, потому что нет I/O (быстрые редиректы).
 """
+import asyncio
 import logging
 import secrets
 import threading
@@ -54,12 +62,39 @@ _codes_lock = threading.Lock()
 
 
 def _purge_expired(now: float | None = None) -> None:
-    """Убирает протухшие коды. Вызывается при каждом обращении."""
+    """Убирает протухшие коды. Вызывается при каждом обращении
+    и фоново из purge_loop."""
     if now is None:
         now = time.time()
     expired = [t for t, v in _pending_codes.items() if v["expires"] < now]
     for t in expired:
         _pending_codes.pop(t, None)
+
+
+async def purge_loop(interval: int = 60) -> None:
+    """Фоново чистит протухшие коды 2FA.
+
+    Без этой задачи код, который пользователь не ввёл, висит
+    в _pending_codes до перезапуска приложения — _purge_expired()
+    вызывается только при следующем auth-действии. Каждый код
+    ~200 байт, но держать мёртвые записи всё равно некрасиво.
+
+    Запускается из lifespan в main.py только если 2FA включён
+    (иначе коды не создаются, чистить нечего). Отменяется
+    при shutdown через .cancel().
+
+    interval=60s при TTL=180s: код живёт в памяти максимум
+    на минуту дольше положенного. Точнее — не нужно, при
+    следующем логине всё равно почистится.
+    """
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            with _codes_lock:
+                _purge_expired()
+    except asyncio.CancelledError:
+        # Штатная отмена при shutdown — выходим молча.
+        raise
 
 
 def _new_code_entry() -> tuple[str, str]:
@@ -103,7 +138,6 @@ def _verify_code(token: str, user_code: str) -> tuple[bool, str]:
             left = TELEGRAM_CODE_MAX_ATTEMPTS - entry["attempts"] + 1
             return False, f"Неверный код. Осталось попыток: {left}"
 
-        # Успех — забираем запись, чтобы код нельзя было использовать дважды.
         _pending_codes.pop(token, None)
     return True, ""
 
@@ -115,7 +149,8 @@ def _has_pending(token: str) -> bool:
     with _codes_lock:
         _purge_expired()
         return token in _pending_codes
-    
+
+
 # ============================================================
 # Отправка кода в Telegram
 # ============================================================
@@ -160,7 +195,6 @@ async def admin_login_form(request: Request):
     if request.session.get("admin"):
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # Если уже висит pending-код — сразу на второй шаг.
     if TELEGRAM_2FA_ENABLED and request.session.get("pending_2fa_token"):
         return RedirectResponse(url="/admin/login/2fa", status_code=303)
 
@@ -196,18 +230,14 @@ async def admin_login_submit(request: Request, password: str = Form(...)):
             status_code=401,
         )
 
-    # Пароль верный. Сбрасываем счётчик неудач.
     reset(key)
 
-    # 2FA выключен → пускаем сразу (dev-режим, тесты).
     if not TELEGRAM_2FA_ENABLED:
         request.session["admin"] = True
         request.session.pop("csrf_token", None)
         request.session.pop("pending_2fa_token", None)
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # Отдельный rate-limit на отправку кодов: даже зная пароль,
-    # нельзя спамить админу в Telegram.
     code_key = f"login-code:{key}"
     if is_blocked(code_key, max_attempts=3, window=300):
         return admin_templates.TemplateResponse(
@@ -220,14 +250,11 @@ async def admin_login_submit(request: Request, password: str = Form(...)):
         )
     register_failure(code_key)
 
-    # Генерируем код, кладём в server-side хранилище,
-    # клиенту отдаём только opaque-token.
     token, code = _new_code_entry()
     request.session["pending_2fa_token"] = token
 
     ok, err = await _send_telegram_code(code)
     if not ok:
-        # Не смогли отправить — сбрасываем, чтобы не висел мёртвый код.
         with _codes_lock:
             _pending_codes.pop(token, None)
         request.session.pop("pending_2fa_token", None)
@@ -251,7 +278,6 @@ async def admin_login_2fa_form(request: Request):
 
     token = request.session.get("pending_2fa_token")
     if not token:
-        # Нет pending-кода — начинаем заново.
         return RedirectResponse(url="/admin/login", status_code=303)
 
     return admin_templates.TemplateResponse(request, "login.html", {
@@ -276,9 +302,6 @@ def admin_login_2fa_submit(request: Request, code: str = Form(...)):
 
     ok, err = _verify_code(token, code.strip())
     if not ok:
-        # Запись могла «сгореть»: код истёк или попытки закончились.
-        # В этом случае токен уже удалён из _pending_codes — надо
-        # вычистить и сессию и вернуть пользователя к шагу пароля.
         if not _has_pending(token):
             request.session.pop("pending_2fa_token", None)
             return RedirectResponse(url="/admin/login", status_code=303)
@@ -293,11 +316,11 @@ def admin_login_2fa_submit(request: Request, code: str = Form(...)):
             status_code=401,
         )
 
-    # Успех.
     request.session["admin"] = True
     request.session.pop("pending_2fa_token", None)
     request.session.pop("csrf_token", None)
     return RedirectResponse(url="/admin/products", status_code=303)
+
 
 # ============================================================
 # Logout / редиректы
@@ -305,7 +328,6 @@ def admin_login_2fa_submit(request: Request, code: str = Form(...)):
 
 @router.get("/logout")
 async def admin_logout(request: Request):
-    # Убираем и pending, если был.
     token = request.session.get("pending_2fa_token")
     if token:
         with _codes_lock:

@@ -1,4 +1,5 @@
 """Точка сборки приложения."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
@@ -27,6 +28,7 @@ from app.core.config import (
     SESSION_HTTPS_ONLY,
     SESSION_MAX_AGE,
     SESSION_SAME_SITE,
+    TELEGRAM_2FA_ENABLED,
     UVICORN_WORKERS,
 )
 from app.core.database import SessionLocal
@@ -102,10 +104,28 @@ async def lifespan(app: FastAPI):
         db.close()
 
     cache.reload_all()
+
+    # Фоновая чистка протухших 2FA-кодов. Только если 2FA включён —
+    # иначе коды не создаются, чистить нечего.
+    purge_task: asyncio.Task | None = None
+    if TELEGRAM_2FA_ENABLED:
+        purge_task = asyncio.create_task(auth.purge_loop())
+        log.info("Фоновая чистка 2FA-кодов запущена")
+
     log.info("Кэш прогрет. Приложение готово")
 
-    yield
-    log.info("Остановка")
+    try:
+        yield
+    finally:
+        if purge_task is not None:
+            purge_task.cancel()
+            try:
+                await purge_task
+            except asyncio.CancelledError:
+                pass
+            log.info("Фоновая чистка 2FA-кодов остановлена")
+
+        log.info("Остановка")
 
 
 app = FastAPI(title="Avelea Shop", lifespan=lifespan)
@@ -151,8 +171,6 @@ async def robots_txt(request: Request):
 
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap_xml(request: Request):
-    # def, не async def: cache.get_products() синхронный, при холодном
-    # кэше дёргает SQLAlchemy. В threadpool — event loop свободен.
     base = str(request.base_url).rstrip("/")
 
     urls = [

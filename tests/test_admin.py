@@ -576,3 +576,43 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
     )
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/login"
+    
+def test_2fa_purge_removes_expired_only():
+    """_purge_expired удаляет только протухшие коды, живые не трогает."""
+    import time
+    from app.routers.admin import auth as auth_mod
+
+    now = time.time()
+    with auth_mod._codes_lock:
+        auth_mod._pending_codes.clear()
+        auth_mod._pending_codes["alive"] = {
+            "code": "111111", "expires": now + 100, "attempts": 0,
+        }
+        auth_mod._pending_codes["dead"] = {
+            "code": "222222", "expires": now - 100, "attempts": 0,
+        }
+
+    auth_mod._purge_expired()
+
+    assert "alive" in auth_mod._pending_codes
+    assert "dead" not in auth_mod._pending_codes
+    
+def test_2fa_purge_removes_expired_only():
+    """_purge_expired удаляет протухшие коды, живые не трогает."""
+    import time
+    from app.routers.admin import auth as auth_mod
+
+    now = time.time()
+    with auth_mod._codes_lock:
+        auth_mod._pending_codes.clear()
+        auth_mod._pending_codes["alive"] = {
+            "code": "111111", "expires": now + 100, "attempts": 0,
+        }
+        auth_mod._pending_codes["dead"] = {
+            "code": "222222", "expires": now - 100, "attempts": 0,
+        }
+
+    auth_mod._purge_expired()
+
+    assert "alive" in auth_mod._pending_codes
+    assert "dead" not in auth_mod._pending_codes
