@@ -1,6 +1,9 @@
 """Админка: контент статичных страниц (картинки + тексты)."""
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -20,7 +23,14 @@ from app.services.storage import (
     site_image_public_url,
 )
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/admin/site", tags=["admin-site"])
+
+_COMMIT_ERROR_MSG = (
+    "Не удалось сохранить — временная ошибка базы данных. "
+    "Попробуйте ещё раз через минуту."
+)
 
 
 def _is_ajax(request: Request) -> bool:
@@ -33,7 +43,6 @@ def admin_site_content(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
 ):
-    # Группируем группы по page, сохраняя порядок первого появления.
     pages_order: list[str] = []
     pages_map: dict[str, list[dict]] = {}
 
@@ -101,10 +110,19 @@ def admin_site_image_upload(
     old_filename = get_setting(db, key)
 
     if remove:
-        set_setting(db, key, None)
-        db.commit()
-        delete_site_image(old_filename)
-        cache.invalidate()
+        try:
+            set_setting(db, key, None)
+            db.commit()
+            delete_site_image(old_filename)
+            cache.invalidate()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            log.exception("site image remove failed: %s", exc)
+            if ajax:
+                return JSONResponse({"ok": False, "error": _COMMIT_ERROR_MSG}, status_code=503)
+            request.session["flash_error"] = _COMMIT_ERROR_MSG
+            return RedirectResponse(url="/admin/site", status_code=303)
+
         if ajax:
             return JSONResponse({"ok": True, "removed": True, "url": None})
         return RedirectResponse(url="/admin/site", status_code=303)
@@ -122,11 +140,19 @@ def admin_site_image_upload(
         return RedirectResponse(url="/admin/site", status_code=303)
 
     if new_filename:
-        set_setting(db, key, new_filename)
-        db.commit()
-        if old_filename and old_filename != new_filename:
-            delete_site_image(old_filename)
-        cache.invalidate()
+        try:
+            set_setting(db, key, new_filename)
+            db.commit()
+            if old_filename and old_filename != new_filename:
+                delete_site_image(old_filename)
+            cache.invalidate()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            log.exception("site image save failed: %s", exc)
+            if ajax:
+                return JSONResponse({"ok": False, "error": _COMMIT_ERROR_MSG}, status_code=503)
+            request.session["flash_error"] = _COMMIT_ERROR_MSG
+            return RedirectResponse(url="/admin/site", status_code=303)
 
     info = site_image_info(new_filename)
 
@@ -160,9 +186,17 @@ def admin_site_text_save(
     if cleaned and len(cleaned) > 200:
         cleaned = cleaned[:200]
 
-    set_setting(db, key, cleaned)
-    db.commit()
-    cache.invalidate()
+    try:
+        set_setting(db, key, cleaned)
+        db.commit()
+        cache.invalidate()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        log.exception("site text save failed: %s", exc)
+        if ajax:
+            return JSONResponse({"ok": False, "error": _COMMIT_ERROR_MSG}, status_code=503)
+        request.session["flash_error"] = _COMMIT_ERROR_MSG
+        return RedirectResponse(url="/admin/site", status_code=303)
 
     if ajax:
         return JSONResponse({"ok": True, "value": cleaned or ""})

@@ -1,14 +1,16 @@
 """Админка: CRUD товаров.
 
 Все роутеры объявлены `def` (не `async def`), потому что внутри
-синхронные db.query(...) и save_media(...) (последний использует
-UploadFile.file.read() — синхронный). FastAPI выносит `def`-роутеры
+синхронные db.query(...) и save_media(...). FastAPI выносит `def`-роутеры
 в threadpool, event loop не блокируется.
 """
+import logging
+
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.data import cache
@@ -26,10 +28,17 @@ from app.data.models import Product, ProductVariant, Brand, Category
 from app.services.storage import save_media, delete_media
 from app.core.rendering import admin_templates
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/admin/products", tags=["admin-products"])
 
 ADMIN_PRODUCTS_PER_PAGE = 50
 MAX_VARIANTS = 10
+
+_COMMIT_ERROR_MSG = (
+    "Не удалось сохранить — временная ошибка базы данных. "
+    "Попробуйте ещё раз через минуту."
+)
 
 
 def _product_form_context(db: Session, product: Product | None):
@@ -50,34 +59,17 @@ def _apply_image_slot(
     new_file: UploadFile | None,
     remove_flag: str | None,
 ) -> str | None:
-    """Применяет изменения к одному слоту медиа.
-
-    Логика приоритетов:
-
-    1. Пользователь загрузил новый файл, он успешно сохранён →
-       старый удаляется с диска, возвращается новое имя.
-    2. Пользователь загрузил новый файл, но save_media вернул
-       ошибку (формат, размер, битый) → старый файл ОСТАЁТСЯ,
-       ошибка пишется во flash. remove_flag игнорируется: раз
-       человек пытался загрузить новое, значит хотел заменить,
-       а не удалить.
-    3. Файла не было и стоит remove_flag → старый удаляется,
-       возвращается None.
-    4. Иначе → старое имя без изменений.
-    """
     had_upload = new_file is not None and getattr(new_file, "filename", "")
 
     if had_upload:
         new_filename, err = save_media(new_file)
         if err:
             request.session["flash_error"] = err
-            return old_filename  # сохраняем старый, ничего не удаляем
+            return old_filename
         if new_filename:
             if old_filename and old_filename != new_filename:
                 delete_media(old_filename)
             return new_filename
-        # save_media вернул (None, None) — файл пустой.
-        # Ведём себя как «файла не было»: смотрим remove_flag ниже.
 
     if remove_flag:
         if old_filename:
@@ -87,29 +79,45 @@ def _apply_image_slot(
     return old_filename
 
 
-def _save_variants(product: Product, amounts: list[str], units: list[str], prices: list[str]):
+def _save_variants(
+    product: Product,
+    amounts: list[str],
+    units: list[str],
+    prices: list[str],
+) -> list[str]:
     """Пересобирает варианты товара из данных формы.
 
-    Логика простая: удаляем все старые, создаём новые.
-    Пустые строки игнорируются. Ограничение MAX_VARIANTS.
+    Возвращает список ошибок — невалидные строки, которые были
+    выкинуты (админ должен об этом узнать, а не молча потерять
+    вариант после сохранения).
     """
     product.variants.clear()
 
     rows = []
+    dropped: list[str] = []
     for i, (amount, unit, price_str) in enumerate(zip(amounts, units, prices)):
         if i >= MAX_VARIANTS:
+            dropped.append(f"строка {i+1}: превышен лимит {MAX_VARIANTS} вариантов")
             break
         amount = (amount or "").strip()
         unit = (unit or "мл").strip()
         price_str = (price_str or "").strip()
+
+        if not amount and not price_str:
+            continue
+
         if not amount or not price_str:
+            dropped.append(f"строка {i+1}: не заполнены объём или цена")
             continue
         try:
             price = int(price_str)
         except ValueError:
+            dropped.append(f"строка {i+1}: цена «{price_str}» — не число")
             continue
         if price < 0:
+            dropped.append(f"строка {i+1}: цена не может быть отрицательной")
             continue
+
         rows.append(ProductVariant(
             volume_amount=amount,
             volume_unit=unit,
@@ -118,10 +126,11 @@ def _save_variants(product: Product, amounts: list[str], units: list[str], price
         ))
 
     product.variants = rows
-
     if rows:
         product.price = min(v.price for v in rows)
         product.volume = None
+
+    return dropped
 
 
 # ============================================================
@@ -267,11 +276,26 @@ def admin_product_create(
     )
     product.categories = resolve_categories(db, categories)
 
-    _save_variants(product, variant_volume_amount, variant_volume_unit, variant_price)
+    dropped = _save_variants(
+        product, variant_volume_amount, variant_volume_unit, variant_price,
+    )
+    if dropped:
+        request.session["flash_error"] = (
+            "Варианты пропущены: " + "; ".join(dropped)
+        )
 
-    db.add(product)
-    db.commit()
-    cache.invalidate()
+    try:
+        db.add(product)
+        db.commit()
+        cache.invalidate()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        log.exception("product create failed: %s", exc)
+        request.session["flash_error"] = (
+            "Не удалось создать товар — временная ошибка БД. "
+            "Попробуйте ещё раз."
+        )
+        return RedirectResponse(url="/admin/products", status_code=303)
 
     return RedirectResponse(url="/admin/products", status_code=303)
 
@@ -365,10 +389,28 @@ def admin_product_update(
     product.image_3 = _apply_image_slot(request, product.image_3, image_3, remove_image_3)
     product.image_4 = _apply_image_slot(request, product.image_4, image_4, remove_image_4)
 
-    _save_variants(product, variant_volume_amount, variant_volume_unit, variant_price)
+    dropped = _save_variants(
+        product, variant_volume_amount, variant_volume_unit, variant_price,
+    )
+    if dropped:
+        request.session["flash_error"] = (
+            "Варианты пропущены: " + "; ".join(dropped)
+        )
 
-    db.commit()
-    cache.invalidate()
+    try:
+        db.commit()
+        cache.invalidate()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        log.exception("product update failed: %s", exc)
+        request.session["flash_error"] = (
+            "Не удалось сохранить изменения — временная ошибка БД. "
+            "Попробуйте ещё раз."
+        )
+        return RedirectResponse(
+            url=f"/admin/products/{product.id}/edit",
+            status_code=303,
+        )
 
     return RedirectResponse(url="/admin/products", status_code=303)
 
@@ -387,9 +429,14 @@ def admin_product_delete(
     product = db.query(Product).filter(Product.id == product_id).first()
     if product:
         files = [product.image, product.image_2, product.image_3, product.image_4]
-        db.delete(product)
-        db.commit()
-        for f in files:
-            delete_media(f)
-        cache.invalidate()
+        try:
+            db.delete(product)
+            db.commit()
+            for f in files:
+                delete_media(f)
+            cache.invalidate()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            log.exception("product delete failed: %s", exc)
+            request.session["flash_error"] = _COMMIT_ERROR_MSG
     return RedirectResponse(url="/admin/products", status_code=303)

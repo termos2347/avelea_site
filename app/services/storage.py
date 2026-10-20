@@ -2,6 +2,8 @@
 import hashlib
 import io
 import logging
+import shutil
+import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -39,6 +41,7 @@ _MAGIC = (
 _VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
 _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
+_SPOOL_MAX = 1024 * 1024  # 1 МБ в RAM, дальше — на диск
 
 _RESAMPLE = (
     Image.Resampling.LANCZOS
@@ -67,17 +70,24 @@ def is_video(filename: str | None) -> bool:
     return Path(filename).suffix.lower() in _VIDEO_EXTS
 
 
-def _read_limited(file, limit: int) -> tuple[bytes, bool]:
-    chunks, total = [], 0
-    while True:
-        chunk = file.file.read(_READ_CHUNK)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > limit:
-            return b"", True
-        chunks.append(chunk)
-    return b"".join(chunks), False
+def _stream_to_spooled(file, limit: int) -> tuple[tempfile.SpooledTemporaryFile | None, bool]:
+    spooled = tempfile.SpooledTemporaryFile(max_size=_SPOOL_MAX, mode="w+b")
+    total = 0
+    try:
+        while True:
+            chunk = file.file.read(_READ_CHUNK)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                spooled.close()
+                return None, True
+            spooled.write(chunk)
+        spooled.seek(0)
+        return spooled, False
+    except Exception:
+        spooled.close()
+        raise
 
 
 def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | None]:
@@ -104,10 +114,7 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
     try:
         with Image.open(io.BytesIO(content)) as img:
             if MAX_IMAGE_DIMENSION > 0 and max(img.size) > MAX_IMAGE_DIMENSION:
-                img.thumbnail(
-                    (MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION),
-                    _RESAMPLE,
-                )
+                img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), _RESAMPLE)
             if img.mode not in ("RGB", "RGBA"):
                 if img.mode in ("P", "LA") or "transparency" in img.info:
                     img = img.convert("RGBA")
@@ -122,9 +129,42 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
         return None, None, "Не удалось обработать изображение."
 
 
+def _hash_stream(spooled) -> tuple[str, int]:
+    h = hashlib.sha1()
+    size = 0
+    while True:
+        chunk = spooled.read(_READ_CHUNK)
+        if not chunk:
+            break
+        h.update(chunk)
+        size += len(chunk)
+    spooled.seek(0)
+    return h.hexdigest(), size
+
+
+def _safe_prefix(prefix: str) -> str:
+    return "".join(c for c in prefix if c.isalnum() or c in "_-")[:40]
+
+
+def _make_stream_filename(spooled, ext: str, prefix: str) -> tuple[str, int]:
+    if prefix:
+        hex_hash, size = _hash_stream(spooled)
+        return f"{_safe_prefix(prefix)}_{hex_hash[:8]}{ext}", size
+    size = 0
+    while True:
+        chunk = spooled.read(_READ_CHUNK)
+        if not chunk:
+            break
+        size += len(chunk)
+    spooled.seek(0)
+    return f"{uuid.uuid4().hex}{ext}", size
+
+
 class StorageBackend(ABC):
     @abstractmethod
     def save(self, content: bytes, ext: str, prefix: str = "") -> str: ...
+    @abstractmethod
+    def save_stream(self, spooled, ext: str, prefix: str = "") -> str: ...
     @abstractmethod
     def delete(self, filename: str) -> None: ...
     @abstractmethod
@@ -134,18 +174,9 @@ class StorageBackend(ABC):
 
 
 def _make_filename(content: bytes, ext: str, prefix: str) -> str:
-    """Собирает имя файла.
-
-    С prefix: `<prefix>_<hash8><ext>` — например `about_hero_image_a1b2c3d4.webp`.
-    Читаемо, кэш безопасен (хэш меняется → URL меняется).
-    Без prefix: `<uuid><ext>` — для товаров (4 слота × N, ключ не подходит).
-    """
     if prefix:
         h = hashlib.sha1(content).hexdigest()[:8]
-        safe_prefix = "".join(
-            c for c in prefix if c.isalnum() or c in "_-"
-        )[:40]
-        return f"{safe_prefix}_{h}{ext}"
+        return f"{_safe_prefix(prefix)}_{h}{ext}"
     return f"{uuid.uuid4().hex}{ext}"
 
 
@@ -158,6 +189,12 @@ class LocalStorage(StorageBackend):
     def save(self, content: bytes, ext: str, prefix: str = "") -> str:
         name = _make_filename(content, ext, prefix)
         (self.folder / name).write_bytes(content)
+        return name
+
+    def save_stream(self, spooled, ext: str, prefix: str = "") -> str:
+        name, _ = _make_stream_filename(spooled, ext, prefix)
+        with open(self.folder / name, "wb") as out:
+            shutil.copyfileobj(spooled, out, length=_READ_CHUNK)
         return name
 
     def delete(self, filename: str) -> None:
@@ -192,9 +229,9 @@ class S3Storage(StorageBackend):
             aws_secret_access_key=secret_key,
         )
 
-    def save(self, content: bytes, ext: str, prefix: str = "") -> str:
-        name = _make_filename(content, ext, prefix)
-        content_type = {
+    @staticmethod
+    def _content_type(ext: str) -> str:
+        return {
             ".mp4":  "video/mp4",
             ".webm": "video/webm",
             ".mov":  "video/quicktime",
@@ -205,9 +242,20 @@ class S3Storage(StorageBackend):
             ".gif":  "image/gif",
             ".webp": "image/webp",
         }.get(ext, "application/octet-stream")
+
+    def save(self, content: bytes, ext: str, prefix: str = "") -> str:
+        name = _make_filename(content, ext, prefix)
         self.client.put_object(
             Bucket=self.bucket, Key=name,
-            Body=content, ContentType=content_type,
+            Body=content, ContentType=self._content_type(ext),
+        )
+        return name
+
+    def save_stream(self, spooled, ext: str, prefix: str = "") -> str:
+        name, _ = _make_stream_filename(spooled, ext, prefix)
+        self.client.upload_fileobj(
+            spooled, self.bucket, name,
+            ExtraArgs={"ContentType": self._content_type(ext)},
         )
         return name
 
@@ -271,24 +319,26 @@ def save_media(file) -> tuple[str | None, str | None]:
     file.file.seek(0)
 
     limit = MAX_VIDEO_UPLOAD_BYTES if is_vid else MAX_UPLOAD_BYTES
-    content, too_large = _read_limited(file, limit)
+    spooled, too_large = _stream_to_spooled(file, limit)
 
     if too_large:
         mb = limit // (1024 * 1024)
         kind = "Видео" if is_vid else "Файл"
         return None, f"{kind} больше {mb} МБ — не сохранён."
 
-    if not content:
-        return None, None
+    try:
+        if is_vid:
+            return _backend.save_stream(spooled, ext), None
 
-    if is_vid:
-        return _backend.save(content, ext), None
-
-    new_content, new_ext, err = _optimize_image(content)
-    if err is not None:
-        return None, err
-
-    return _backend.save(new_content, new_ext), None
+        content = spooled.read()
+        if not content:
+            return None, None
+        new_content, new_ext, err = _optimize_image(content)
+        if err is not None:
+            return None, err
+        return _backend.save(new_content, new_ext), None
+    finally:
+        spooled.close()
 
 
 def delete_media(filename: str | None) -> None:
@@ -322,11 +372,6 @@ _site_backend = LocalStorage(
 
 
 def save_site_image(file, key: str) -> tuple[str | None, str | None]:
-    """Сохраняет картинку сайта с именем `<key>_<hash8>.webp`.
-
-    key передаётся из роутера — например `about_hero_image`.
-    Хэш от содержимого → браузер не закэширует старую версию.
-    """
     if not file or not file.filename:
         return None, None
 
@@ -340,18 +385,21 @@ def save_site_image(file, key: str) -> tuple[str | None, str | None]:
 
     file.file.seek(0)
 
-    content, too_large = _read_limited(file, MAX_UPLOAD_BYTES)
+    spooled, too_large = _stream_to_spooled(file, MAX_UPLOAD_BYTES)
     if too_large:
         mb = MAX_UPLOAD_BYTES // (1024 * 1024)
         return None, f"Файл больше {mb} МБ — не сохранён."
-    if not content:
-        return None, None
 
-    new_content, new_ext, err = _optimize_image(content)
-    if err is not None:
-        return None, err
-
-    return _site_backend.save(new_content, new_ext, prefix=key), None
+    try:
+        content = spooled.read()
+        if not content:
+            return None, None
+        new_content, new_ext, err = _optimize_image(content)
+        if err is not None:
+            return None, err
+        return _site_backend.save(new_content, new_ext, prefix=key), None
+    finally:
+        spooled.close()
 
 
 def delete_site_image(filename: str | None) -> None:
@@ -366,7 +414,6 @@ def site_image_public_url(filename: str | None) -> str | None:
 
 
 def site_image_info(filename: str | None) -> dict | None:
-    """Размер и путь файла — для отображения в админке."""
     if not filename:
         return None
     path = BASE_DIR / "static" / "site" / filename

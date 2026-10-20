@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     HTMLResponse,
+    JSONResponse,
     PlainTextResponse,
     RedirectResponse,
     Response,
@@ -132,6 +133,13 @@ app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=800)
 app.add_middleware(AdminAuthGuardMiddleware)
 
+# ВАЖНО: SessionMiddleware должен идти ПОСЛЕ (снаружи) BodySizeLimitMiddleware,
+# чтобы request.session был доступен в _render_413. Порядок в Starlette
+# инвертируется: последний добавленный выполняется первым.
+app.add_middleware(
+    BodySizeLimitMiddleware,
+    max_bytes=4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024,
+)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
@@ -139,9 +147,6 @@ app.add_middleware(
     same_site=SESSION_SAME_SITE,
     max_age=SESSION_MAX_AGE,
 )
-
-_BODY_LIMIT = 4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024
-app.add_middleware(BodySizeLimitMiddleware, max_bytes=_BODY_LIMIT)
 
 app.add_middleware(StaticCacheMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -155,6 +160,20 @@ app.mount(
 
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
+    from sqlalchemy import text as sa_text
+
+    db = SessionLocal()
+    try:
+        db.execute(sa_text("SELECT 1"))
+    except Exception as exc:
+        log.error("healthz: db check failed: %s", exc)
+        return JSONResponse(
+            {"ok": False, "error": "db_unavailable"},
+            status_code=503,
+        )
+    finally:
+        db.close()
+
     return {"ok": True}
 
 

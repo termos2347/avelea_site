@@ -4,6 +4,25 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import SESSION_HTTPS_ONLY
 
 
+# CSP разрешает только нужные CDN. 'unsafe-inline' для script/style —
+# вынужденная мера: Tailwind JIT вставляет inline-стили, а htmx — атрибуты.
+# При vendoring Tailwind/FA/htmx — 'unsafe-inline' можно убрать.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' "
+    "https://cdn.tailwindcss.com https://unpkg.com; "
+    "style-src 'self' 'unsafe-inline' "
+    "https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+    "img-src 'self' data: blob: https://images.unsplash.com; "
+    "media-src 'self' blob:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self';"
+)
+
+
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """Отклоняет запросы, у которых Content-Length больше лимита.
 
@@ -49,14 +68,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Добавляет базовые security-заголовки к каждому ответу.
-
-    CSP не ставим — Tailwind и Font Awesome подключены через CDN
-    с inline-стилями, дефолтная политика их сломает.
-
-    HSTS включается автоматически, если приложение крутится за HTTPS
-    (сигнал — SESSION_HTTPS_ONLY=True).
-    """
+    """Добавляет базовые security-заголовки к каждому ответу."""
 
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -72,6 +84,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Cross-Origin-Opener-Policy", "same-origin",
         )
+        response.headers.setdefault("Content-Security-Policy", _CSP)
         if SESSION_HTTPS_ONLY:
             response.headers.setdefault(
                 "Strict-Transport-Security",
@@ -81,29 +94,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class StaticCacheMiddleware(BaseHTTPMiddleware):
-    """Долгий Cache-Control для статики.
-
-    Три группы:
-
-    1. /static/uploads/* — 30 дней, immutable.
-       Файлы имеют уникальные имена (uuid), поэтому кеширование
-       безопасно: один и тот же URL всегда отдаёт один и тот же
-       файл. Браузер один раз скачает картинку и будет использовать
-       её из локального кеша месяц.
-
-    2. /static/css/*, /static/js/* — 1 день.
-       CSS/JS могут обновляться при разработке, и мы хотим, чтобы
-       браузер подтягивал свежие версии. 1 день — компромисс:
-       заметная скорость загрузки при повторных визитах,
-       но и обновления доходят в разумные сроки. Если понадобится
-       мгновенное обновление — добавляй ?v=<hash> в шаблоны,
-       и кэш будет сбрасываться при смене версии.
-
-    3. Остальное (/static/favicon.ico и т.п.) — без Cache-Control,
-       поведение по умолчанию от StaticFiles (ETag).
-
-    /static/site/* — как uploads: uuid-имена, 30 дней immutable.
-    """
+    """Долгий Cache-Control для статики."""
 
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -126,27 +117,7 @@ class StaticCacheMiddleware(BaseHTTPMiddleware):
 
 
 class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
-    """Единая защита /admin/*.
-
-    Зачем нужен отдельный middleware, если уже есть require_admin
-    на роутерах: этот guard срабатывает РАНЬШЕ роутера. Значит,
-    он ловит и те URL, под которые вообще нет роутов
-    (/admin/what-is-this). Без него такие запросы попадали в
-    глобальный 404-обработчик, а тот видел `/admin/` в пути и
-    отрисовывал админский шаблон ошибки — палево.
-
-    Логика:
-      - /admin/login*               → пропускаем (иначе как войти);
-      - /admin/* без активной сессии → отдаём обычную 404 как сайт,
-                                        без единого намёка на админку;
-      - /admin/* с сессией           → пропускаем, дальше рулит
-                                        require_admin на роутерах.
-
-    Дополнительно ко всем ответам из /admin/* ставим заголовок
-    X-Robots-Tag: noindex, nofollow. Это защита от индексации
-    на уровне HTTP — работает даже если робот не читал robots.txt
-    (а мы там /admin явно не перечисляем — не подсказываем).
-    """
+    """Единая защита /admin/*."""
 
     _NOT_FOUND_HTML = (
         "<!DOCTYPE html>"

@@ -7,28 +7,24 @@ from app.core.config import BASE_DIR
 from tests.conftest import extract_csrf
 
 
-# Папка, куда приложение складывает загруженные картинки.
 UPLOADS_DIR = BASE_DIR / "static" / "uploads"
 
 
 # ============== Вспомогательное ==============
 
 def _png(size=(8, 8), color=(200, 30, 30)) -> bytes:
-    """Возвращает байты настоящего PNG."""
     buf = io.BytesIO()
     Image.new("RGB", size, color).save(buf, format="PNG")
     return buf.getvalue()
 
 
 def _jpeg(size=(8, 8), color=(30, 30, 200)) -> bytes:
-    """Возвращает байты настоящего JPEG."""
     buf = io.BytesIO()
     Image.new("RGB", size, color).save(buf, format="JPEG")
     return buf.getvalue()
 
 
 def _first_brand_id() -> str:
-    """Берём id первого бренда из БД. В тестовой базе seed создаёт Avelea."""
     from app.core.database import SessionLocal
     from app.data.models import Brand
     with SessionLocal() as db:
@@ -37,7 +33,6 @@ def _first_brand_id() -> str:
 
 
 def _first_category_name() -> str:
-    """Берём имя первой категории. Seed создаёт «Лицо», «Макияж» и т.д."""
     from app.core.database import SessionLocal
     from app.data.models import Category
     with SessionLocal() as db:
@@ -46,7 +41,6 @@ def _first_category_name() -> str:
 
 
 def _payload(**overrides) -> dict:
-    """Полный набор полей для POST /admin/products/new."""
     data = {
         "name": "Тестовый товар",
         "price": "999",
@@ -61,21 +55,19 @@ def _payload(**overrides) -> dict:
 
 
 def _post_new_product(client, token, **overrides):
-    """POST /admin/products/new со всеми обязательными полями."""
     data = _payload(**overrides)
     data["csrf_token"] = token
     png = _png()
     return client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("test.png", png, "image/png")},
+        files={"image_1": ("test.png", png, "image/png")},
         follow_redirects=False,
     )
 
 
 @pytest.fixture
 def clean_uploads():
-    """Изолирует static/uploads: чистит папку до и после теста."""
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
     def _clear():
@@ -93,7 +85,6 @@ def clean_uploads():
 # ============== Авторизация ==============
 
 def test_admin_requires_login(client):
-    """Неавторизованный /admin/* встречает обычная 404 как у сайта."""
     r = client.get("/admin/products", follow_redirects=False)
     assert r.status_code == 404
 
@@ -119,7 +110,7 @@ def test_login_success(client):
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -127,7 +118,6 @@ def test_login_success(client):
 
 
 def test_login_bruteforce_blocked(client):
-    """После 5 неудачных попыток — 429, даже если пароль верный."""
     for _ in range(5):
         r = client.get("/admin/login")
         token = extract_csrf(r.text)
@@ -141,14 +131,13 @@ def test_login_bruteforce_blocked(client):
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
     )
     assert r.status_code == 429
     assert "Слишком много попыток" in r.text
 
 
 def test_login_success_resets_counter(client):
-    """После успешного входа счётчик сбрасывается."""
     for _ in range(3):
         r = client.get("/admin/login")
         token = extract_csrf(r.text)
@@ -161,7 +150,7 @@ def test_login_success_resets_counter(client):
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -171,7 +160,7 @@ def test_login_success_resets_counter(client):
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -180,7 +169,7 @@ def test_login_success_resets_counter(client):
 # ============== CSRF ==============
 
 def test_post_without_csrf_is_forbidden(client):
-    r = client.post("/admin/login", data={"password": "test-password"})
+    r = client.post("/admin/login", data={"password": "test-password-123"})
     assert r.status_code == 403
 
 
@@ -188,7 +177,7 @@ def test_post_with_wrong_csrf_is_forbidden(client):
     client.get("/admin/login")
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": "подделка"},
+        data={"password": "test-password-123", "csrf_token": "подделка"},
     )
     assert r.status_code == 403
 
@@ -219,10 +208,48 @@ def test_create_product(admin_client):
     assert "Тестовый товар" in r.text
 
 
+def test_delete_category_with_products(admin_client):
+    """Удаление категории с товарами — не 500, товар остаётся без категории."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product, Category
+
+    # Создать категорию + товар с ней
+    r = admin_client.get("/admin/categories")
+    token = extract_csrf(r.text)
+    admin_client.post(
+        "/admin/categories/new",
+        data={"name": "Удаляемая", "csrf_token": token},
+    )
+
+    with SessionLocal() as db:
+        cat_id = db.query(Category).filter(Category.name == "Удаляемая").one().id
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    _post_new_product(admin_client, token, name="Товар в категории", categories=["Удаляемая"])
+
+    with SessionLocal() as db:
+        pid = db.query(Product).filter(Product.name == "Товар в категории").one().id
+
+    # Удалить категорию
+    r = admin_client.get("/admin/categories")
+    token = extract_csrf(r.text)
+    r = admin_client.post(
+        f"/admin/categories/{cat_id}/delete",
+        data={"csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    # Товар остался, но без категории
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == pid).one()
+        assert p.categories == []
+
+
 # ============== Загрузка изображений ==============
 
 def test_upload_rejects_non_image(admin_client, clean_uploads):
-    """Файл с «картинным» расширением, но чужими magic bytes — отклоняется."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -231,7 +258,7 @@ def test_upload_rejects_non_image(admin_client, clean_uploads):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("fake.png", b"MZ\x90\x00 not really a png", "image/png")},
+        files={"image_1": ("fake.png", b"MZ\x90\x00 not really a png", "image/png")},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -243,7 +270,6 @@ def test_upload_rejects_non_image(admin_client, clean_uploads):
 
 
 def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
-    """PNG-magic + мусор: _sniff_image_ext пропускает, Pillow — отклоняет."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -253,7 +279,7 @@ def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("broken.png", fake_png, "image/png")},
+        files={"image_1": ("broken.png", fake_png, "image/png")},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -265,15 +291,6 @@ def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
 
 
 def test_upload_valid_png_is_saved(admin_client, clean_uploads):
-    """Настоящий PNG сохраняется, URL отдаётся в шаблоне.
-
-    storage.save_media конвертирует всё, кроме GIF, в WebP
-    (см. _optimize_image в app/services/storage.py). Поэтому на диске
-    лежит .webp, а не .png — это ожидаемое поведение, а не баг.
-
-    Поле формы — image_1 (первый слот медиа). Всего слотов 4:
-    image_1..image_4, см. _product_form.html.
-    """
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -283,7 +300,7 @@ def test_upload_valid_png_is_saved(admin_client, clean_uploads):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image_1": ("photo.png", png, "image/png")},  # ← image_1
+        files={"image_1": ("photo.png", png, "image/png")},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -298,7 +315,6 @@ def test_upload_valid_png_is_saved(admin_client, clean_uploads):
 
 
 def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
-    """Настоящий JPEG тоже сохраняется — тоже конвертируется в WebP."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -308,7 +324,7 @@ def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image_1": ("photo.jpg", jpg, "image/jpeg")},  # ← image_1
+        files={"image_1": ("photo.jpg", jpg, "image/jpeg")},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -319,11 +335,6 @@ def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
 
 
 def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
-    """Файл, превышающий MAX_UPLOAD_BYTES, не сохраняется.
-
-    Патчим app.services.storage.MAX_UPLOAD_BYTES (не app.main —
-    тот импортирует свою копию константы и на storage не влияет).
-    """
     monkeypatch.setattr("app.services.storage.MAX_UPLOAD_BYTES", 100)
 
     r = admin_client.get("/admin/products")
@@ -335,7 +346,7 @@ def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("big.png", big, "image/png")},
+        files={"image_1": ("big.png", big, "image/png")},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -347,7 +358,6 @@ def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
 
 
 def test_body_size_limit_returns_413():
-    """BodySizeLimitMiddleware отклоняет запрос по Content-Length."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -377,7 +387,6 @@ def test_body_size_limit_returns_413():
 # ============== Валидация цены ==============
 
 def test_create_product_rejects_negative_price(admin_client):
-    """Отрицательная цена — товар не создаётся, показывается сообщение."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -387,7 +396,7 @@ def test_create_product_rejects_negative_price(admin_client):
     r = admin_client.post(
         "/admin/products/new",
         data=data,
-        files={"image": ("test.png", png, "image/png")},
+        files={"image_1": ("test.png", png, "image/png")},
         follow_redirects=True,
     )
     assert r.status_code == 200
@@ -396,7 +405,6 @@ def test_create_product_rejects_negative_price(admin_client):
 
 
 def test_create_product_accepts_zero_price(admin_client):
-    """Ноль — валидная цена (бесплатный товар/подарок)."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -408,7 +416,6 @@ def test_create_product_accepts_zero_price(admin_client):
 
 
 def test_update_product_rejects_negative_price(admin_client):
-    """Отрицательная цена при редактировании — цена не меняется."""
     from app.core.database import SessionLocal
     from app.data.models import Product
 
@@ -427,7 +434,7 @@ def test_update_product_rejects_negative_price(admin_client):
     r = admin_client.post(
         f"/admin/products/{pid}/edit",
         data=data,
-        files={"image": ("test.png", png, "image/png")},
+        files={"image_1": ("test.png", png, "image/png")},
         follow_redirects=True,
     )
     assert r.status_code == 200
@@ -441,11 +448,6 @@ def test_update_product_rejects_negative_price(admin_client):
 # ============== Telegram 2FA ==============
 
 def _enable_2fa(monkeypatch, sink: dict):
-    """Активирует 2FA в модуле auth и подменяет отправку в Telegram.
-
-    sink — словарь, куда фейк положит последний «отправленный» код,
-    чтобы тест мог его прочитать.
-    """
     from app.routers.admin import auth as auth_mod
 
     monkeypatch.setattr(auth_mod, "TELEGRAM_2FA_ENABLED", True)
@@ -462,12 +464,11 @@ def _enable_2fa(monkeypatch, sink: dict):
 
 
 def test_2fa_disabled_by_default(client):
-    """Без настроек Telegram вход идёт в один шаг — как раньше."""
     r = client.get("/admin/login")
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -475,7 +476,6 @@ def test_2fa_disabled_by_default(client):
 
 
 def test_2fa_enabled_first_step_redirects_to_code(client, monkeypatch):
-    """С включённым 2FA верный пароль не пускает сразу."""
     sink: dict = {}
     _enable_2fa(monkeypatch, sink)
 
@@ -483,7 +483,7 @@ def test_2fa_enabled_first_step_redirects_to_code(client, monkeypatch):
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
     assert r.status_code == 303
@@ -492,34 +492,29 @@ def test_2fa_enabled_first_step_redirects_to_code(client, monkeypatch):
     assert len(sink["last_code"]) == 6
     assert sink["last_code"].isdigit()
 
-    # В админку всё ещё нельзя
     r = client.get("/admin/products", follow_redirects=False)
     assert r.status_code == 404
 
 
 def test_2fa_full_flow(client, monkeypatch):
-    """Пароль → код → админка."""
     sink: dict = {}
     _enable_2fa(monkeypatch, sink)
 
-    # Шаг 1: пароль
     r = client.get("/admin/login")
     token = extract_csrf(r.text)
     r = client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/login/2fa"
 
-    # Шаг 2: форма кода
     r = client.get("/admin/login/2fa")
     assert r.status_code == 200
     assert "Код из Telegram" in r.text
     code_token = extract_csrf(r.text)
 
-    # Шаг 3: неверный код → 401
     r = client.post(
         "/admin/login/2fa",
         data={"code": "000000", "csrf_token": code_token},
@@ -527,7 +522,6 @@ def test_2fa_full_flow(client, monkeypatch):
     assert r.status_code == 401
     assert "Неверный код" in r.text
 
-    # Шаг 4: верный код → 303 на /admin/products
     r = client.post(
         "/admin/login/2fa",
         data={"code": sink["last_code"], "csrf_token": code_token},
@@ -536,13 +530,11 @@ def test_2fa_full_flow(client, monkeypatch):
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/products"
 
-    # Админка доступна
     r = client.get("/admin/products")
     assert r.status_code == 200
 
 
 def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
-    """После N неверных кодов — сброс, надо начинать заново с пароля."""
     sink: dict = {}
     _enable_2fa(monkeypatch, sink)
 
@@ -553,14 +545,13 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
     token = extract_csrf(r.text)
     client.post(
         "/admin/login",
-        data={"password": "test-password", "csrf_token": token},
+        data={"password": "test-password-123", "csrf_token": token},
         follow_redirects=False,
     )
 
     r = client.get("/admin/login/2fa")
     code_token = extract_csrf(r.text)
 
-    # 3 неверных — все 401
     for _ in range(3):
         r = client.post(
             "/admin/login/2fa",
@@ -568,7 +559,6 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
         )
         assert r.status_code == 401
 
-    # 4-й раз — сброс, редирект на /admin/login
     r = client.post(
         "/admin/login/2fa",
         data={"code": "000000", "csrf_token": code_token},
@@ -576,29 +566,10 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
     )
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/login"
-    
+
+
 def test_2fa_purge_removes_expired_only():
     """_purge_expired удаляет только протухшие коды, живые не трогает."""
-    import time
-    from app.routers.admin import auth as auth_mod
-
-    now = time.time()
-    with auth_mod._codes_lock:
-        auth_mod._pending_codes.clear()
-        auth_mod._pending_codes["alive"] = {
-            "code": "111111", "expires": now + 100, "attempts": 0,
-        }
-        auth_mod._pending_codes["dead"] = {
-            "code": "222222", "expires": now - 100, "attempts": 0,
-        }
-
-    auth_mod._purge_expired()
-
-    assert "alive" in auth_mod._pending_codes
-    assert "dead" not in auth_mod._pending_codes
-    
-def test_2fa_purge_removes_expired_only():
-    """_purge_expired удаляет протухшие коды, живые не трогает."""
     import time
     from app.routers.admin import auth as auth_mod
 

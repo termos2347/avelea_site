@@ -1,20 +1,6 @@
-"""Наполнение БД тестовыми данными.
-
-Используется только при первом запуске (когда таблица products пуста).
-Функция seed_database() идемпотентна: повторный вызов ничего не сделает.
-
-ВАЖНО про SQLite и кириллицу:
-    SQLite-функция LOWER() умеет только ASCII, кириллицу не трогает.
-    Поэтому регистронезависимый поиск категорий делаем в Python через .lower(),
-    а не через func.lower() в SQL-запросе.
-
-ВАЖНО про флаг сида:
-    Раньше признаком «сид уже был» считалось «в таблице есть хотя бы один
-    товар». Это приводило к багу: если админ удалит ВСЕ товары, при рестарте
-    приложения сид снова насыпал демо-данные. Теперь факт сида фиксируется
-    в таблице settings (key='seeded_v1').
-"""
+"""Наполнение БД стартовыми данными (идемпотентно)."""
 import logging
+import os
 
 from sqlalchemy.orm import Session
 
@@ -23,51 +9,37 @@ from app.data.models import Product, Brand, Category, Setting
 log = logging.getLogger(__name__)
 
 
-# Ключ-маркер в таблице settings. Меняй суффикс (v1 → v2), если захочешь
-# однажды досыпать новые демо-данные в уже существующие базы.
 SEED_MARKER_KEY = "seeded_v1"
-
-
-# Базовые категории, которые всегда создаются при первом запуске.
-# Порядок здесь не важен — на сайте они сортируются по алфавиту.
 BASE_CATEGORIES = ("Лицо", "Макияж", "Тело", "Парфюм")
 
 
+def _demo_product_enabled() -> bool:
+    v = os.getenv("SEED_DEMO_PRODUCT", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def seed_database(db: Session) -> None:
-    """Наполняет БД тестовыми товарами ровно один раз за всю жизнь базы."""
     marker = db.query(Setting).filter(Setting.key == SEED_MARKER_KEY).first()
     if marker and marker.value == "1":
         return
 
-    # Апгрейд со старой версии: товары в БД уже есть, а флага ещё нет.
-    # Не трогаем данные — просто фиксируем, что сид пройден.
     if db.query(Product).count() > 0:
         db.add(Setting(key=SEED_MARKER_KEY, value="1"))
         db.commit()
         return
 
-    # ------------------------------------------------------------------
-    # Кеш категорий: ключ — имя в нижнем регистре, значение — ORM-объект.
-    # Один SELECT, дальше ищем в памяти. Дубликатов не будет.
-    # ------------------------------------------------------------------
-    cat_cache: dict[str, Category] = {
-        c.name.lower(): c for c in db.query(Category).all()
-    }
+    cat_cache: dict[str, Category] = {c.name.lower(): c for c in db.query(Category).all()}
 
     def cat(name: str) -> Category:
-        """Найти или создать категорию. Никогда не возвращает None."""
         key = name.strip().lower()
         if key in cat_cache:
             return cat_cache[key]
         c = Category(name=name.strip())
         db.add(c)
-        db.flush()             # получаем id сразу, чтобы id попал в связку
-        cat_cache[key] = c     # регистрируем в кеше — следующий вызов найдёт
+        db.flush()
+        cat_cache[key] = c
         return c
 
-    # ------------------------------------------------------------------
-    # Базовый бренд (тоже идемпотентно, через кеш)
-    # ------------------------------------------------------------------
     brand_cache = {b.name.lower(): b for b in db.query(Brand).all()}
     if "avelea" not in brand_cache:
         b = Brand(name="Avelea")
@@ -76,20 +48,11 @@ def seed_database(db: Session) -> None:
         brand_cache["avelea"] = b
     avelea_brand = brand_cache["avelea"]
 
-    # ------------------------------------------------------------------
-    # Предсоздаём все категории заранее. Иначе cat() внутри списка
-    # products ниже делает db.add() прямо во время конструирования
-    # Product(...) — SQLAlchemy на это ругается SAWarning.
-    # ------------------------------------------------------------------
     for cat_name in BASE_CATEGORIES:
         cat(cat_name)
 
-    # ------------------------------------------------------------------
-    # Тестовые товары — распределены по всем 4 категориям,
-    # чтобы при клике на любую категорию с главной что-то было.
-    # ------------------------------------------------------------------
-    products = [
-        Product(
+    if _demo_product_enabled():
+        db.add(Product(
             name="Древесный парфюм Bois",
             categories=[cat("Парфюм")],
             brand_id=avelea_brand.id,
@@ -97,11 +60,8 @@ def seed_database(db: Session) -> None:
             popular=False,
             description="Тёплый древесный аромат с сандалом, ванилью и амброй.",
             volume="50 мл",
-        ),
-    ]
+        ))
 
-    db.add_all(products)
-    # Ставим флаг в той же транзакции, что и товары: либо всё, либо ничего.
     db.add(Setting(key=SEED_MARKER_KEY, value="1"))
     db.commit()
-    log.info("База данных заполнена тестовыми товарами")
+    log.info("База данных инициализирована (demo=%s)", _demo_product_enabled())

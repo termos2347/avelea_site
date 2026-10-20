@@ -20,8 +20,18 @@ def safe_str_compare(a: str, b: str) -> bool:
 
 
 def get_csrf_token(request: Request) -> str:
-    """Возвращает текущий CSRF-токен сессии, создавая его при необходимости."""
-    token = request.session.get("csrf_token")
+    """Возвращает текущий CSRF-токен сессии, создавая его при необходимости.
+
+    Возвращает пустую строку, если SessionMiddleware нет в цепочке
+    (например, 413 от BodySizeLimitMiddleware срабатывает до Session).
+    Пустой токен = CSRF-проверка потом отклонит форму, но страница
+    отрендерится без 500.
+    """
+    try:
+        token = request.session.get("csrf_token")
+    except (AttributeError, AssertionError):
+        return ""
+
     if not token:
         token = secrets.token_urlsafe(32)
         request.session["csrf_token"] = token

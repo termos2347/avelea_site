@@ -4,12 +4,23 @@
 JavaScript (HTMX + Tailwind). Без корзины, без оплаты, без личного
 кабинета — только публичный каталог и панель управления.
 
+**База данных — PostgreSQL** (облачный инстанс: Neon, Supabase,
+Selectel, VK Cloud, RDS — любой провайдер). Драйвер — `psycopg3`.
+
 ---
 
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Tests](https://img.shields.io/badge/tests-passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![Alembic](https://img.shields.io/badge/Alembic-1.14-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791)
+
+## Требования
+
+- Python 3.12+
+- PostgreSQL 15+ (локально или облачный инстанс)
+- Node.js — опционально, только если хочется собрать Tailwind локально
+  (сейчас стили тянутся с CDN, для витрины это работает «из коробки»)
 
 ## Запуск
 
@@ -22,7 +33,7 @@ cd ~/avelea_site
 
 # Скопировать шаблон и заполнить секреты
 cp .env.example .env
-# (отредактировать SECRET_KEY и ADMIN_PASSWORD)
+# (отредактировать SECRET_KEY, ADMIN_PASSWORD и DATABASE_URL)
 
 # Запустить сервер
 ./start.sh
@@ -33,14 +44,10 @@ cp .env.example .env
 npx localtunnel --port 8000 --subdomain avelea-test
 ```
 
-Перед первым запуском скопируйте `.env.example` в `.env` и заполните
-`SECRET_KEY` и `ADMIN_PASSWORD`.
-
 ---
 
 ## Структура проекта
 
-```
 avelea_site/
 ├── alembic.ini                     # Конфиг Alembic (URL берётся из .env)
 ├── app/
@@ -50,30 +57,33 @@ avelea_site/
 │   │
 │   ├── core/                       # Инфраструктура (не зависит от бизнес-логики)
 │   │   ├── config.py               # Чтение .env и константы
-│   │   ├── database.py             # engine, SessionLocal, Base, get_db()
+│   │   ├── database.py             # engine (Postgres pool), SessionLocal, Base, get_db()
 │   │   ├── deps.py                 # FastAPI-зависимости: require_admin, CSRF
-│   │   ├── middleware.py           # BodySizeLimit, SecurityHeaders, AdminAuthGuard
+│   │   ├── middleware.py           # BodySizeLimit, SecurityHeaders, AdminAuthGuard,
+│   │   │                           #   StaticCache
 │   │   ├── ratelimit.py            # In-memory rate-limiter для /admin/login
 │   │   └── rendering.py            # Jinja2-окружения + регистрация глобалов
 │   │
 │   ├── data/                       # Всё про данные
-│   │   ├── models.py               # SQLAlchemy: Product, Brand, Category, Setting
-│   │   │                           #   (источник правды для схемы БД)
-│   │   ├── seed.py                 # Стартовые данные (один раз, флаг в Setting)
+│   │   ├── models.py               # SQLAlchemy: Product, ProductVariant, Brand,
+│   │   │                           #   Category, Setting
+│   │   ├── seed.py                 # Стартовые данные (флаг в Setting, демо — опционально)
+│   │   ├── settings.py             # Реестр настроек сайта (SITE_CONTENT_GROUPS)
 │   │   └── cache.py                # In-memory кэш товаров/категорий/брендов
 │   │
 │   ├── services/                   # Внешние сервисы
-│   │   └── storage.py              # Сохранение картинок (Local / S3) + ресайз
+│   │   └── storage.py              # Сохранение картинок/видео (Local / S3) + WebP
 │   │
 │   ├── utils/                      # Чистые функции без состояния
 │   │   └── helpers.py              # URL-билдеры, парсинг формы, resolve-хелперы
 │   │
 │   ├── routers/                    # HTTP-роуты
-│   │   ├── site.py                 # /, /catalog, /product, /about
-│   │   └── admin/                  # Админка
+│   │   ├── site.py                 # /, /catalog, /product, /brands, /about
+│   │   └── admin/
 │   │       ├── auth.py             #   /admin/login (+ Telegram 2FA), /admin/logout
 │   │       ├── products.py         #   /admin/products/*
-│   │       └── catalog.py          #   /admin/brands/*, /admin/categories/*
+│   │       ├── catalog.py          #   /admin/brands/*, /admin/categories/*
+│   │       └── site_content.py     #   /admin/site/* (картинки + тексты статических страниц)
 │   │
 │   └── templates/                  # Jinja2-шаблоны
 │       ├── admin/
@@ -84,6 +94,7 @@ avelea_site/
 │       │   ├── _product_form.html  #   Общая форма (для /new и /edit)
 │       │   ├── brands.html
 │       │   ├── categories.html
+│       │   ├── site_content.html   #   Управление контентом публичных страниц
 │       │   └── error.html          #   Универсальная страница (404 / 500 / 413 / …)
 │       └── site/
 │           ├── _macros.html        #   Макрос product_card
@@ -91,6 +102,7 @@ avelea_site/
 │           ├── index.html          #   Главная (hero-карусель, категории, популярное)
 │           ├── catalog.html        #   Каталог с фильтрами
 │           ├── product.html        #   Карточка товара
+│           ├── brands.html         #   Алфавитный указатель брендов
 │           ├── about.html
 │           └── error.html          #   Универсальная страница ошибки
 │
@@ -102,10 +114,10 @@ avelea_site/
 │   │   ├── admin.js                # Модалки, форма, debounce, saving-overlay
 │   │   ├── catalog.js              # Модал фильтров каталога
 │   │   └── site.js                 # Скелетон, hero-карусель, рейлы карточек
-│   └── uploads/                    # Загруженные картинки (в .gitignore)
+│   ├── uploads/                    # Загруженные картинки товаров (в .gitignore)
+│   └── site/                       # Картинки страниц сайта (в .gitignore)
 │
 ├── instance/
-│   ├── shop.db                     # SQLite, только для тестов (в .gitignore)
 │   └── logs/
 │       └── avelea.log              # Ротируемый лог приложения
 │
@@ -113,7 +125,7 @@ avelea_site/
 │   ├── env.py                      # Настройка: target_metadata, render_as_batch
 │   ├── script.py.mako              # Шаблон для новых миграций
 │   └── versions/
-│       └── ac7136db8fe5_initial_schema.py   # Baseline (создаёт всю схему)
+│       └── f63c89e8e32f_initial_schema.py   # Baseline (создаёт всю схему)
 │
 ├── tests/
 │   ├── conftest.py                 # Фикстуры: TestClient, admin_client, CSRF

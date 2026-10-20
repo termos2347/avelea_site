@@ -1,12 +1,10 @@
-"""Админка: бренды и категории.
+"""Админка: бренды и категории."""
+import logging
 
-Все роутеры объявлены `def` (не `async def`), потому что внутри
-синхронные db.query(...) к SQLAlchemy. FastAPI выносит их в
-threadpool — event loop не блокируется.
-"""
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.data import cache
@@ -15,7 +13,15 @@ from app.core.deps import require_admin
 from app.data.models import Product, Brand, Category, product_categories
 from app.core.rendering import admin_templates
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/admin", tags=["admin-catalog"])
+
+
+_COMMIT_ERROR_MSG = (
+    "Не удалось сохранить — временная ошибка базы данных. "
+    "Попробуйте ещё раз через минуту."
+)
 
 
 # ============================================================
@@ -56,14 +62,26 @@ def admin_category_create(
     name: str = Form(...),
 ):
     name = name.strip()
-    if name:
-        exists = db.query(Category).filter(Category.name == name).first()
-        if exists:
-            request.session["flash_error"] = f"Категория «{name}» уже существует."
-        else:
-            db.add(Category(name=name))
-            db.commit()
-            cache.invalidate()
+    if not name:
+        return RedirectResponse(url="/admin/categories", status_code=303)
+
+    exists = db.query(Category).filter(Category.name == name).first()
+    if exists:
+        request.session["flash_error"] = f"Категория «{name}» уже существует."
+        return RedirectResponse(url="/admin/categories", status_code=303)
+
+    try:
+        db.add(Category(name=name))
+        db.commit()
+        cache.invalidate()
+    except IntegrityError:
+        db.rollback()
+        request.session["flash_error"] = f"Категория «{name}» уже существует."
+    except SQLAlchemyError as exc:
+        db.rollback()
+        log.exception("category create failed: %s", exc)
+        request.session["flash_error"] = _COMMIT_ERROR_MSG
+
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
@@ -80,18 +98,30 @@ def admin_category_edit(
         raise HTTPException(status_code=404)
 
     name = name.strip()
-    if name and name != category.name:
-        exists = (
-            db.query(Category)
-              .filter(Category.name == name, Category.id != category_id)
-              .first()
-        )
-        if exists:
-            request.session["flash_error"] = f"Категория «{name}» уже существует."
-        else:
-            category.name = name
-            db.commit()
-            cache.invalidate()
+    if not name or name == category.name:
+        return RedirectResponse(url="/admin/categories", status_code=303)
+
+    exists = (
+        db.query(Category)
+          .filter(Category.name == name, Category.id != category_id)
+          .first()
+    )
+    if exists:
+        request.session["flash_error"] = f"Категория «{name}» уже существует."
+        return RedirectResponse(url="/admin/categories", status_code=303)
+
+    try:
+        category.name = name
+        db.commit()
+        cache.invalidate()
+    except IntegrityError:
+        db.rollback()
+        request.session["flash_error"] = f"Категория «{name}» уже существует."
+    except SQLAlchemyError as exc:
+        db.rollback()
+        log.exception("category edit failed: %s", exc)
+        request.session["flash_error"] = _COMMIT_ERROR_MSG
+
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
@@ -104,9 +134,16 @@ def admin_category_delete(
 ):
     category = db.query(Category).filter(Category.id == category_id).first()
     if category:
-        db.delete(category)
-        db.commit()
-        cache.invalidate()
+        try:
+            category.products.clear()
+            db.delete(category)
+            db.commit()
+            cache.invalidate()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            log.exception("category delete failed: %s", exc)
+            request.session["flash_error"] = _COMMIT_ERROR_MSG
+
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
@@ -148,15 +185,26 @@ def admin_brand_create(
 ):
     name = name.strip()
     desc = (description or "").strip() or None
+    if not name:
+        return RedirectResponse(url="/admin/brands", status_code=303)
 
-    if name:
-        exists = db.query(Brand).filter(Brand.name == name).first()
-        if exists:
-            request.session["flash_error"] = f"Бренд «{name}» уже существует."
-        else:
-            db.add(Brand(name=name, description=desc))
-            db.commit()
-            cache.invalidate()
+    exists = db.query(Brand).filter(Brand.name == name).first()
+    if exists:
+        request.session["flash_error"] = f"Бренд «{name}» уже существует."
+        return RedirectResponse(url="/admin/brands", status_code=303)
+
+    try:
+        db.add(Brand(name=name, description=desc))
+        db.commit()
+        cache.invalidate()
+    except IntegrityError:
+        db.rollback()
+        request.session["flash_error"] = f"Бренд «{name}» уже существует."
+    except SQLAlchemyError as exc:
+        db.rollback()
+        log.exception("brand create failed: %s", exc)
+        request.session["flash_error"] = _COMMIT_ERROR_MSG
+
     return RedirectResponse(url="/admin/brands", status_code=303)
 
 
@@ -186,17 +234,25 @@ def admin_brand_edit(
         )
         if exists:
             request.session["flash_error"] = f"Бренд «{name}» уже существует."
-        else:
-            brand.name = name
-            changed = True
+            return RedirectResponse(url="/admin/brands", status_code=303)
+        brand.name = name
+        changed = True
 
     if brand.description != desc:
         brand.description = desc
         changed = True
 
     if changed:
-        db.commit()
-        cache.invalidate()
+        try:
+            db.commit()
+            cache.invalidate()
+        except IntegrityError:
+            db.rollback()
+            request.session["flash_error"] = f"Бренд «{name}» уже существует."
+        except SQLAlchemyError as exc:
+            db.rollback()
+            log.exception("brand edit failed: %s", exc)
+            request.session["flash_error"] = _COMMIT_ERROR_MSG
 
     return RedirectResponse(url="/admin/brands", status_code=303)
 
@@ -210,9 +266,15 @@ def admin_brand_delete(
 ):
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if brand:
-        for p in db.query(Product).filter(Product.brand_id == brand.id).all():
-            p.brand_id = None
-        db.delete(brand)
-        db.commit()
-        cache.invalidate()
+        try:
+            for p in db.query(Product).filter(Product.brand_id == brand.id).all():
+                p.brand_id = None
+            db.delete(brand)
+            db.commit()
+            cache.invalidate()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            log.exception("brand delete failed: %s", exc)
+            request.session["flash_error"] = _COMMIT_ERROR_MSG
+
     return RedirectResponse(url="/admin/brands", status_code=303)
