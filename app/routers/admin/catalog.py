@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.data import cache
 from app.core.database import get_db
-from app.core.deps import require_admin
+from app.core.security import require_admin
 from app.data.models import Product, Brand, Category, product_categories
 from app.core.rendering import admin_templates
 

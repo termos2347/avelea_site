@@ -33,7 +33,7 @@ from app.core.config import (
     UVICORN_WORKERS,
 )
 from app.core.database import SessionLocal
-from app.core.deps import NotAuthenticated
+from app.core.security import NotAuthenticated
 from app.core.middleware import (
     AdminAuthGuardMiddleware,
     BodySizeLimitMiddleware,

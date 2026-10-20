@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.data import cache
 from app.core.database import get_db
-from app.core.deps import require_admin
+from app.core.security import require_admin
 from app.utils.helpers import (
     make_page_items,
     build_page_url,

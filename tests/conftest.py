@@ -73,7 +73,7 @@ def admin_client(client):
 @pytest.fixture(autouse=True)
 def _reset_shared_state():
     """Чистит in-memory state до и после каждого теста."""
-    from app.core.ratelimit import reset_all
+    from app.core.security import reset_all
     from app.routers.admin import auth as auth_mod
 
     reset_all()

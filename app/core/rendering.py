@@ -3,7 +3,7 @@ from markupsafe import Markup, escape
 from fastapi.templating import Jinja2Templates
 
 from app.core.config import BASE_DIR
-from app.core.deps import get_csrf_token
+from app.core.security import get_csrf_token
 from app.services.storage import is_video
 from app.utils.helpers import build_page_url, build_filter_url, build_reset_url
 

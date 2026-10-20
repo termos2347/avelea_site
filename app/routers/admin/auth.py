@@ -34,8 +34,9 @@ from app.core.config import (
     TELEGRAM_CODE_MAX_ATTEMPTS,
     TELEGRAM_CODE_TTL,
 )
-from app.core.deps import check_csrf, safe_str_compare
-from app.core.ratelimit import (
+from app.core.security import (
+    check_csrf,
+    safe_str_compare,
     client_key,
     is_blocked,
     register_failure,
