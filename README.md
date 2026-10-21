@@ -347,9 +347,9 @@ avelea_site/
 | Добавить раздел в админке | новый файл в `app/routers/admin/` |
 | Добавить поле в товар | `app/data/models.py` + `app/routers/admin/products.py` + `_product_form.html` |
 | Изменить фильтры каталога | `app/routers/site.py` + `app/utils/helpers.py` |
-| Изменить защиту от CSRF | `app/core/deps.py` |
+| Изменить защиту от CSRF | `app/core/security.py` |
 | Добавить настройку через `.env` | `app/core/config.py` |
-| Изменить миграции БД | `app/data/migrations.py` |
+| Изменить миграции БД | `migrations/versions/ (Alembic)` |
 | Изменить стартовые данные | `app/data/seed.py` |
 | Поменять хранилище картинок | `app/services/storage.py` |
 | Изменить security-заголовки | `app/core/middleware.py` |

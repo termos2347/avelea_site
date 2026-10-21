@@ -43,11 +43,6 @@ _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 _SPOOL_MAX = 1024 * 1024  # 1 МБ в RAM, дальше — на диск
 
-# Все исключения, которые PIL может бросить при Image.open() / verify()
-# на «плохом» файле. DecompressionBombError — отдельный вектор DoS:
-# PNG размером 50000×50000 весит ~1 КБ (сжимается отлично), но при
-# декодировании разворачивается в десятки гигабайт. PIL ловит это
-# сам (w*h > 2 * MAX_IMAGE_PIXELS), но мы должны поймать его исключение.
 _PIL_OPEN_ERRORS = (
     UnidentifiedImageError,
     OSError,
@@ -103,8 +98,6 @@ def _stream_to_spooled(file, limit: int) -> tuple[tempfile.SpooledTemporaryFile 
 
 
 def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | None]:
-    # 1. Проверка формата и целостности (img.verify()).
-    #    Здесь же отлавливается DecompressionBombError на «бомбах».
     try:
         with Image.open(io.BytesIO(content)) as img:
             fmt = img.format
@@ -117,10 +110,6 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
     except _PIL_OPEN_ERRORS:
         return None, None, "Файл повреждён или не является изображением."
 
-    # 2. Быстрый путь без перекодирования: GIF не трогаем,
-    #    WebP с подходящим размером сохраняем как есть.
-    #    try/except — на случай, если DecompressionBombError вылетит
-    #    повторно при Image.open (кэш PIL не всегда помогает).
     try:
         with Image.open(io.BytesIO(content)) as img:
             if img.format == "GIF":
@@ -132,7 +121,6 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
     except _PIL_OPEN_ERRORS:
         return None, None, "Файл повреждён или не является изображением."
 
-    # 3. Конвертация в WebP с ресайзом.
     try:
         with Image.open(io.BytesIO(content)) as img:
             if MAX_IMAGE_DIMENSION > 0 and max(img.size) > MAX_IMAGE_DIMENSION:
@@ -436,15 +424,8 @@ def site_image_public_url(filename: str | None) -> str | None:
 
 
 def site_image_info(filename: str | None) -> dict | None:
-    """Информация о файле для отображения в админке.
-
-    Путь берётся из _site_backend.folder, а не хардкодится —
-    иначе в тестах (где folder перенаправлен в tempdir) функция
-    смотрела бы в боевую static/site/ и врала «missing: true».
-    """
     if not filename:
         return None
-
     path = _site_backend.folder / filename
     if not path.exists():
         return {"filename": filename, "size_kb": 0, "missing": True}
@@ -454,3 +435,75 @@ def site_image_info(filename: str | None) -> dict | None:
         "size_kb": round(size / 1024, 1),
         "missing": False,
     }
+
+
+# ============================================================
+# Очистка orphan-файлов
+# ============================================================
+def cleanup_orphans(min_age_minutes: int = 60, dry_run: bool = True) -> dict:
+    """Удаляет файлы на диске, на которые нет ссылок в БД.
+
+    Орфаны появляются, когда:
+      - замена картинки через админку упала между save и commit;
+      - старый файл не удалился из-за OSError (readonly FS, права);
+      - ручное вмешательство в БД.
+
+    Параметры:
+      min_age_minutes — не трогать файлы младше N минут. Защита от race:
+                        только что загруженная картинка товара может
+                        быть ещё не привязана (между save_media и commit).
+      dry_run         — True: только найти, не удалять.
+
+    Возвращает {"site": [...], "uploads": [...]} — имена файлов,
+    которые были найдены (и удалены, если dry_run=False).
+    """
+    import time
+    from app.core.database import SessionLocal
+    from app.data.models import Product, Setting
+
+    db = SessionLocal()
+    try:
+        referenced_site = {
+            s.value for s in db.query(Setting).all()
+            if s.key and s.key.endswith("_image") and s.value
+        }
+        referenced_uploads = set()
+        for p in db.query(Product).all():
+            for f in (p.image, p.image_2, p.image_3, p.image_4):
+                if f:
+                    referenced_uploads.add(f)
+    finally:
+        db.close()
+
+    cutoff = time.time() - min_age_minutes * 60
+
+    result: dict[str, list[str]] = {"site": [], "uploads": []}
+
+    for backend, refs, kind in (
+        (_site_backend, referenced_site, "site"),
+        (_backend, referenced_uploads, "uploads"),
+    ):
+        if not backend.folder.exists():
+            continue
+        for f in backend.folder.iterdir():
+            if not f.is_file():
+                continue
+            if f.name in refs:
+                continue
+            try:
+                if f.stat().st_mtime > cutoff:
+                    continue
+            except OSError:
+                continue
+
+            result[kind].append(f.name)
+
+            if not dry_run:
+                try:
+                    f.unlink()
+                except OSError as e:
+                    log.warning("cleanup_orphans: не удалось удалить %s: %s", f, e)
+
+    result["site"].sort()
+    result["uploads"].sort()
+    return result

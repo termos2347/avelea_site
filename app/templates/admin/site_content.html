@@ -616,19 +616,39 @@
     function renderMeta(root, info) {
         var meta = root.querySelector('[data-meta]');
         if (!meta) return;
+
+        meta.textContent = '';
+
         if (!info) {
-            meta.innerHTML = 'jpg, png, gif, webp — до 5 МБ. Автоконвертация в WebP.';
+            meta.textContent = 'jpg, png, gif, webp — до 5 МБ. Автоконвертация в WebP.';
             return;
         }
+
         if (info.missing) {
-            meta.innerHTML = '<span style="color: var(--adm-danger);">'
-                + '<i class="fas fa-exclamation-triangle"></i> Файл '
-                + info.filename + ' отсутствует на диске</span>';
+            var warn = document.createElement('span');
+            warn.style.color = 'var(--adm-danger)';
+
+            var icon = document.createElement('i');
+            icon.className = 'fas fa-exclamation-triangle';
+            warn.appendChild(icon);
+
+            warn.appendChild(
+                document.createTextNode(' Файл ' + info.filename + ' отсутствует на диске')
+            );
+            meta.appendChild(warn);
             return;
         }
-        meta.innerHTML = '<span class="site-img-meta-type">WebP</span>'
-            + ' · ' + info.size_kb + ' KB'
-            + ' · <code>' + info.filename + '</code>';
+
+        var type = document.createElement('span');
+        type.className = 'site-img-meta-type';
+        type.textContent = 'WebP';
+        meta.appendChild(type);
+
+        meta.appendChild(document.createTextNode(' · ' + info.size_kb + ' KB · '));
+
+        var code = document.createElement('code');
+        code.textContent = info.filename;
+        meta.appendChild(code);
     }
 
     function setPreview(root, url, info) {

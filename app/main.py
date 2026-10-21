@@ -32,6 +32,7 @@ from app.core.config import (
     SESSION_HTTPS_ONLY,
     SESSION_MAX_AGE,
     SESSION_SAME_SITE,
+    SITE_PUBLIC,
     TELEGRAM_2FA_ENABLED,
     UVICORN_WORKERS,
 )
@@ -89,13 +90,7 @@ log = logging.getLogger("avelea")
 
 
 def _ensure_migrations_current(alembic_cfg: Config) -> None:
-    """Проверяет, что БД накачена до head. Иначе — отказ стартовать.
-
-    Используется при AUTO_MIGRATE=false: миграции запускаются снаружи
-    (`alembic upgrade head`) перед рестартом, а приложение только
-    удостоверяется, что схема актуальна. Иначе на半-мигрированной БД
-    запросы будут падать непонятными 500-ми.
-    """
+    """Проверяет, что БД накачена до head. Иначе — отказ стартовать."""
     from app.core.database import engine as app_engine
 
     script = ScriptDirectory.from_config(alembic_cfg)
@@ -141,6 +136,20 @@ async def lifespan(app: FastAPI):
 
     cache.reload_all()
 
+    try:
+        from app.services.storage import cleanup_orphans
+        removed = cleanup_orphans(min_age_minutes=60, dry_run=False)
+        total = len(removed["site"]) + len(removed["uploads"])
+        if total:
+            log.info(
+                "Очистка orphan: удалено site=%d, uploads=%d",
+                len(removed["site"]), len(removed["uploads"]),
+            )
+        else:
+            log.info("Очистка orphan: чисто")
+    except Exception as exc:
+        log.exception("cleanup_orphans упал (продолжаем): %s", exc)
+
     purge_task: asyncio.Task | None = None
     if TELEGRAM_2FA_ENABLED:
         purge_task = asyncio.create_task(auth.purge_loop())
@@ -167,9 +176,6 @@ app = FastAPI(title="Avelea Shop", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=800)
 app.add_middleware(AdminAuthGuardMiddleware)
 
-# ВАЖНО: SessionMiddleware должен идти ПОСЛЕ (снаружи) BodySizeLimitMiddleware,
-# чтобы request.session был доступен в _render_413. Порядок в Starlette
-# инвертируется: последний добавленный выполняется первым.
 app.add_middleware(
     BodySizeLimitMiddleware,
     max_bytes=4 * max(MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) + 1024 * 1024,
@@ -213,6 +219,13 @@ async def healthz():
 
 @app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
 async def robots_txt(request: Request):
+    if not SITE_PUBLIC:
+        # Staging/разработка: закрываем от поисковиков.
+        return PlainTextResponse(
+            "User-agent: *\n"
+            "Disallow: /\n"
+        )
+
     base = str(request.base_url).rstrip("/")
     return PlainTextResponse(
         "User-agent: *\n"
@@ -223,6 +236,10 @@ async def robots_txt(request: Request):
 
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap_xml(request: Request):
+    if not SITE_PUBLIC:
+        # На staging sitemap не отдаём — чтобы не подсказывать поисковикам.
+        return Response(content="", media_type="application/xml", status_code=404)
+
     base = str(request.base_url).rstrip("/")
 
     urls = [
@@ -244,10 +261,6 @@ def sitemap_xml(request: Request):
 
     return Response(content=body, media_type="application/xml")
 
-
-# ============================================================
-# Страницы ошибок
-# ============================================================
 
 _ERROR_PAGES: dict[int, dict] = {
     400: {
@@ -288,9 +301,6 @@ _ERROR_PAGES: dict[int, dict] = {
 }
 
 
-# Короткие тексты для JSON-ответов AJAX-запросам. Полные тексты
-# из _ERROR_PAGES рассчитаны на HTML-страницу — для JS-тоста они
-# слишком длинные и с лишними деталями.
 _JSON_ERROR_MESSAGES: dict[int, str] = {
     400: "Некорректный запрос. Проверьте данные.",
     403: "Сессия истекла или доступ запрещён. Обновите страницу и попробуйте снова.",
@@ -303,7 +313,6 @@ _JSON_ERROR_MESSAGES: dict[int, str] = {
 
 
 def _is_ajax(request: Request) -> bool:
-    """AJAX-запросы (fetch/XHR с явным заголовком) ждут JSON, не HTML."""
     return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 

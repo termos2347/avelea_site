@@ -2,10 +2,6 @@
 крупных правок. Возвращает exit code 1, если что-то не так.
 
     python scripts/check_db.py
-
-Совместим с SQLite (тесты) и Postgres (прод). Для boolean-колонок
-используем `WHERE is_active` — без сравнения с 1/true, чтобы
-работало на обоих диалектах без каста.
 """
 import sys
 from pathlib import Path
@@ -119,11 +115,6 @@ def check_orphans(db) -> None:
 
 
 def check_name_lower(db) -> None:
-    """Сверяем name_lower с name в Python.
-
-    Postgres LOWER() зависит от collation/локали и может расходиться
-    с Python .lower() на кириллице. Поэтому — в Python, не в SQL.
-    """
     print("\n[4] Синхронизация name_lower")
 
     rows = db.query(Product.id, Product.name, Product.name_lower).all()
@@ -170,16 +161,11 @@ def check_prices(db) -> None:
 
 
 def check_media_files(db) -> None:
-    """Проверяем, что все файлы, на которые ссылается БД, есть на диске.
-
-    Ловит ситуацию «кто-то удалил файл из static/uploads/ руками,
-    а в БД ссылка осталась» — тогда на сайте битые картинки.
-    """
+    """Файлы, на которые ссылается БД, должны быть на диске."""
     print("\n[7] Медиафайлы на диске")
 
     from app.services.storage import _backend, _site_backend
 
-    # Картинки товаров
     missing_products = []
     for p in db.query(Product).all():
         for f in (p.image, p.image_2, p.image_3, p.image_4):
@@ -195,7 +181,6 @@ def check_media_files(db) -> None:
     else:
         ok("все картинки товаров на месте")
 
-    # Картинки сайта (Setting с ключами вида *_image)
     missing_site = []
     for s in db.query(Setting).all():
         if not (s.key and s.key.endswith("_image")):
@@ -213,19 +198,54 @@ def check_media_files(db) -> None:
         ok("все картинки сайта на месте")
 
 
+def check_orphan_files() -> None:
+    """Файлы на диске, на которые не ссылается БД.
+
+    Не ошибка, а сигнал. Удаляются автоматически при старте приложения
+    (файлы старше 60 минут — защита от race с загрузкой).
+    """
+    print("\n[8] Orphan-файлы на диске")
+
+    from app.services.storage import cleanup_orphans
+    found = cleanup_orphans(min_age_minutes=0, dry_run=True)
+
+    site_orphans = found["site"]
+    upload_orphans = found["uploads"]
+
+    if site_orphans:
+        print(f"  ⚠️  static/site: {len(site_orphans)} файлов без ссылок в БД:")
+        for f in site_orphans[:10]:
+            print(f"     - {f}")
+        if len(site_orphans) > 10:
+            print(f"     ... и ещё {len(site_orphans) - 10}")
+        print(f"     Удалятся при следующем рестарте сервера (lifespan).")
+    else:
+        ok("static/site: все файлы используются")
+
+    if upload_orphans:
+        print(f"  ⚠️  static/uploads: {len(upload_orphans)} файлов без ссылок в БД:")
+        for f in upload_orphans[:10]:
+            print(f"     - {f}")
+        if len(upload_orphans) > 10:
+            print(f"     ... и ещё {len(upload_orphans) - 10}")
+        print(f"     Удалятся при следующем рестарте сервера (lifespan).")
+    else:
+        ok("static/uploads: все файлы используются")
+
+
 def check_stats(db) -> None:
-    print("\n[8] Статистика (не проверка, просто смотрим)")
+    print("\n[9] Статистика (не проверка, просто смотрим)")
 
     for label, q in [
-        ("товаров всего",       "SELECT COUNT(*) FROM products"),
-        ("из них активных",     "SELECT COUNT(*) FROM products WHERE is_active"),
-        ("популярных",          "SELECT COUNT(*) FROM products WHERE popular"),
-        ("с картинкой",         "SELECT COUNT(*) FROM products WHERE image IS NOT NULL AND image != ''"),
-        ("с вариантами",        "SELECT COUNT(DISTINCT product_id) FROM product_variants"),
-        ("брендов",             "SELECT COUNT(*) FROM brands"),
-        ("категорий",           "SELECT COUNT(*) FROM categories"),
-        ("настроек",            "SELECT COUNT(*) FROM settings"),
-        ("настроек с картинкой","SELECT COUNT(*) FROM settings WHERE key LIKE '%\\_image' ESCAPE '\\' AND value IS NOT NULL AND value != ''"),
+        ("товаров всего",        "SELECT COUNT(*) FROM products"),
+        ("из них активных",      "SELECT COUNT(*) FROM products WHERE is_active"),
+        ("популярных",           "SELECT COUNT(*) FROM products WHERE popular"),
+        ("с картинкой",          "SELECT COUNT(*) FROM products WHERE image IS NOT NULL AND image != ''"),
+        ("с вариантами",         "SELECT COUNT(DISTINCT product_id) FROM product_variants"),
+        ("брендов",              "SELECT COUNT(*) FROM brands"),
+        ("категорий",            "SELECT COUNT(*) FROM categories"),
+        ("настроек",             "SELECT COUNT(*) FROM settings"),
+        ("настроек с картинкой", "SELECT COUNT(*) FROM settings WHERE key LIKE '%\\_image' ESCAPE '\\' AND value IS NOT NULL AND value != ''"),
     ]:
         v = db.execute(text(q)).scalar()
         print(f"     {label}: {v}")
@@ -246,6 +266,7 @@ def main() -> int:
         check_slugs(db)
         check_prices(db)
         check_media_files(db)
+        check_orphan_files()
         check_stats(db)
     finally:
         db.close()
