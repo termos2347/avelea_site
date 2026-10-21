@@ -34,6 +34,8 @@ router = APIRouter(prefix="/admin/products", tags=["admin-products"])
 
 ADMIN_PRODUCTS_PER_PAGE = 50
 MAX_VARIANTS = 10
+MAX_NAME_LEN = 200
+MAX_TEXT_LEN = 10000
 
 _COMMIT_ERROR_MSG = (
     "Не удалось сохранить — временная ошибка базы данных. "
@@ -58,19 +60,13 @@ def _product_form_context(db: Session, product: Product | None):
 
 
 def _append_flash(request: Request, msg: str) -> None:
-    """Добавляет сообщение к flash_error, не перезатирая уже там лежащее."""
     existing = request.session.get("flash_error") or ""
     request.session["flash_error"] = (
         f"{existing}; {msg}" if existing else msg
     )
 
 
-def _parse_price(
-    request: Request,
-    raw: str,
-    action: str,
-) -> int | None:
-    """Парсит цену из строки. При ошибке — пишет flash_error и возвращает None."""
+def _parse_price(request: Request, raw: str, action: str) -> int | None:
     raw = (raw or "").strip()
     if not raw:
         request.session["flash_error"] = f"Укажите цену — {action}."
@@ -78,9 +74,7 @@ def _parse_price(
     try:
         return int(raw)
     except ValueError:
-        request.session["flash_error"] = (
-            f"Цена «{raw}» — не число, {action}."
-        )
+        request.session["flash_error"] = f"Цена «{raw}» — не число, {action}."
         return None
 
 
@@ -92,13 +86,6 @@ def _apply_image_slot(
     files_to_rollback: list[str],
     errors: list[str],
 ) -> str | None:
-    """Возвращает имя файла для сохранения в product.image_N.
-
-    Побочные эффекты отложены — вызывающий сам решает, когда их применить:
-      - files_to_rollback: новые файлы, которые надо удалить при откате БД;
-      - files_to_delete:   старые файлы, которые надо удалить после успеха;
-      - errors:            тексты ошибок загрузки/валидации.
-    """
     had_upload = new_file is not None and getattr(new_file, "filename", "")
 
     if had_upload:
@@ -126,11 +113,6 @@ def _save_variants(
     units: list[str],
     prices: list[str],
 ) -> list[str]:
-    """Пересобирает варианты товара из данных формы.
-
-    Возвращает список предупреждений: невалидные строки (выкинуты)
-    и инфо-сообщения (например, «варианты удалены»).
-    """
     had_variants = bool(product.variants)
     product.variants.clear()
 
@@ -179,10 +161,6 @@ def _save_variants(
 
     return warnings
 
-
-# ============================================================
-# Список
-# ============================================================
 
 @router.get("", response_class=HTMLResponse)
 def admin_products(
@@ -250,10 +228,6 @@ def admin_products(
     })
 
 
-# ============================================================
-# Создание
-# ============================================================
-
 @router.get("/new", response_class=HTMLResponse)
 def admin_product_new(request: Request, _: bool = Depends(require_admin)):
     return RedirectResponse(url="/admin/products", status_code=303)
@@ -264,15 +238,15 @@ def admin_product_create(
     request: Request,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
-    name: str = Form(...),
+    name: str = Form(..., max_length=MAX_NAME_LEN),
     categories: list[str] = Form([]),
     brand_id: str = Form(None),
     price: str = Form(""),
     volume_amount: str = Form(""),
     volume_unit: str = Form("мл"),
-    description: str = Form(""),
-    composition: str = Form(""),
-    usage: str = Form(""),
+    description: str = Form("", max_length=MAX_TEXT_LEN),
+    composition: str = Form("", max_length=MAX_TEXT_LEN),
+    usage: str = Form("", max_length=MAX_TEXT_LEN),
     popular: str = Form(None),
     is_active: str = Form(None),
     image_1: UploadFile = File(None),
@@ -301,7 +275,6 @@ def admin_product_create(
         request.session["flash_error"] = "Выберите бренд — товар не создан."
         return RedirectResponse(url="/admin/products", status_code=303)
 
-    # Загрузка файлов: собираем всё, что сохранилось, и все ошибки.
     f1, e1 = save_media(image_1)
     f2, e2 = save_media(image_2)
     f3, e3 = save_media(image_3)
@@ -361,10 +334,6 @@ def admin_product_create(
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
-# ============================================================
-# Редактирование
-# ============================================================
-
 @router.get("/{product_id}/edit", response_class=HTMLResponse)
 def admin_product_edit(
     request: Request,
@@ -377,9 +346,6 @@ def admin_product_edit(
         raise HTTPException(status_code=404)
 
     ctx = _product_form_context(db, product)
-    # flash_error — чтобы форма редактирования показывала ошибки валидации
-    # (например, «цена не может быть отрицательной»), которые роутер
-    # кладёт в сессию перед редиректом обратно на /edit.
     ctx["flash_error"] = request.session.pop("flash_error", None)
 
     if request.headers.get("hx-request") == "true":
@@ -395,15 +361,15 @@ def admin_product_update(
     product_id: int,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
-    name: str = Form(...),
+    name: str = Form(..., max_length=MAX_NAME_LEN),
     categories: list[str] = Form([]),
     brand_id: str = Form(None),
     price: str = Form(""),
     volume_amount: str = Form(""),
     volume_unit: str = Form("мл"),
-    description: str = Form(""),
-    composition: str = Form(""),
-    usage: str = Form(""),
+    description: str = Form("", max_length=MAX_TEXT_LEN),
+    composition: str = Form("", max_length=MAX_TEXT_LEN),
+    usage: str = Form("", max_length=MAX_TEXT_LEN),
     popular: str = Form(None),
     is_active: str = Form(None),
     image_1: UploadFile = File(None),
@@ -509,16 +475,11 @@ def admin_product_update(
         )
         return RedirectResponse(url=edit_url, status_code=303)
 
-    # Успешный коммит — только теперь удаляем старые файлы.
     for f in files_to_delete:
         delete_media(f)
 
     return RedirectResponse(url="/admin/products", status_code=303)
 
-
-# ============================================================
-# Удаление
-# ============================================================
 
 @router.post("/{product_id}/delete")
 def admin_product_delete(

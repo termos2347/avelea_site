@@ -32,7 +32,6 @@ from app.core.config import (
     SESSION_HTTPS_ONLY,
     SESSION_MAX_AGE,
     SESSION_SAME_SITE,
-    SITE_PUBLIC,
     TELEGRAM_2FA_ENABLED,
     UVICORN_WORKERS,
 )
@@ -219,13 +218,6 @@ async def healthz():
 
 @app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
 async def robots_txt(request: Request):
-    if not SITE_PUBLIC:
-        # Staging/разработка: закрываем от поисковиков.
-        return PlainTextResponse(
-            "User-agent: *\n"
-            "Disallow: /\n"
-        )
-
     base = str(request.base_url).rstrip("/")
     return PlainTextResponse(
         "User-agent: *\n"
@@ -236,10 +228,6 @@ async def robots_txt(request: Request):
 
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap_xml(request: Request):
-    if not SITE_PUBLIC:
-        # На staging sitemap не отдаём — чтобы не подсказывать поисковикам.
-        return Response(content="", media_type="application/xml", status_code=404)
-
     base = str(request.base_url).rstrip("/")
 
     urls = [
@@ -260,7 +248,6 @@ def sitemap_xml(request: Request):
     body += "</urlset>\n"
 
     return Response(content=body, media_type="application/xml")
-
 
 _ERROR_PAGES: dict[int, dict] = {
     400: {

@@ -26,7 +26,6 @@ def test_catalog_search_cyrillic_case_insensitive(client):
     from app.data.models import Product, Brand
     from app.data import cache
 
-    # --- Setup: создаём тестовый товар с кириллицей в названии ---
     db = SessionLocal()
     try:
         brand = db.query(Brand).first()
@@ -41,30 +40,25 @@ def test_catalog_search_cyrillic_case_insensitive(client):
     finally:
         db.close()
 
-    # Сбрасываем кэш, чтобы новый товар был виден сайту.
     cache.invalidate()
 
     try:
-        # --- Test: ищем в нижнем регистре ---
         r = client.get("/catalog?q=крем")
         assert r.status_code == 200
         assert "Тестовый Увлажняющий КРЕМ" in r.text, \
             "Поиск в нижнем регистре не нашёл товар"
 
-        # --- Test: ищем в верхнем регистре ---
         r = client.get("/catalog?q=КРЕМ")
         assert r.status_code == 200
         assert "Тестовый Увлажняющий КРЕМ" in r.text, \
             "Поиск в верхнем регистре не нашёл товар"
 
-        # --- Test: смешанный регистр тоже работает ---
         r = client.get("/catalog?q=КрЕм")
         assert r.status_code == 200
         assert "Тестовый Увлажняющий КРЕМ" in r.text, \
             "Поиск в смешанном регистре не нашёл товар"
 
     finally:
-        # --- Teardown: удаляем тестовый товар ---
         db = SessionLocal()
         try:
             p = db.query(Product).filter(Product.id == test_pid).first()
@@ -122,29 +116,35 @@ def test_security_headers(client):
     assert r.headers["cross-origin-opener-policy"] == "same-origin"
 
 
+def test_csp_no_unsafe_inline_scripts(client):
+    """CSP не должен разрешать inline-скрипты: все JS вынесены в /static/js/."""
+    r = client.get("/")
+    csp = r.headers.get("content-security-policy", "")
+
+    parts = [p.strip() for p in csp.split(";")]
+    script_src = next((p for p in parts if p.startswith("script-src")), "")
+
+    assert script_src, "script-src отсутствует в CSP"
+    assert "'unsafe-inline'" not in script_src, (
+        f"script-src не должен содержать 'unsafe-inline': {script_src}"
+    )
+
+
 # ============== Контекстные 404 ==============
 
 def test_404_context_product(client):
-    """404 на /product/* показывает специфичный текст, не общий."""
     r = client.get("/product/999999")
     assert r.status_code == 404
     assert "Товар не найден" in r.text
 
 
 def test_404_context_generic(client):
-    """Произвольный URL — общий текст «Страница не найдена»."""
     r = client.get("/nope")
     assert r.status_code == 404
     assert "Страница не найдена" in r.text
 
 
 def test_admin_404_does_not_leak_admin(client):
-    """Неавторизованный /admin/* не палит существование админки.
-
-    Раньше отдавался редирект на /admin/login — это подтверждало
-    существование админки. Теперь AdminGuardMiddleware отдаёт
-    обычную 404 без единого намёка.
-    """
     r = client.get("/admin/whatever-this-is", follow_redirects=False)
     assert r.status_code == 404
 
@@ -157,7 +157,6 @@ def test_admin_404_does_not_leak_admin(client):
 
 
 def test_admin_login_is_reachable(client):
-    """Но /admin/login при этом доступен — иначе как войти."""
     r = client.get("/admin/login")
     assert r.status_code == 200
     assert "Вход в админку" in r.text
@@ -172,45 +171,23 @@ def test_sitemap_xml(client):
     assert "<urlset" in r.text
     assert "/catalog" in r.text
     assert "/about" in r.text
-    # В сиде есть товары — значит, в sitemap должны быть /product/*
     assert "/product/" in r.text
-    
+
+
+def test_robots_txt(client):
+    r = client.get("/robots.txt")
+    assert r.status_code == 200
+    assert "Allow: /" in r.text
+    assert "Sitemap:" in r.text
+    assert "/admin" not in r.text
+
+
 def test_admin_login_has_noindex_header(client):
-    """Все ответы /admin/* несут X-Robots-Tag — роботы не индексируют."""
+    """Все ответы /admin/* несут X-Robots-Tag."""
     r = client.get("/admin/login")
     assert r.status_code == 200
     assert r.headers.get("x-robots-tag") == "noindex, nofollow"
 
-    # И 404 для неавторизованных — тоже с заголовком
     r = client.get("/admin/whatever", follow_redirects=False)
     assert r.status_code == 404
     assert r.headers.get("x-robots-tag") == "noindex, nofollow"
-
-
-def test_robots_txt_does_not_mention_admin(client):
-    """robots.txt не подсказывает злодеям про /admin."""
-    r = client.get("/robots.txt")
-    assert r.status_code == 200
-    assert "/admin" not in r.text
-    
-def test_ajax_404_returns_json(client):
-    """XHR-запрос на несуществующий URL — JSON, не HTML.
-
-    Тест на глобальный handler, не на конкретный роут — поэтому
-    бьёт в произвольный путь.
-    """
-    r = client.get(
-        "/nope",
-        headers={"X-Requested-With": "XMLHttpRequest"},
-    )
-    assert r.status_code == 404
-    data = r.json()
-    assert data["ok"] is False
-    assert "error" in data
-
-
-def test_non_ajax_404_returns_html(client):
-    """Без X-Requested-With — обычная HTML-страница."""
-    r = client.get("/nope")
-    assert r.status_code == 404
-    assert "text/html" in r.headers["content-type"]

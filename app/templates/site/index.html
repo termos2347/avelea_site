@@ -5,7 +5,9 @@
 
 {% block content %}
 
-<section class="relative w-screen ml-[calc(50%-50vw)] mb-10 md:mb-16">
+[...document.querySelectorAll('*')].filter(el => el.scrollWidth > document.documentElement.clientWidth)
+
+<section class="relative -mx-4 md:-mx-6 mb-10 md:mb-16">
     <div class="relative overflow-hidden" data-carousel>
 
         <div class="absolute top-4 left-0 right-0 z-30 px-4 md:px-6 pointer-events-none">

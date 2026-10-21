@@ -5,12 +5,14 @@ from starlette.responses import JSONResponse
 from app.core.config import SESSION_HTTPS_ONLY
 
 
-# CSP разрешает только нужные CDN. 'unsafe-inline' для script/style —
-# вынужденная мера: Tailwind JIT вставляет inline-стили, а htmx — атрибуты.
-# При vendoring Tailwind/FA/htmx — 'unsafe-inline' можно убрать.
+# CSP разрешает только нужные CDN.
+# script-src: без 'unsafe-inline' — все скрипты вынесены в /static/js/.
+#             Это закрывает XSS через inline-инъекции в HTML.
+# style-src:  'unsafe-inline' вынужденно — Tailwind JIT вставляет
+#             inline-стили динамически. При vendoring Tailwind — убрать.
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' "
+    "script-src 'self' "
     "https://cdn.tailwindcss.com https://unpkg.com; "
     "style-src 'self' 'unsafe-inline' "
     "https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
@@ -30,15 +32,7 @@ def _is_ajax(request) -> bool:
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Отклоняет запросы, у которых Content-Length больше лимита.
-
-    Рендерит ту же HTML-страницу ошибки, что и глобальный handler 413 —
-    потому что этот middleware сидит СНАРУЖИ от ExceptionMiddleware,
-    и его HTTPException не был бы пойман глобальными handlers.
-
-    Для AJAX-запросов (X-Requested-With: XMLHttpRequest) отдаёт JSON —
-    иначе JS-парсер `xhr.responseText` упадёт.
-    """
+    """Отклоняет запросы, у которых Content-Length больше лимита."""
 
     def __init__(self, app, max_bytes: int):
         super().__init__(app)

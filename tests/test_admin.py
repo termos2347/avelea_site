@@ -7,6 +7,9 @@ from app.core.config import BASE_DIR
 from tests.conftest import extract_csrf
 
 
+# UPLOADS_DIR и SITE_DIR указывают на временные папки, куда
+# тестовый storage перенаправлен в conftest.py.
+# Боевые static/uploads/ и static/site/ тесты не трогают.
 from app.services.storage import (
     _backend as _storage_backend,
     _site_backend as _site_storage_backend,
@@ -145,7 +148,6 @@ def test_login_success_resets_counter(client):
     )
     assert r.status_code == 303
 
-    # Logout — POST (не GET): <img src="/admin/logout"> не должен работать.
     client.post("/admin/logout", follow_redirects=False)
 
     r = client.get("/admin/login")
@@ -398,6 +400,56 @@ def test_upload_rejects_decompression_bomb(admin_client, monkeypatch):
     assert list(UPLOADS_DIR.iterdir()) == []
 
 
+# ============== Видео (mp4) ==============
+
+def test_upload_mp4_video_saves(admin_client):
+    """MP4 с правильными magic bytes сохраняется в static/uploads/."""
+    # ftyp на смещении 4, бренд isom на 8-12 — так _sniff_ext определяет .mp4
+    fake_mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2" + b"\x00" * 1000
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+
+    data = _payload(name="Видео-товар", price="100")
+    data["csrf_token"] = token
+    r = admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("test.mp4", fake_mp4, "video/mp4")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    files = [f.name for f in UPLOADS_DIR.iterdir() if f.is_file()]
+    assert len(files) == 1
+    assert files[0].endswith(".mp4")
+
+
+def test_upload_rejects_too_large_video(admin_client, monkeypatch):
+    """Видео больше MAX_VIDEO_UPLOAD_BYTES отклоняется, товар создаётся без файла."""
+    monkeypatch.setattr("app.services.storage.MAX_VIDEO_UPLOAD_BYTES", 100)
+
+    fake_mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2" + b"x" * 200
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+
+    data = _payload(name="Большое видео", price="1")
+    data["csrf_token"] = token
+    r = admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("big.mp4", fake_mp4, "video/mp4")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    r = admin_client.get("/admin/products", params={"q": "Большое видео"})
+    assert "Большое видео" in r.text
+    assert "/static/uploads/" not in r.text
+    assert list(UPLOADS_DIR.iterdir()) == []
+
+
 def test_body_size_limit_returns_413():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -508,11 +560,7 @@ def test_update_product_rejects_negative_price(admin_client):
 # ============== Утечка файлов при ошибках БД ==============
 
 def test_create_product_rolls_back_files_on_db_error(admin_client, monkeypatch):
-    """Если db.commit() падает — загруженные файлы удаляются с диска.
-
-    Патчим Session.commit на уровне класса: sessionmaker возвращает
-    экземпляры Session, но самого метода commit у sessionmaker нет.
-    """
+    """Если db.commit() падает — загруженные файлы удаляются с диска."""
     from sqlalchemy.orm import Session
 
     def boom(self, *args, **kwargs):
@@ -1079,10 +1127,7 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
 
 
 def test_2fa_purge_removes_expired_only():
-    """_purge_expired удаляет только протухшие коды, живые не трогает.
-
-    С RLock внутри функции — lock снаружи больше не требуется.
-    """
+    """_purge_expired удаляет только протухшие коды, живые не трогает."""
     import time
     from app.routers.admin import auth as auth_mod
 

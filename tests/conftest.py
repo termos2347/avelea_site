@@ -31,8 +31,6 @@ from app.main import app
 #
 # Без этого autouse-уборка удаляла бы файлы из боевых
 # static/uploads и static/site — где лежат реальные фото.
-# Теперь всё, что тесты создают, уходит в /tmp/avelea_test_*/uploads
-# и /tmp/avelea_test_*/site. Боевые папки не трогаются вообще.
 # ============================================================
 from app.core.config import BASE_DIR
 from app.services import storage as _storage
@@ -45,15 +43,13 @@ _test_site.mkdir(parents=True, exist_ok=True)
 _storage._backend.folder = _test_uploads
 _storage._site_backend.folder = _test_site
 
-# Боевые папки — только для защиты от случайного удаления.
 _REAL_UPLOADS = (BASE_DIR / "static" / "uploads").resolve()
 _REAL_SITE = (BASE_DIR / "static" / "site").resolve()
 
 
 def _assert_safe_to_clear(folder: Path) -> None:
     """Страховка: не даём очистить боевые папки, даже если что-то
-    сломалось в redirect'е storage → tempdir. Лучше упасть с
-    AssertionError, чем удалить пользовательские фото.
+    сломалось в redirect'е storage → tempdir.
     """
     resolved = folder.resolve()
     if resolved == _REAL_UPLOADS or resolved == _REAL_SITE:
@@ -129,8 +125,6 @@ def _clean_test_storage():
     """Очищает временные папки тестового storage.
 
     ВАЖНО: НЕ трогает static/uploads и static/site — там боевые фото.
-    Если redirect storage → tempdir не сработал, _assert_safe_to_clear
-    упадёт с AssertionError ДО того, как что-то удалится.
     """
     from app.services.storage import _backend, _site_backend
 

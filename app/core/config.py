@@ -84,9 +84,7 @@ UVICORN_WORKERS = _int("UVICORN_WORKERS", 1)
 # AUTO_MIGRATE=true — накатывать миграции Alembic в lifespan.
 # Для прода рекомендуется false: миграции запускать отдельно
 # (`alembic upgrade head`) перед рестартом сервиса, а lifespan
-# только проверяет, что схема актуальна. Если не актуальна —
-# приложение отказывается стартовать с понятной ошибкой,
-# вместо того чтобы подняться на半-мигрированной БД.
+# только проверяет, что схема актуальна.
 AUTO_MIGRATE = _bool("AUTO_MIGRATE", default=True)
 
 SESSION_HTTPS_ONLY = _bool("SESSION_HTTPS_ONLY", default=False)

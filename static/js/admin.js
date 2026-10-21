@@ -831,4 +831,374 @@
         });
     })();
 
+    // ============================================================
+    // SITE CONTENT (перенос из site_content.html <script>)
+    // Работает только на странице /admin/site — проверка наличия
+    // .site-page. При htmx-переходе на эту страницу admin.js уже
+    // выполнен, поэтому init() вызывается на htmx:afterSettle.
+    // data-ready на .site-page защищает от повторной инициализации.
+    // ============================================================
+    (function initSiteContent() {
+        function init() {
+            var pages = document.querySelectorAll('.site-page');
+            if (!pages.length) return;
+            if (pages[0].hasAttribute('data-ready')) return;
+
+            pages.forEach(function (el) {
+                el.setAttribute('data-ready', '1');
+            });
+
+            var toast = document.getElementById('site-toast');
+            var toastTimer = null;
+
+            function showToast(msg, isError) {
+                if (!toast) return;
+                toast.textContent = msg;
+                toast.classList.toggle('is-error', !!isError);
+                toast.classList.add('is-visible');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () {
+                    toast.classList.remove('is-visible');
+                }, 3000);
+            }
+
+            function getCsrf() {
+                var el = document.querySelector('input[name="csrf_token"]');
+                return el ? el.value : '';
+            }
+
+            // ----- UNSAVED STATE -----
+            function isDirty(root) {
+                var input = root.querySelector('[data-text-input]');
+                if (!input) return false;
+                var original = root.dataset.original || '';
+                return input.value !== original;
+            }
+
+            function getDirtyCount() {
+                return Array.from(document.querySelectorAll('[data-site-text]'))
+                    .filter(isDirty).length;
+            }
+
+            function updateGlobal() {
+                var float = document.querySelector('[data-unsaved-float]');
+                if (!float) return;
+                var n = getDirtyCount();
+                if (n > 0) {
+                    float.style.display = '';
+                    var c = float.querySelector('[data-count]');
+                    if (c) c.textContent = n;
+                } else {
+                    float.style.display = 'none';
+                }
+            }
+
+            function updateDirtyState(root) {
+                var item = root.closest('.site-item');
+                if (!item) return;
+                var dirty = isDirty(root);
+                item.classList.toggle('is-dirty', dirty);
+                var badge = item.querySelector('[data-unsaved-badge]');
+                if (badge) badge.style.display = dirty ? '' : 'none';
+                updateGlobal();
+            }
+
+            document.querySelectorAll('[data-site-text]').forEach(function (root) {
+                var input = root.querySelector('[data-text-input]');
+                if (!input) return;
+                input.addEventListener('input', function () { updateDirtyState(root); });
+                updateDirtyState(root);
+            });
+
+            // ----- Предупреждение при уходе -----
+            function warnIfDirty() {
+                var n = getDirtyCount();
+                if (n === 0) return true;
+                var word = n === 1 ? 'изменение' : (n < 5 ? 'изменения' : 'изменений');
+                return confirm('У вас есть несохранённые ' + word + ' (' + n + ').\nПерейти и потерять их?');
+            }
+
+            window.addEventListener('beforeunload', function (e) {
+                if (getDirtyCount() > 0) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+
+            document.body.addEventListener('htmx:confirm', function (e) {
+                if (getDirtyCount() === 0) return;
+                if (!warnIfDirty()) {
+                    e.preventDefault();
+                }
+            });
+
+            // ----- Аккордеон -----
+            var STORAGE_PREFIX = 'site_page_open_';
+
+            document.querySelectorAll('.site-page').forEach(function (details) {
+                var slug = details.dataset.pageSlug;
+                if (!slug) return;
+
+                try {
+                    var stored = localStorage.getItem(STORAGE_PREFIX + slug);
+                    if (stored === '0') details.open = false;
+                    else if (stored === '1') details.open = true;
+                } catch (e) {}
+
+                details.addEventListener('toggle', function () {
+                    try {
+                        localStorage.setItem(STORAGE_PREFIX + slug, details.open ? '1' : '0');
+                    } catch (e) {}
+                });
+            });
+
+            var expandBtn = document.querySelector('[data-expand-all]');
+            var collapseBtn = document.querySelector('[data-collapse-all]');
+
+            function setAll(open) {
+                document.querySelectorAll('.site-page').forEach(function (d) {
+                    d.open = open;
+                    try {
+                        localStorage.setItem(STORAGE_PREFIX + d.dataset.pageSlug, open ? '1' : '0');
+                    } catch (e) {}
+                });
+            }
+
+            if (expandBtn) expandBtn.addEventListener('click', function () { setAll(true); });
+            if (collapseBtn) collapseBtn.addEventListener('click', function () { setAll(false); });
+
+            // ----- КАРТИНКИ -----
+            function renderMeta(root, info) {
+                var meta = root.querySelector('[data-meta]');
+                if (!meta) return;
+
+                meta.textContent = '';
+
+                if (!info) {
+                    meta.textContent = 'jpg, png, gif, webp — до 5 МБ. Автоконвертация в WebP.';
+                    return;
+                }
+
+                if (info.missing) {
+                    var warn = document.createElement('span');
+                    warn.style.color = 'var(--adm-danger)';
+
+                    var icon = document.createElement('i');
+                    icon.className = 'fas fa-exclamation-triangle';
+                    warn.appendChild(icon);
+
+                    warn.appendChild(
+                        document.createTextNode(' Файл ' + info.filename + ' отсутствует на диске')
+                    );
+                    meta.appendChild(warn);
+                    return;
+                }
+
+                var type = document.createElement('span');
+                type.className = 'site-img-meta-type';
+                type.textContent = 'WebP';
+                meta.appendChild(type);
+
+                meta.appendChild(document.createTextNode(' · ' + info.size_kb + ' KB · '));
+
+                var code = document.createElement('code');
+                code.textContent = info.filename;
+                meta.appendChild(code);
+            }
+
+            function setPreview(root, url, info) {
+                var preview = root.querySelector('[data-preview]');
+                var overlayText = root.querySelector('[data-overlay-text]');
+                var removeBtn = root.querySelector('[data-remove-btn]');
+
+                if (url) {
+                    preview.innerHTML = '<img src="' + url + '" alt="">';
+                    if (overlayText) overlayText.textContent = 'Заменить';
+                    if (removeBtn) removeBtn.style.display = '';
+                    root.dataset.hasImage = '1';
+                } else {
+                    preview.innerHTML = '<div class="site-img-empty"><i class="fas fa-image"></i></div>';
+                    if (overlayText) overlayText.textContent = 'Загрузить';
+                    if (removeBtn) removeBtn.style.display = 'none';
+                    root.dataset.hasImage = '0';
+                }
+                renderMeta(root, info);
+            }
+
+            function uploadImage(root, file) {
+                var key = root.dataset.key;
+                var progress = root.querySelector('[data-progress]');
+                var progressBar = root.querySelector('[data-progress-bar]');
+                var progressText = root.querySelector('[data-progress-text]');
+                var success = root.querySelector('[data-success]');
+                var preview = root.querySelector('[data-preview]');
+
+                preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '" alt="">';
+
+                var form = new FormData();
+                form.append('image', file);
+                form.append('csrf_token', getCsrf());
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/admin/site/' + key + '/image', true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (!e.lengthComputable) return;
+                    var pct = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressText.textContent = pct + '%';
+                });
+
+                progress.classList.add('is-visible');
+
+                xhr.addEventListener('load', function () {
+                    progress.classList.remove('is-visible');
+                    progressBar.style.width = '0%';
+                    var data = null;
+                    try { data = JSON.parse(xhr.responseText); } catch (e) {}
+                    if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+                        setPreview(root, data.url, data.info);
+                        success.classList.add('is-visible');
+                        setTimeout(function () { success.classList.remove('is-visible'); }, 700);
+                        showToast('Картинка обновлена', false);
+                    } else {
+                        showToast((data && data.error) || 'Не удалось загрузить', true);
+                        setPreview(root, null, null);
+                    }
+                });
+                xhr.send(form);
+            }
+
+            function removeImage(root) {
+                if (!confirm('Удалить картинку «' + root.dataset.label + '»?')) return;
+                var form = new FormData();
+                form.append('remove', '1');
+                form.append('csrf_token', getCsrf());
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/admin/site/' + root.dataset.key + '/image', true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.addEventListener('load', function () {
+                    var data = null;
+                    try { data = JSON.parse(xhr.responseText); } catch (e) {}
+                    if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+                        setPreview(root, null, null);
+                        showToast('Картинка удалена', false);
+                    } else {
+                        showToast('Не удалось удалить', true);
+                    }
+                });
+                xhr.send(form);
+            }
+
+            document.querySelectorAll('[data-site-img]').forEach(function (root) {
+                var drop = root.querySelector('[data-drop]');
+                var input = root.querySelector('[data-input]');
+                var trigger = root.querySelector('[data-trigger-input]');
+                var removeBtn = root.querySelector('[data-remove-btn]');
+
+                if (trigger && input) {
+                    trigger.addEventListener('click', function () { input.click(); });
+                }
+                if (input) {
+                    input.addEventListener('change', function () {
+                        var f = input.files && input.files[0];
+                        if (!f) return;
+                        uploadImage(root, f);
+                        input.value = '';
+                    });
+                }
+                if (drop) {
+                    ['dragenter', 'dragover'].forEach(function (ev) {
+                        drop.addEventListener(ev, function (e) {
+                            e.preventDefault(); e.stopPropagation();
+                            drop.classList.add('is-dragover');
+                        });
+                    });
+                    ['dragleave', 'drop'].forEach(function (ev) {
+                        drop.addEventListener(ev, function (e) {
+                            e.preventDefault(); e.stopPropagation();
+                            drop.classList.remove('is-dragover');
+                        });
+                    });
+                    drop.addEventListener('drop', function (e) {
+                        var files = e.dataTransfer && e.dataTransfer.files;
+                        if (!files || !files.length) return;
+                        var f = files[0];
+                        if (!f.type.startsWith('image/')) {
+                            showToast('Это не изображение', true);
+                            return;
+                        }
+                        uploadImage(root, f);
+                    });
+                }
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function () { removeImage(root); });
+                }
+            });
+
+            // ----- ТЕКСТЫ -----
+            document.querySelectorAll('[data-site-text]').forEach(function (root) {
+                var input = root.querySelector('[data-text-input]');
+                var saveBtn = root.querySelector('[data-save-text]');
+                if (!input || !saveBtn) return;
+
+                saveBtn.addEventListener('click', function () {
+                    var form = new FormData();
+                    form.append('value', input.value);
+                    form.append('csrf_token', getCsrf());
+
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/admin/site/' + root.dataset.key + '/text', true);
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>…</span>';
+                    saveBtn.disabled = true;
+
+                    xhr.addEventListener('load', function () {
+                        saveBtn.innerHTML = '<i class="fas fa-check"></i><span>Сохранить</span>';
+                        saveBtn.disabled = false;
+                        var data = null;
+                        try { data = JSON.parse(xhr.responseText); } catch (e) {}
+                        if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+                            var newVal = data.value || '';
+                            input.value = newVal;
+                            root.dataset.original = newVal;
+                            updateDirtyState(root);
+                            showToast('Текст сохранён', false);
+                        } else {
+                            showToast((data && data.error) || 'Не удалось сохранить', true);
+                        }
+                    });
+                    xhr.addEventListener('error', function () {
+                        saveBtn.innerHTML = '<i class="fas fa-check"></i><span>Сохранить</span>';
+                        saveBtn.disabled = false;
+                        showToast('Ошибка сети', true);
+                    });
+
+                    xhr.send(form);
+                });
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                    var active = document.activeElement;
+                    if (!active || !active.closest('[data-site-text]')) return;
+                    e.preventDefault();
+                    var btn = active.closest('[data-site-text]').querySelector('[data-save-text]');
+                    if (btn) btn.click();
+                }
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+        document.body.addEventListener('htmx:afterSettle', init);
+    })();
+
 })();

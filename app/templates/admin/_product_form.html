@@ -17,7 +17,7 @@
 
         <div class="adm-col-full">
             <label class="adm-label">Название *</label>
-            <input type="text" name="name" required
+            <input type="text" name="name" required maxlength="200"
                    value="{{ product.name if product else '' }}"
                    class="adm-input" placeholder="Например: Увлажняющий крем">
         </div>
@@ -186,19 +186,19 @@
 
         <div class="adm-col-full">
             <label class="adm-label">Описание</label>
-            <textarea name="description" rows="4" class="adm-textarea"
+            <textarea name="description" rows="4" maxlength="10000" class="adm-textarea"
                       placeholder="Короткое описание товара...">{{ product.description or '' if product else '' }}</textarea>
         </div>
 
         <div class="adm-col-full">
             <label class="adm-label">Состав</label>
-            <textarea name="composition" rows="3" class="adm-textarea"
+            <textarea name="composition" rows="3" maxlength="10000" class="adm-textarea"
                       placeholder="Aqua, Glycerin, ...">{{ product.composition or '' if product else '' }}</textarea>
         </div>
 
         <div class="adm-col-full">
             <label class="adm-label">Применение</label>
-            <textarea name="usage" rows="3" class="adm-textarea"
+            <textarea name="usage" rows="3" maxlength="10000" class="adm-textarea"
                       placeholder="Нанести на очищенную кожу...">{{ product.usage or '' if product else '' }}</textarea>
         </div>
 

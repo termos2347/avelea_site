@@ -103,7 +103,7 @@
 .adm-header-actions a i,
 .adm-header-actions button i { font-size: 0.78rem; }
 
-/* Logout — POST-форма. Стилизуем как обычную ссылку из .adm-header-actions. */
+/* Logout — POST-форма. Стилизуем как обычную ссылку. */
 .adm-logout-form {
     display: inline-flex;
     margin: 0;
@@ -1130,15 +1130,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     box-shadow: 0 4px 16px rgb(236 72 153 / 0.10);
 }
 
-/* ============================================================
-   .adm-product-thumb — картинка с иконками поверх.
-
-   Все иконки (кнопки действий справа, «скрыт» слева,
-   badge «популярное» снизу) выровнены через CSS-переменные,
-   объявленные здесь. Один источник правды для размеров
-   и отступов → они всегда одинаковы и масштабируются вместе
-   с карточкой через container queries (cqw).
-   ============================================================ */
 .adm-product-thumb {
     --icon-size:   clamp(1.5rem,  10cqw,  1.85rem);
     --icon-gap:    clamp(0.15rem,  1cqw,  0.25rem);
@@ -1159,7 +1150,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     font-weight: 600;
     color: #ec4899;
 
-    /* Делает thumb контейнером — cqw считается от его ширины */
     container-type: inline-size;
 }
 
@@ -1176,7 +1166,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     transform: scale(1.05);
 }
 
-/* Badge «популярное» — снизу слева, тот же отступ */
 .adm-product-badge {
     position: absolute;
     bottom: var(--icon-offset);
@@ -1192,9 +1181,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     line-height: 1.2;
 }
 
-/* Кнопки действий — справа сверху.
-   display: contents у формы — чтобы кнопка удаления была
-   прямым flex-элементом рядом с остальными. */
 .adm-product-actions {
     position: absolute;
     top: var(--icon-offset);
@@ -1247,8 +1233,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
 .adm-product-actions .act-info:hover { background: #0891b2; color: #fff; }
 .adm-product-actions .act-del:hover  { background: var(--adm-danger); color: #fff; }
 
-/* Иконка «скрыт» — слева сверху.
-   Тот же размер, шрифт, тень и отступ, что и кнопки действий. */
 .adm-hidden-flag {
     position: absolute;
     top: var(--icon-offset);
@@ -1280,9 +1264,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     pointer-events: none;
 }
 
-/* ============================================================
-   Тело карточки: название, категории, цена, бренд
-   ============================================================ */
 .adm-product-body {
     display: flex;
     flex-direction: column;
@@ -1336,7 +1317,6 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
     .adm-product-actions { opacity: 1; }
 }
 
-/* Скрытые товары — приглушены */
 .adm-product-card.is-hidden-card {
     opacity: 0.65;
 }
@@ -1695,3 +1675,324 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
         font-size: 4rem;
     }
 }
+
+/* ============================================================
+   SITE CONTENT (перенос из site_content.html <style>)
+   Стили страницы /admin/site — секции, картинки, тексты, toast.
+   ============================================================ */
+
+/* ---------- Шапка ---------- */
+.site-cms-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+.site-cms-desc {
+    color: var(--adm-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0;
+    flex: 1;
+    min-width: 16rem;
+}
+.site-cms-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* ---------- Аккордеон ---------- */
+.site-page {
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    background: var(--adm-surface);
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    transition: border-color 140ms ease;
+}
+.site-page[open] { border-color: var(--adm-muted-soft); }
+
+.site-page-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    background: var(--adm-surface);
+    transition: background 140ms ease;
+}
+.site-page-summary::-webkit-details-marker { display: none; }
+.site-page-summary:hover { background: var(--adm-border-soft); }
+
+.site-page-arrow {
+    display: inline-flex;
+    width: 1.25rem;
+    height: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--adm-muted);
+    flex-shrink: 0;
+    transition: transform 200ms ease;
+}
+.site-page[open] .site-page-arrow { transform: rotate(90deg); }
+.site-page-arrow i { font-size: 0.7rem; }
+
+.site-page-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--adm-text);
+    flex: 1;
+}
+
+.site-page-count {
+    font-size: 0.75rem;
+    color: var(--adm-muted);
+    background: var(--adm-border-soft);
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+}
+
+.site-page-body {
+    padding: 0.5rem 1.25rem 1.25rem;
+    border-top: 1px solid var(--adm-border-soft);
+}
+
+/* ---------- Группы внутри страницы ---------- */
+.site-group {
+    padding: 1.25rem 0;
+    border-bottom: 1px dashed var(--adm-border-soft);
+}
+.site-group:last-child { border-bottom: 0; padding-bottom: 0.25rem; }
+.site-group:first-child { padding-top: 1rem; }
+
+.site-group-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--adm-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 0.75rem;
+}
+
+.site-group-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.site-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+/* ---------- Заголовок item + бейдж "не сохранено" ---------- */
+.site-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.site-unsaved-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+    animation: site-unsaved-pulse 2s ease-in-out infinite;
+}
+.site-unsaved-badge i {
+    font-size: 0.5rem;
+    color: #f59e0b;
+}
+
+@keyframes site-unsaved-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.65; }
+}
+
+/* Оранжевая рамка у грязного поля */
+.site-item.is-dirty .adm-input,
+.site-item.is-dirty .adm-textarea {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+.site-item.is-dirty .adm-input:focus,
+.site-item.is-dirty .adm-textarea:focus {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+}
+
+/* ---------- Плавающий счётчик ---------- */
+.site-unsaved-float {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1rem;
+    background: #f59e0b;
+    color: #fff;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+    z-index: 8000;
+    animation: site-unsaved-pop 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.site-unsaved-float i { font-size: 0.5rem; }
+.site-unsaved-float strong { font-weight: 700; }
+
+@keyframes site-unsaved-pop {
+    from { transform: translateY(20px) scale(0.9); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ---------- Картинки ---------- */
+.site-img-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.site-img-drop {
+    position: relative;
+    width: 12rem;
+    height: 8rem;
+    border-radius: var(--adm-radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--adm-border-soft);
+    border: 1.5px dashed transparent;
+    flex-shrink: 0;
+    transition: border-color 140ms ease, transform 140ms ease;
+    display: block;
+}
+.site-img-drop:hover { border-color: var(--adm-muted-soft); }
+.site-img-drop:focus-visible { outline: 2px solid var(--adm-primary); outline-offset: 2px; }
+.site-img-drop.is-dragover { border-color: var(--adm-primary); transform: scale(1.02); }
+
+.site-img-input {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; z-index: 2;
+}
+.site-img-preview {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.site-img-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.site-img-empty {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; color: var(--adm-muted-soft); font-size: 1.4rem;
+}
+
+.site-img-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.35rem;
+    background: rgba(17, 24, 39, 0.55); color: #fff;
+    font-size: 0.72rem; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0; transition: opacity 160ms ease; pointer-events: none; z-index: 1;
+}
+.site-img-overlay i { font-size: 1.4rem; }
+.site-img-drop:hover .site-img-overlay { opacity: 1; }
+
+.site-img-progress {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.5rem;
+    background: rgba(17, 24, 39, 0.7); color: #fff; z-index: 3; padding: 1rem;
+}
+.site-img-progress.is-visible { display: flex; }
+.site-img-progress-track {
+    width: 100%; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.25); overflow: hidden;
+}
+.site-img-progress-bar {
+    height: 100%; width: 0%; background: #fff; border-radius: 2px;
+    transition: width 120ms ease;
+}
+.site-img-progress-text {
+    font-size: 0.85rem; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+
+.site-img-success {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(34, 197, 94, 0.85); color: #fff; font-size: 2rem; z-index: 4;
+    animation: site-pop 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.site-img-success.is-visible { display: flex; }
+@keyframes site-pop {
+    from { transform: scale(0.7); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+}
+
+.site-img-side {
+    flex: 1;
+    min-width: 14rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.site-img-meta {
+    font-size: 0.72rem;
+    color: var(--adm-muted);
+    margin-top: 0.25rem;
+    line-height: 1.5;
+}
+.site-img-meta-type {
+    color: var(--adm-text);
+    font-weight: 500;
+}
+
+/* ---------- Тексты ---------- */
+.site-text-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 42rem;
+}
+.site-text-row .adm-textarea { font-family: inherit; }
+.site-text-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.site-text-hint {
+    font-size: 0.72rem;
+    color: var(--adm-muted);
+}
+
+/* ---------- Toast ---------- */
+.site-toast {
+    position: fixed; bottom: 1.5rem; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--adm-text); color: #fff;
+    padding: 0.75rem 1.25rem; border-radius: 0.6rem;
+    font-size: 0.875rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    opacity: 0; pointer-events: none;
+    transition: opacity 200ms ease, transform 200ms ease;
+    z-index: 9999;
+}
+.site-toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+.site-toast.is-error { background: var(--adm-danger); }
