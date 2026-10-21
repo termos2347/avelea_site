@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
-# backup.sh — бэкап БД и файлов проекта.
+# backup.sh — бэкап БД и файлов проекта в датированную папку.
 #
 # Запуск:  ./backup.sh
 #
-# Делает два файла в ~/backups/ с таймстампом:
-#   db-YYYY-MM-DD-HHMM.sql         — дамп Postgres
-#   uploads-YYYY-MM-DD-HHMM.tar.gz — картинки + .env
+# Структура:
+#   ~/backups/
+#   ├── 2026-10-21-1726/
+#   │   ├── db.sql       — дамп Postgres (с --clean --if-exists)
+#   │   ├── env          — копия .env
+#   │   ├── uploads/     — static/uploads/* как есть
+#   │   └── site/        — static/site/* как есть
+#   └── 2026-10-21-1756/
+#       └── ...
 #
-# Хранит последние 10 пар. Всё старше — удаляется при запуске.
+# Хранит последние $KEEP снимков. Всё старше — удаляется.
 set -e
 
 cd "$(dirname "$0")"
 
 BACKUP_DIR="$HOME/backups"
-KEEP=10
+KEEP=48              # 48 снимков × 30 мин = сутки истории
 STAMP=$(date +%F-%H%M)
-
-mkdir -p "$BACKUP_DIR"
 
 # --- 1. DATABASE_URL из .env ---
 if [ ! -f ".env" ]; then
@@ -35,40 +39,72 @@ fi
 DB_URL="${DB_URL/postgresql+psycopg:\/\//postgresql:\/\/}"
 DB_URL="${DB_URL/postgresql+psycopg2:\/\//postgresql:\/\/}"
 
-# --- 2. Дамп БД ---
-DB_FILE="$BACKUP_DIR/db-$STAMP.sql"
-echo "→ Бэкап БД → $DB_FILE"
+# --- 2. Создаём папку снимка ---
+SNAPSHOT="$BACKUP_DIR/$STAMP"
 
-if ! pg_dump "$DB_URL" > "$DB_FILE"; then
-    echo "❌ pg_dump упал. Бэкап БД не сделан." >&2
-    rm -f "$DB_FILE"
+if [ -d "$SNAPSHOT" ]; then
+    echo "❌ Папка $SNAPSHOT уже существует (два запуска в одну минуту?)" >&2
     exit 1
 fi
 
-# --- 3. Архив файлов ---
-FILES_FILE="$BACKUP_DIR/uploads-$STAMP.tar.gz"
-echo "→ Бэкап файлов → $FILES_FILE"
+mkdir -p "$SNAPSHOT/uploads" "$SNAPSHOT/site"
 
-tar czf "$FILES_FILE" static/uploads/ .env
+echo "→ Снимок → $SNAPSHOT"
 
-# --- 4. Оставляем последние $KEEP пар ---
-echo "→ Оставляю последние $KEEP бэкапов, старые удаляю..."
+# --- 3. Дамп БД ---
+echo "  • БД"
+if ! pg_dump --clean --if-exists --no-owner --no-acl "$DB_URL" > "$SNAPSHOT/db.sql"; then    echo "❌ pg_dump упал. Бэкап прерван." >&2
+    rm -rf "$SNAPSHOT"
+    exit 1
+fi
 
-# Для каждого префикса отдельно: сортируем по времени (новые сверху),
-# всё за пределами первых $KEEP — удаляем.
-for PREFIX in db uploads; do
-    mapfile -t FILES < <(ls -1t "$BACKUP_DIR"/${PREFIX}-* 2>/dev/null || true)
-    for ((i = KEEP; i < ${#FILES[@]}; i++)); do
-        rm -f "${FILES[$i]}"
+# --- 4. Копия .env ---
+echo "  • .env"
+cp .env "$SNAPSHOT/env"
+
+# --- 5. Файлы — копируем как есть ---
+echo "  • uploads/"
+if [ -d static/uploads ]; then
+    cp -a static/uploads/. "$SNAPSHOT/uploads/"
+fi
+
+echo "  • site/"
+if [ -d static/site ]; then
+    cp -a static/site/. "$SNAPSHOT/site/"
+fi
+
+# --- 6. Удаляем старые снимки ---
+echo "→ Оставляю $KEEP последних, старые удаляю..."
+
+# Формат имени YYYY-MM-DD-HHMM → лексикографическая сортировка = хронология.
+mapfile -t SNAPSHOTS < <(ls -1d "$BACKUP_DIR"/[0-9]*-*-*-* 2>/dev/null | sort)
+
+TOTAL=${#SNAPSHOTS[@]}
+if [ "$TOTAL" -gt "$KEEP" ]; then
+    TO_DELETE=$((TOTAL - KEEP))
+    for ((i = 0; i < TO_DELETE; i++)); do
+        rm -rf "${SNAPSHOTS[$i]}"
     done
-done
+    echo "  Удалено старых: $TO_DELETE"
+fi
 
-# --- 5. Отчёт ---
+# --- 7. Отчёт ---
+SIZE=$(du -sh "$SNAPSHOT" | cut -f1)
+DB_SIZE=$(du -h "$SNAPSHOT/db.sql" | cut -f1)
+UPLOADS_N=$(find "$SNAPSHOT/uploads" -type f 2>/dev/null | wc -l)
+SITE_N=$(find "$SNAPSHOT/site" -type f 2>/dev/null | wc -l)
+
 echo ""
-echo "✅ Готово. Содержимое $BACKUP_DIR:"
+echo "✅ Готово. Снимок: $SNAPSHOT"
+echo "   Размер снимка:  $SIZE"
+echo "   БД:             $DB_SIZE"
+echo "   uploads/:       $UPLOADS_N файлов"
+echo "   site/:          $SITE_N файлов"
 echo ""
-ls -lh "$BACKUP_DIR/" | grep -E 'db-|uploads-|total|итого'
+echo "Всего снимков: $(ls -1d "$BACKUP_DIR"/[0-9]*-*-*-* 2>/dev/null | wc -l) (KEEP=$KEEP)"
 echo ""
 echo "Восстановление:"
-echo "  БД:     psql \"<DATABASE_URL без +psycopg>\" < $DB_FILE"
-echo "  Файлы:  tar xzf $FILES_FILE -C $(pwd)"
+echo "  ./restore.sh                    # последний снимок, всё"
+echo "  ./restore.sh $STAMP             # конкретный снимок, всё"
+echo "  ./restore.sh $STAMP db          # только БД"
+echo "  ./restore.sh $STAMP files       # только файлы"
