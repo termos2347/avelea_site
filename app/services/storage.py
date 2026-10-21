@@ -436,9 +436,16 @@ def site_image_public_url(filename: str | None) -> str | None:
 
 
 def site_image_info(filename: str | None) -> dict | None:
+    """Информация о файле для отображения в админке.
+
+    Путь берётся из _site_backend.folder, а не хардкодится —
+    иначе в тестах (где folder перенаправлен в tempdir) функция
+    смотрела бы в боевую static/site/ и врала «missing: true».
+    """
     if not filename:
         return None
-    path = BASE_DIR / "static" / "site" / filename
+
+    path = _site_backend.folder / filename
     if not path.exists():
         return {"filename": filename, "size_kb": 0, "missing": True}
     size = path.stat().st_size

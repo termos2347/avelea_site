@@ -42,10 +42,14 @@
                         <i class="fas fa-external-link-alt"></i>
                         <span>На сайт</span>
                     </a>
-                    <a href="/admin/logout">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Выйти</span>
-                    </a>
+                    {# Logout — POST, не GET: <img src="/admin/logout">
+                       с чужого сайта не должен выкидывать админа. #}
+                    <form method="post" action="/admin/logout" class="adm-logout-form">
+                        <button type="submit">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Выйти</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

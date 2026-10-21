@@ -177,13 +177,15 @@ def product_page(request: Request, slug_or_id: str):
     # 1. Ищем по slug.
     product = next((p for p in all_products if p.slug == slug_or_id), None)
 
-    # 2. Если не нашли и это число — ищем по id и редиректим на slug.
+    # 2. Если не нашли и это число — ищем по id.
+    #    Скрытые товары НЕ редиректим на slug — иначе 301 утекает
+    #    существование скрытого товара (301 → 404 = «товар был»).
     if product is None and slug_or_id.isdigit():
         product = next(
             (p for p in all_products if p.id == int(slug_or_id)),
             None,
         )
-        if product and product.slug:
+        if product and product.is_active and product.slug:
             return RedirectResponse(
                 url=f"/product/{product.slug}",
                 status_code=301,

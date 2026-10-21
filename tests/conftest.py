@@ -26,6 +26,43 @@ from sqlalchemy import text as sa_text
 
 from app.main import app
 
+# ============================================================
+# ВАЖНО: перенаправляем storage в tempdir.
+#
+# Без этого autouse-уборка удаляла бы файлы из боевых
+# static/uploads и static/site — где лежат реальные фото.
+# Теперь всё, что тесты создают, уходит в /tmp/avelea_test_*/uploads
+# и /tmp/avelea_test_*/site. Боевые папки не трогаются вообще.
+# ============================================================
+from app.core.config import BASE_DIR
+from app.services import storage as _storage
+
+_test_uploads = Path(_tmp_dir) / "uploads"
+_test_site = Path(_tmp_dir) / "site"
+_test_uploads.mkdir(parents=True, exist_ok=True)
+_test_site.mkdir(parents=True, exist_ok=True)
+
+_storage._backend.folder = _test_uploads
+_storage._site_backend.folder = _test_site
+
+# Боевые папки — только для защиты от случайного удаления.
+_REAL_UPLOADS = (BASE_DIR / "static" / "uploads").resolve()
+_REAL_SITE = (BASE_DIR / "static" / "site").resolve()
+
+
+def _assert_safe_to_clear(folder: Path) -> None:
+    """Страховка: не даём очистить боевые папки, даже если что-то
+    сломалось в redirect'е storage → tempdir. Лучше упасть с
+    AssertionError, чем удалить пользовательские фото.
+    """
+    resolved = folder.resolve()
+    if resolved == _REAL_UPLOADS or resolved == _REAL_SITE:
+        raise AssertionError(
+            f"SAFETY: попытка очистить боевую папку {resolved}. "
+            "Проверь, что redirect storage → tempdir в conftest.py "
+            "сработал ДО первого теста."
+        )
+
 
 def extract_csrf(html: str) -> str:
     m = re.search(r'name="csrf_token" value="([^"]+)"', html)
@@ -88,21 +125,24 @@ def _reset_shared_state():
 
 
 @pytest.fixture(autouse=True)
-def _clean_uploads_autouse():
-    """Гарантирует, что static/uploads пуст до и после каждого теста.
+def _clean_test_storage():
+    """Очищает временные папки тестового storage.
 
-    Раньше очистка жила в test_admin.py через явную фикстуру —
-    тесты без неё оставляли .webp-файлы на диске.
+    ВАЖНО: НЕ трогает static/uploads и static/site — там боевые фото.
+    Если redirect storage → tempdir не сработал, _assert_safe_to_clear
+    упадёт с AssertionError ДО того, как что-то удалится.
     """
-    from app.core.config import BASE_DIR
-    d = BASE_DIR / "static" / "uploads"
-    d.mkdir(parents=True, exist_ok=True)
+    from app.services.storage import _backend, _site_backend
 
-    def _clear():
-        for f in d.iterdir():
-            if f.is_file():
-                f.unlink()
+    def _clear(folder):
+        _assert_safe_to_clear(folder)
+        if folder.exists():
+            for f in folder.iterdir():
+                if f.is_file():
+                    f.unlink()
 
-    _clear()
+    _clear(_backend.folder)
+    _clear(_site_backend.folder)
     yield
-    _clear()
+    _clear(_backend.folder)
+    _clear(_site_backend.folder)

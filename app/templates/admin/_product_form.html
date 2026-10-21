@@ -1,3 +1,10 @@
+{% if flash_error %}
+<div class="adm-alert adm-alert-warn" style="margin-bottom: 1rem;">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>{{ flash_error }}</span>
+</div>
+{% endif %}
+
 <form method="post"
       enctype="multipart/form-data"
       action="{% if product %}/admin/products/{{ product.id }}/edit{% else %}/admin/products/new{% endif %}"

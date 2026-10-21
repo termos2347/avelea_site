@@ -377,6 +377,10 @@ def admin_product_edit(
         raise HTTPException(status_code=404)
 
     ctx = _product_form_context(db, product)
+    # flash_error — чтобы форма редактирования показывала ошибки валидации
+    # (например, «цена не может быть отрицательной»), которые роутер
+    # кладёт в сессию перед редиректом обратно на /edit.
+    ctx["flash_error"] = request.session.pop("flash_error", None)
 
     if request.headers.get("hx-request") == "true":
         ctx["in_dialog"] = True
