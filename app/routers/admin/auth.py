@@ -9,6 +9,10 @@
 Если TELEGRAM_2FA_ENABLED=False (нет токена или admin_id в .env) —
 шаг с кодом пропускается, логин работает как раньше.
 
+CSRF-проверка на /admin/login и /admin/login/2fa делается вручную,
+а не через Depends(check_csrf): при невалидном токене рендерим форму
+с понятным сообщением, а не глобальную HTML-страницу 403.
+
 Тип роутеров:
     - admin_login_submit — async def, потому что await _send_telegram_code
       (httpx.AsyncClient — реальный async I/O).
@@ -23,7 +27,7 @@ import threading
 import time
 
 import httpx
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.config import (
@@ -35,7 +39,6 @@ from app.core.config import (
     TELEGRAM_CODE_TTL,
 )
 from app.core.security import (
-    check_csrf,
     safe_str_compare,
     client_key,
     is_blocked,
@@ -57,19 +60,26 @@ router = APIRouter(prefix="/admin", tags=["admin-auth"])
 # (SessionMiddleware подписывает, но НЕ шифрует).
 #
 # Формат: token -> {"code": "123456", "expires": ts, "attempts": 0}
+#
+# RLock: _purge_expired может вызываться как самостоятельный хелпер
+# (без внешнего lock), так и из-под _codes_lock — нужен re-entrant.
 # ============================================================
 _pending_codes: dict[str, dict] = {}
-_codes_lock = threading.Lock()
+_codes_lock = threading.RLock()
 
 
 def _purge_expired(now: float | None = None) -> None:
-    """Убирает протухшие коды. Вызывается при каждом обращении
-    и фоново из purge_loop."""
+    """Убирает протухшие коды.
+
+    RLock берёт сам — безопасно вызывать из любого места,
+    в том числе из-под уже захваченного _codes_lock.
+    """
     if now is None:
         now = time.time()
-    expired = [t for t, v in _pending_codes.items() if v["expires"] < now]
-    for t in expired:
-        _pending_codes.pop(t, None)
+    with _codes_lock:
+        expired = [t for t, v in _pending_codes.items() if v["expires"] < now]
+        for t in expired:
+            _pending_codes.pop(t, None)
 
 
 async def purge_loop(interval: int = 60) -> None:
@@ -91,10 +101,8 @@ async def purge_loop(interval: int = 60) -> None:
     try:
         while True:
             await asyncio.sleep(interval)
-            with _codes_lock:
-                _purge_expired()
+            _purge_expired()
     except asyncio.CancelledError:
-        # Штатная отмена при shutdown — выходим молча.
         raise
 
 
@@ -150,6 +158,14 @@ def _has_pending(token: str) -> bool:
     with _codes_lock:
         _purge_expired()
         return token in _pending_codes
+
+
+def _csrf_ok(request: Request, submitted: str) -> bool:
+    """Проверка CSRF-токена, возвращает bool (не бросает исключение)."""
+    session_token = request.session.get("csrf_token") or ""
+    if not submitted or not session_token:
+        return False
+    return safe_str_compare(submitted, session_token)
 
 
 # ============================================================
@@ -209,8 +225,23 @@ async def admin_login_form(request: Request):
 # POST /admin/login — проверка пароля
 # ============================================================
 
-@router.post("/login", dependencies=[Depends(check_csrf)])
-async def admin_login_submit(request: Request, password: str = Form(...)):
+@router.post("/login")
+async def admin_login_submit(
+    request: Request,
+    password: str = Form(...),
+    csrf_token: str = Form(""),
+):
+    if not _csrf_ok(request, csrf_token):
+        return admin_templates.TemplateResponse(
+            request, "login.html",
+            {
+                "step": "password",
+                "error": "Сессия истекла или cookie не переданы. "
+                         "Обновите страницу и попробуйте снова.",
+            },
+            status_code=403,
+        )
+
     key = client_key(request)
 
     if is_blocked(key):
@@ -292,14 +323,30 @@ async def admin_login_2fa_form(request: Request):
 # POST /admin/login/2fa — проверка кода
 # ============================================================
 
-@router.post("/login/2fa", dependencies=[Depends(check_csrf)])
-def admin_login_2fa_submit(request: Request, code: str = Form(...)):
+@router.post("/login/2fa")
+def admin_login_2fa_submit(
+    request: Request,
+    code: str = Form(...),
+    csrf_token: str = Form(""),
+):
     if request.session.get("admin"):
         return RedirectResponse(url="/admin/products", status_code=303)
 
     token = request.session.get("pending_2fa_token")
     if not token:
         return RedirectResponse(url="/admin/login", status_code=303)
+
+    if not _csrf_ok(request, csrf_token):
+        return admin_templates.TemplateResponse(
+            request, "login.html",
+            {
+                "step": "code",
+                "error": "Сессия истекла или cookie не переданы. "
+                         "Обновите страницу и начните вход заново.",
+                "code_ttl_minutes": TELEGRAM_CODE_TTL // 60,
+            },
+            status_code=403,
+        )
 
     ok, err = _verify_code(token, code.strip())
     if not ok:

@@ -1,9 +1,9 @@
 """Наполнение БД стартовыми данными (идемпотентно)."""
 import logging
-import os
 
 from sqlalchemy.orm import Session
 
+from app.core.config import SEED_DEMO_PRODUCT
 from app.data.models import Product, Brand, Category, Setting
 
 log = logging.getLogger(__name__)
@@ -11,11 +11,6 @@ log = logging.getLogger(__name__)
 
 SEED_MARKER_KEY = "seeded_v1"
 BASE_CATEGORIES = ("Лицо", "Макияж", "Тело", "Парфюм")
-
-
-def _demo_product_enabled() -> bool:
-    v = os.getenv("SEED_DEMO_PRODUCT", "").strip().lower()
-    return v in ("1", "true", "yes", "on")
 
 
 def seed_database(db: Session) -> None:
@@ -51,7 +46,7 @@ def seed_database(db: Session) -> None:
     for cat_name in BASE_CATEGORIES:
         cat(cat_name)
 
-    if _demo_product_enabled():
+    if SEED_DEMO_PRODUCT:
         db.add(Product(
             name="Древесный парфюм Bois",
             categories=[cat("Парфюм")],
@@ -64,4 +59,4 @@ def seed_database(db: Session) -> None:
 
     db.add(Setting(key=SEED_MARKER_KEY, value="1"))
     db.commit()
-    log.info("База данных инициализирована (demo=%s)", _demo_product_enabled())
+    log.info("База данных инициализирована (demo=%s)", SEED_DEMO_PRODUCT)

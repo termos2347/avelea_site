@@ -1,5 +1,6 @@
 """HTTP-мидлвари приложения."""
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from app.core.config import SESSION_HTTPS_ONLY
 
@@ -17,10 +18,15 @@ _CSP = (
     "img-src 'self' data: blob: https://images.unsplash.com; "
     "media-src 'self' blob:; "
     "connect-src 'self'; "
+    "object-src 'none'; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self';"
 )
+
+
+def _is_ajax(request) -> bool:
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
@@ -29,6 +35,9 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     Рендерит ту же HTML-страницу ошибки, что и глобальный handler 413 —
     потому что этот middleware сидит СНАРУЖИ от ExceptionMiddleware,
     и его HTTPException не был бы пойман глобальными handlers.
+
+    Для AJAX-запросов (X-Requested-With: XMLHttpRequest) отдаёт JSON —
+    иначе JS-парсер `xhr.responseText` упадёт.
     """
 
     def __init__(self, app, max_bytes: int):
@@ -43,12 +52,24 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     def _render_413(self, request):
+        limit_mb = self.max_bytes // (1024 * 1024)
+
+        if _is_ajax(request):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": (
+                        f"Файл слишком большой "
+                        f"(лимит на весь запрос — {limit_mb} МБ)."
+                    ),
+                },
+                status_code=413,
+            )
+
         from app.core.rendering import admin_templates, site_templates
 
         is_admin = request.url.path.startswith("/admin")
         templates = admin_templates if is_admin else site_templates
-
-        limit_mb = self.max_bytes // (1024 * 1024)
 
         return templates.TemplateResponse(
             request,

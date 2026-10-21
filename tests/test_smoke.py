@@ -192,3 +192,25 @@ def test_robots_txt_does_not_mention_admin(client):
     r = client.get("/robots.txt")
     assert r.status_code == 200
     assert "/admin" not in r.text
+    
+def test_ajax_404_returns_json(client):
+    """XHR-запрос на несуществующий URL — JSON, не HTML.
+
+    Тест на глобальный handler, не на конкретный роут — поэтому
+    бьёт в произвольный путь.
+    """
+    r = client.get(
+        "/nope",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert r.status_code == 404
+    data = r.json()
+    assert data["ok"] is False
+    assert "error" in data
+
+
+def test_non_ajax_404_returns_html(client):
+    """Без X-Requested-With — обычная HTML-страница."""
+    r = client.get("/nope")
+    assert r.status_code == 404
+    assert "text/html" in r.headers["content-type"]

@@ -148,6 +148,8 @@ def admin_site_image_upload(
             cache.invalidate()
         except SQLAlchemyError as exc:
             db.rollback()
+            # Откат: новый файл уже на диске, но в Setting не попал.
+            delete_site_image(new_filename)
             log.exception("site image save failed: %s", exc)
             if ajax:
                 return JSONResponse({"ok": False, "error": _COMMIT_ERROR_MSG}, status_code=503)

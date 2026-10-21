@@ -66,22 +66,6 @@ def _post_new_product(client, token, **overrides):
     )
 
 
-@pytest.fixture
-def clean_uploads():
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-
-    def _clear():
-        for f in UPLOADS_DIR.iterdir():
-            if f.is_file():
-                f.unlink()
-
-    _clear()
-    try:
-        yield
-    finally:
-        _clear()
-
-
 # ============== Авторизация ==============
 
 def test_admin_requires_login(client):
@@ -169,8 +153,16 @@ def test_login_success_resets_counter(client):
 # ============== CSRF ==============
 
 def test_post_without_csrf_is_forbidden(client):
+    """Без csrf_token форма входа рендерится заново с понятной ошибкой.
+
+    Раньше возвращался глобальный HTML-403 — пользователь не понимал,
+    что именно не так. Теперь — форма с сообщением про истёкшую сессию.
+    """
     r = client.post("/admin/login", data={"password": "test-password-123"})
     assert r.status_code == 403
+    assert "Сессия истекла" in r.text
+    # Поле пароля присутствует — форма снова отрендерена
+    assert 'name="password"' in r.text
 
 
 def test_post_with_wrong_csrf_is_forbidden(client):
@@ -180,6 +172,7 @@ def test_post_with_wrong_csrf_is_forbidden(client):
         data={"password": "test-password-123", "csrf_token": "подделка"},
     )
     assert r.status_code == 403
+    assert "Сессия истекла" in r.text
 
 
 # ============== CRUD ==============
@@ -249,7 +242,7 @@ def test_delete_category_with_products(admin_client):
 
 # ============== Загрузка изображений ==============
 
-def test_upload_rejects_non_image(admin_client, clean_uploads):
+def test_upload_rejects_non_image(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -269,7 +262,7 @@ def test_upload_rejects_non_image(admin_client, clean_uploads):
     assert list(UPLOADS_DIR.iterdir()) == []
 
 
-def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
+def test_upload_rejects_png_magic_with_garbage(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -290,7 +283,7 @@ def test_upload_rejects_png_magic_with_garbage(admin_client, clean_uploads):
     assert list(UPLOADS_DIR.iterdir()) == []
 
 
-def test_upload_valid_png_is_saved(admin_client, clean_uploads):
+def test_upload_valid_png_is_saved(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -314,7 +307,7 @@ def test_upload_valid_png_is_saved(admin_client, clean_uploads):
     assert files[0].endswith(".webp")
 
 
-def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
+def test_upload_valid_jpeg_is_saved(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -334,7 +327,7 @@ def test_upload_valid_jpeg_is_saved(admin_client, clean_uploads):
     assert files[0].endswith(".webp")
 
 
-def test_upload_rejects_too_large(admin_client, clean_uploads, monkeypatch):
+def test_upload_rejects_too_large(admin_client, monkeypatch):
     monkeypatch.setattr("app.services.storage.MAX_UPLOAD_BYTES", 100)
 
     r = admin_client.get("/admin/products")
@@ -404,6 +397,25 @@ def test_create_product_rejects_negative_price(admin_client):
     assert "Отрицательный" not in r.text
 
 
+def test_create_product_rejects_non_numeric_price(admin_client):
+    """Нечисловая цена — флеш-сообщение, а не 400 HTML."""
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+
+    data = _payload(name="Кривая цена", price="дорого")
+    data["csrf_token"] = token
+    png = _png()
+    r = admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=True,
+    )
+    assert r.status_code == 200
+    assert "не число" in r.text
+    assert "Кривая цена" not in r.text
+
+
 def test_create_product_accepts_zero_price(admin_client):
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
@@ -443,6 +455,114 @@ def test_update_product_rejects_negative_price(admin_client):
     with SessionLocal() as db:
         p = db.query(Product).filter(Product.id == pid).one()
         assert p.price == 500
+
+
+# ============== Утечка файлов при ошибках БД ==============
+
+def test_create_product_rolls_back_files_on_db_error(admin_client, monkeypatch):
+    """Если db.commit() падает — загруженные файлы удаляются с диска."""
+    from sqlalchemy.exc import SQLAlchemyError
+    from app.core.database import SessionLocal
+
+    def boom(*args, **kwargs):
+        raise SQLAlchemyError("simulated")
+
+    # Подменяем метод commit на уровне класса сессии — так тест
+    # не зависит от того, где именно вызывается commit.
+    monkeypatch.setattr(SessionLocal, "commit", boom, raising=True)
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+
+    data = _payload(name="Сломанный", price="100")
+    data["csrf_token"] = token
+    png = _png()
+    r = admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    # Файл не остался на диске
+    assert list(UPLOADS_DIR.iterdir()) == []
+
+
+# ============== Варианты ==============
+
+def test_create_product_with_variants_sets_min_price(admin_client):
+    """Цена товара = минимальная цена варианта."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+
+    data = _payload(name="С вариантами", price="1000")
+    data["csrf_token"] = token
+    data["variant_volume_amount"] = ["10", "50"]
+    data["variant_volume_unit"] = ["мл", "мл"]
+    data["variant_price"] = ["500", "1500"]
+    png = _png()
+    r = admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.name == "С вариантами").one()
+        assert p.price == 500
+        assert len(p.variants) == 2
+
+
+def test_update_product_removing_all_variants_warns(admin_client):
+    """Удалили все варианты — flash-сообщение о базовой цене."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+
+    # Создаём товар с вариантами
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    data = _payload(name="С вариантами 2", price="1000")
+    data["csrf_token"] = token
+    data["variant_volume_amount"] = ["10"]
+    data["variant_volume_unit"] = ["мл"]
+    data["variant_price"] = ["500"]
+    png = _png()
+    admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=False,
+    )
+
+    with SessionLocal() as db:
+        pid = db.query(Product).filter(Product.name == "С вариантами 2").one().id
+
+    # Обновляем: убираем все варианты, ставим цену 777
+    r = admin_client.get(f"/admin/products/{pid}/edit")
+    token = extract_csrf(r.text)
+    data = _payload(name="С вариантами 2", price="777")
+    data["csrf_token"] = token
+    # Никаких variant_* полей
+    png = _png()
+    r = admin_client.post(
+        f"/admin/products/{pid}/edit",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=True,
+    )
+    assert r.status_code == 200
+    assert "все варианты удалены" in r.text
+
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == pid).one()
+        assert p.price == 777
+        assert len(p.variants) == 0
 
 
 # ============== Telegram 2FA ==============
@@ -569,7 +689,10 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
 
 
 def test_2fa_purge_removes_expired_only():
-    """_purge_expired удаляет только протухшие коды, живые не трогает."""
+    """_purge_expired удаляет только протухшие коды, живые не трогает.
+
+    С RLock внутри функции — lock снаружи больше не требуется.
+    """
     import time
     from app.routers.admin import auth as auth_mod
 
@@ -583,7 +706,85 @@ def test_2fa_purge_removes_expired_only():
             "code": "222222", "expires": now - 100, "attempts": 0,
         }
 
-    auth_mod._purge_expired()
+    auth_mod._purge_expired()  # RLock берёт сам
 
     assert "alive" in auth_mod._pending_codes
     assert "dead" not in auth_mod._pending_codes
+    
+# ============== AJAX-ошибки возвращаются JSON'ом ==============
+
+def test_ajax_csrf_error_returns_json(admin_client):
+    """AJAX-запрос с невалидным CSRF — JSON, не HTML.
+
+    Раньше глобальный handler отдавал HTML-403, JS-парсер
+    `xhr.responseText` падал на JSON.parse, пользователь видел
+    «Не удалось сохранить» вместо «Сессия истекла».
+    """
+    r = admin_client.post(
+        "/admin/products/new",
+        data={"name": "x", "price": "1", "csrf_token": "подделка"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    data = r.json()
+    assert data["ok"] is False
+    assert "error" in data
+    assert "Сессия" in data["error"]
+
+
+def test_non_ajax_csrf_error_returns_html(admin_client):
+    """Без X-Requested-With — обычная HTML-страница 403."""
+    r = admin_client.post(
+        "/admin/products/new",
+        data={"name": "x", "price": "1", "csrf_token": "подделка"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    assert "text/html" in r.headers["content-type"]
+    assert r.json if False else True  # не JSON — просто проверяем content-type
+
+
+def test_ajax_404_returns_json(admin_client):
+    """AJAX 404 — JSON, не HTML."""
+    r = admin_client.get(
+        "/admin/products/999999/edit",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert r.status_code == 404
+    data = r.json()
+    assert data["ok"] is False
+
+
+# ============== Decompression bomb ==============
+
+def test_upload_rejects_decompression_bomb(admin_client, monkeypatch):
+    """PNG с огромным числом пикселей (но маленьким файлом) не сохраняется.
+
+    PIL по умолчанию бросает Image.DecompressionBombError при
+    w*h > 2 * MAX_IMAGE_PIXELS. Тест опускает порог, чтобы не генерить
+    реальный 178-мегапиксельный PNG.
+    """
+    from PIL import Image
+    # Картинка 8x8 = 64 пикселя. Порог 10 → 64 > 2*10 → bomb.
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10)
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+
+    png = _png(size=(8, 8))
+    data = _payload(name="Бомба", price="1")
+    data["csrf_token"] = token
+    r = admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("bomb.png", png, "image/png")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    # Товар создан, но файл не сохранён
+    r = admin_client.get("/admin/products", params={"q": "Бомба"})
+    assert "Бомба" in r.text
+    assert "/static/uploads/" not in r.text
+    assert list(UPLOADS_DIR.iterdir()) == []

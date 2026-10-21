@@ -81,6 +81,14 @@ UVICORN_PORT    = _int("UVICORN_PORT", 8000)
 UVICORN_RELOAD  = _bool("UVICORN_RELOAD", default=False)
 UVICORN_WORKERS = _int("UVICORN_WORKERS", 1)
 
+# AUTO_MIGRATE=true — накатывать миграции Alembic в lifespan.
+# Для прода рекомендуется false: миграции запускать отдельно
+# (`alembic upgrade head`) перед рестартом сервиса, а lifespan
+# только проверяет, что схема актуальна. Если не актуальна —
+# приложение отказывается стартовать с понятной ошибкой,
+# вместо того чтобы подняться на半-мигрированной БД.
+AUTO_MIGRATE = _bool("AUTO_MIGRATE", default=True)
+
 SESSION_HTTPS_ONLY = _bool("SESSION_HTTPS_ONLY", default=False)
 SESSION_SAME_SITE  = _str("SESSION_SAME_SITE", "lax")
 SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)

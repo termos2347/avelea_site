@@ -7,6 +7,8 @@ from xml.sax.saxutils import escape
 
 from alembic import command
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
@@ -22,6 +24,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import (
+    AUTO_MIGRATE,
     BASE_DIR,
     MAX_UPLOAD_BYTES,
     MAX_VIDEO_UPLOAD_BYTES,
@@ -85,6 +88,33 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("avelea")
 
 
+def _ensure_migrations_current(alembic_cfg: Config) -> None:
+    """Проверяет, что БД накачена до head. Иначе — отказ стартовать.
+
+    Используется при AUTO_MIGRATE=false: миграции запускаются снаружи
+    (`alembic upgrade head`) перед рестартом, а приложение только
+    удостоверяется, что схема актуальна. Иначе на半-мигрированной БД
+    запросы будут падать непонятными 500-ми.
+    """
+    from app.core.database import engine as app_engine
+
+    script = ScriptDirectory.from_config(alembic_cfg)
+    head = script.get_current_head()
+
+    with app_engine.connect() as conn:
+        current = MigrationContext.configure(conn).get_current_revision()
+
+    if current != head:
+        log.error(
+            "Миграции не применены: current=%s, head=%s. "
+            "Выполните `alembic upgrade head` и перезапустите приложение.",
+            current, head,
+        )
+        raise SystemExit(1)
+
+    log.info("Миграции актуальны: %s", current)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if UVICORN_WORKERS > 1:
@@ -94,10 +124,14 @@ async def lifespan(app: FastAPI):
             UVICORN_WORKERS,
         )
 
-    log.info("Запуск: миграции Alembic + seed")
-
     alembic_cfg = Config(str(_ALEMBIC_INI))
-    command.upgrade(alembic_cfg, "head")
+
+    if AUTO_MIGRATE:
+        log.info("Запуск: миграции Alembic (AUTO_MIGRATE=true)")
+        command.upgrade(alembic_cfg, "head")
+    else:
+        log.info("AUTO_MIGRATE=false — проверяю актуальность миграций")
+        _ensure_migrations_current(alembic_cfg)
 
     db = SessionLocal()
     try:
@@ -211,6 +245,10 @@ def sitemap_xml(request: Request):
     return Response(content=body, media_type="application/xml")
 
 
+# ============================================================
+# Страницы ошибок
+# ============================================================
+
 _ERROR_PAGES: dict[int, dict] = {
     400: {
         "title": "Некорректный запрос",
@@ -248,6 +286,29 @@ _ERROR_PAGES: dict[int, dict] = {
         "icon":  "fa-triangle-exclamation",
     },
 }
+
+
+# Короткие тексты для JSON-ответов AJAX-запросам. Полные тексты
+# из _ERROR_PAGES рассчитаны на HTML-страницу — для JS-тоста они
+# слишком длинные и с лишними деталями.
+_JSON_ERROR_MESSAGES: dict[int, str] = {
+    400: "Некорректный запрос. Проверьте данные.",
+    403: "Сессия истекла или доступ запрещён. Обновите страницу и попробуйте снова.",
+    404: "Не найдено.",
+    405: "Метод не поддерживается.",
+    413: "Слишком большой запрос.",
+    429: "Слишком много запросов. Попробуйте через минуту.",
+    500: "Внутренняя ошибка. Попробуйте ещё раз.",
+}
+
+
+def _is_ajax(request: Request) -> bool:
+    """AJAX-запросы (fetch/XHR с явным заголовком) ждут JSON, не HTML."""
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _json_error_message(status_code: int) -> str:
+    return _JSON_ERROR_MESSAGES.get(status_code, "Ошибка.")
 
 
 def _pick_error_preset(status_code: int, path: str) -> dict:
@@ -312,11 +373,21 @@ async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if _is_ajax(request):
+        return JSONResponse(
+            {"ok": False, "error": _json_error_message(exc.status_code)},
+            status_code=exc.status_code,
+        )
     return _render_error(request, exc.status_code)
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if _is_ajax(request):
+        return JSONResponse(
+            {"ok": False, "error": "Некорректные данные формы."},
+            status_code=400,
+        )
     if request.url.path.startswith("/product/"):
         return _render_error(request, 404)
     return _render_error(request, 400)
@@ -325,6 +396,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     log.exception("Необработанная ошибка на %s", request.url.path)
+
+    if _is_ajax(request):
+        return JSONResponse(
+            {"ok": False, "error": _json_error_message(500)},
+            status_code=500,
+        )
+
     try:
         return _render_error(request, 500)
     except Exception:

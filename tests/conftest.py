@@ -85,3 +85,24 @@ def _reset_shared_state():
     reset_all()
     with auth_mod._codes_lock:
         auth_mod._pending_codes.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clean_uploads_autouse():
+    """Гарантирует, что static/uploads пуст до и после каждого теста.
+
+    Раньше очистка жила в test_admin.py через явную фикстуру —
+    тесты без неё оставляли .webp-файлы на диске.
+    """
+    from app.core.config import BASE_DIR
+    d = BASE_DIR / "static" / "uploads"
+    d.mkdir(parents=True, exist_ok=True)
+
+    def _clear():
+        for f in d.iterdir():
+            if f.is_file():
+                f.unlink()
+
+    _clear()
+    yield
+    _clear()

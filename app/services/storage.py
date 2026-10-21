@@ -43,6 +43,18 @@ _ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
 _READ_CHUNK = 64 * 1024
 _SPOOL_MAX = 1024 * 1024  # 1 МБ в RAM, дальше — на диск
 
+# Все исключения, которые PIL может бросить при Image.open() / verify()
+# на «плохом» файле. DecompressionBombError — отдельный вектор DoS:
+# PNG размером 50000×50000 весит ~1 КБ (сжимается отлично), но при
+# декодировании разворачивается в десятки гигабайт. PIL ловит это
+# сам (w*h > 2 * MAX_IMAGE_PIXELS), но мы должны поймать его исключение.
+_PIL_OPEN_ERRORS = (
+    UnidentifiedImageError,
+    OSError,
+    ValueError,
+    Image.DecompressionBombError,
+)
+
 _RESAMPLE = (
     Image.Resampling.LANCZOS
     if hasattr(Image, "Resampling")
@@ -91,6 +103,8 @@ def _stream_to_spooled(file, limit: int) -> tuple[tempfile.SpooledTemporaryFile 
 
 
 def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | None]:
+    # 1. Проверка формата и целостности (img.verify()).
+    #    Здесь же отлавливается DecompressionBombError на «бомбах».
     try:
         with Image.open(io.BytesIO(content)) as img:
             fmt = img.format
@@ -100,17 +114,25 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
                     "(разрешены jpg, png, gif, webp) — файл не сохранён."
                 )
             img.verify()
-    except (UnidentifiedImageError, OSError, ValueError):
+    except _PIL_OPEN_ERRORS:
         return None, None, "Файл повреждён или не является изображением."
 
-    with Image.open(io.BytesIO(content)) as img:
-        if img.format == "GIF":
-            return content, ".gif", None
-        if img.format == "WEBP" and (
-            MAX_IMAGE_DIMENSION <= 0 or max(img.size) <= MAX_IMAGE_DIMENSION
-        ):
-            return content, ".webp", None
+    # 2. Быстрый путь без перекодирования: GIF не трогаем,
+    #    WebP с подходящим размером сохраняем как есть.
+    #    try/except — на случай, если DecompressionBombError вылетит
+    #    повторно при Image.open (кэш PIL не всегда помогает).
+    try:
+        with Image.open(io.BytesIO(content)) as img:
+            if img.format == "GIF":
+                return content, ".gif", None
+            if img.format == "WEBP" and (
+                MAX_IMAGE_DIMENSION <= 0 or max(img.size) <= MAX_IMAGE_DIMENSION
+            ):
+                return content, ".webp", None
+    except _PIL_OPEN_ERRORS:
+        return None, None, "Файл повреждён или не является изображением."
 
+    # 3. Конвертация в WebP с ресайзом.
     try:
         with Image.open(io.BytesIO(content)) as img:
             if MAX_IMAGE_DIMENSION > 0 and max(img.size) > MAX_IMAGE_DIMENSION:
@@ -124,7 +146,7 @@ def _optimize_image(content: bytes) -> tuple[bytes | None, str | None, str | Non
             buf = io.BytesIO()
             img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=WEBP_METHOD)
             return buf.getvalue(), ".webp", None
-    except (OSError, ValueError) as e:
+    except _PIL_OPEN_ERRORS as e:
         log.warning("WebP-конвертация не удалась: %s", e)
         return None, None, "Не удалось обработать изображение."
 

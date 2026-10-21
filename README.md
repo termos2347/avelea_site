@@ -46,8 +46,169 @@ npx localtunnel --port 8000 --subdomain avelea-test
 
 ---
 
-## Структура проекта
+## ⚠️ Один воркер
+In-memory state — кэш товаров, rate-limiter логина, хранилище 2FA-кодов —
+живёт в памяти процесса. При UVICORN_WORKERS > 1:
 
+2FA ломается (код выдан на воркере A, проверяется на воркере B);
+
+rate-limit обходится (у каждого воркера свой счётчик);
+
+cache.invalidate() не виден другим воркерам (отдаётся старьё);
+
+Alembic в lifespan запускается N раз параллельно.
+
+Поэтому UVICORN_WORKERS=1 (значение по умолчанию). Для масштабирования
+на несколько процессов — сначала вынести state в Redis.
+
+---
+
+## 🚀 Деплой в прод
+
+Раздел для тех, кто впервые выкатывает проект на сервер и не хочет
+наступить на типовые грабли. Локально всё это **не нужно** — здесь про
+боевой запуск.
+
+### Что поменять в `.env` на проде
+
+| Переменная | Локально | В проде | Почему |
+|---|---|---|---|
+| `UVICORN_RELOAD` | `true` | **`false`** | Reload следит за файлами (в проде их никто не меняет), плодит второй процесс. In-memory state (кэш, rate-limit, 2FA-коды) **не шарится** между процессами → 2FA и rate-limit ломаются |
+| `UVICORN_WORKERS` | `1` | **`1`** | Та же причина. Для >1 сначала вынести state в Redis |
+| `AUTO_MIGRATE` | `true` | **`false`** | Миграции запускать отдельно (`alembic upgrade head`) перед рестартом. Иначе при падении миграции сервис не стартует — хорошо, но лучше контролировать руками |
+| `SESSION_HTTPS_ONLY` | `false` | **`true`** | Cookie только по HTTPS + HSTS-заголовок. Без этого сессия уедет по HTTP |
+| `SEED_DEMO_PRODUCT` | `1` (для тестов) | **`0`** | Демо-товар «Древесный парфюм» не нужен в проде |
+| `DATABASE_URL` | локальный Postgres | **с `?sslmode=require`** | Облачный Postgres (Neon, Supabase) требует TLS |
+| `SECRET_KEY` | любой | **64+ случайных** | `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `ADMIN_PASSWORD` | `test-password-123` | **16+ символов, не из словаря** | Это единственный барьер перед админкой, если 2FA выключен |
+
+**Проверить одним глазом:**
+
+```bash
+grep -E '^(UVICORN_RELOAD|UVICORN_WORKERS|AUTO_MIGRATE|SESSION_HTTPS_ONLY|SEED_DEMO_PRODUCT)=' .env
+```
+
+Ожидаемо на проде:
+
+```
+UVICORN_RELOAD=false
+UVICORN_WORKERS=1
+AUTO_MIGRATE=false
+SESSION_HTTPS_ONLY=true
+SEED_DEMO_PRODUCT=0
+```
+
+### Systemd unit — пример
+
+Файл `/etc/systemd/system/avelea.service`:
+
+```ini
+[Unit]
+Description=Avelea shop
+After=network.target
+
+[Service]
+Type=simple
+User=avelea
+Group=avelea
+WorkingDirectory=/home/avelea/avelea_site
+EnvironmentFile=/home/avelea/avelea_site/.env
+ExecStart=/home/avelea/avelea_site/.venv/bin/python run.py
+
+# Перезапускать при падении, но не бесконечно.
+# StartLimit* — критично: без них systemd будет долбиться
+# вечно, если сервис падает на старте (например,
+# AUTO_MIGRATE=false и БД отстаёт от head).
+Restart=on-failure
+RestartSec=30
+StartLimitBurst=3
+StartLimitIntervalSec=300
+
+# Логи — в journald. Смотреть: journalctl -u avelea -f
+StandardOutput=journal
+StandardError=journal
+
+# Базовая изоляция
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/avelea/avelea_site/instance /home/avelea/avelea_site/static/uploads /home/avelea/avelea_site/static/site
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Что делает `StartLimitBurst=3` + `StartLimitIntervalSec=300`:**
+не более 3 перезапусков за 5 минут. Если сервис падает 3 раза подряд — systemd
+**перестаёт его перезапускать** и оставляет в статусе `failed`. Это правильно:
+лучше увидеть `failed` и разобраться, чем наблюдать, как сервис падает в цикле
+и жрёт CPU.
+
+**Первичная установка:**
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable avelea
+sudo systemctl start avelea
+sudo systemctl status avelea
+```
+
+**После `git pull` + изменения `.env` или миграций:**
+
+```bash
+# 1. Накатить миграции (если AUTO_MIGRATE=false)
+cd /home/avelea/avelea_site
+.venv/bin/alembic upgrade head
+
+# 2. Перезапустить сервис
+sudo systemctl restart avelea
+
+# 3. Посмотреть, что стартануло
+sudo journalctl -u avelea -n 30 --no-pager
+```
+
+### Если сервис упал — что смотреть
+
+```bash
+# Статус и код последнего завершения
+sudo systemctl status avelea
+
+# Логи за последние 5 минут
+sudo journalctl -u avelea --since "5 min ago" --no-pager
+
+# Только ошибки
+sudo journalctl -u avelea -p err -n 50 --no-pager
+
+# Следить в реальном времени
+sudo journalctl -u avelea -f
+```
+
+**Типовые сообщения и что делать:**
+
+| В логе | Причина | Что делать |
+|---|---|---|
+| `Миграции не применены: current=..., head=...` | `AUTO_MIGRATE=false`, БД отстаёт | `.venv/bin/alembic upgrade head` → `systemctl restart avelea` |
+| `❌ Переменная SECRET_KEY не задана` | `.env` не найден или пустой | Проверить `EnvironmentFile=` в unit, права на файл |
+| `❌ Файл .env не найден` (из `start.sh`) | Сервис запущен не через systemd, а руками из чужой папки | Проверить `WorkingDirectory=` |
+| `Address already in use` | Порт 8000 занят другим процессом | `sudo ss -tlnp \| grep 8000` — найти и убить |
+| `Application startup failed. Exiting.` + стектрейс | Что-то упало в lifespan (БД недоступна, миграции, seed) | Читать строку **над** стектрейсом — там ERROR от `avelea`-логгера |
+
+### Локально vs прод — короткая шпаргалка
+
+| | Локально | В проде |
+|---|---|---|
+| Запуск | `./start.sh` | `sudo systemctl start avelea` |
+| Логи | терминал | `journalctl -u avelea -f` |
+| `UVICORN_RELOAD` | `true` — удобно | `false` — обязательно |
+| Миграции | автоматом при старте (`AUTO_MIGRATE=true`) | вручную `alembic upgrade head` |
+| Порт | 8000 напрямую | 8000 за nginx (443 → 8000) |
+| HTTPS | нет | nginx + certbot |
+| `SESSION_HTTPS_ONLY` | `false` | `true` |
+
+---
+
+## Структура проекта
+```bash
 avelea_site/
 ├── alembic.ini                     # Конфиг Alembic (URL берётся из .env)
 ├── app/
@@ -58,10 +219,9 @@ avelea_site/
 │   ├── core/                       # Инфраструктура (не зависит от бизнес-логики)
 │   │   ├── config.py               # Чтение .env и константы
 │   │   ├── database.py             # engine (Postgres pool), SessionLocal, Base, get_db()
-│   │   ├── deps.py                 # FastAPI-зависимости: require_admin, CSRF
+│   │   ├── security.py             # CSRF, require_admin, rate-limit логина
 │   │   ├── middleware.py           # BodySizeLimit, SecurityHeaders, AdminAuthGuard,
 │   │   │                           #   StaticCache
-│   │   ├── ratelimit.py            # In-memory rate-limiter для /admin/login
 │   │   └── rendering.py            # Jinja2-окружения + регистрация глобалов
 │   │
 │   ├── data/                       # Всё про данные
@@ -128,9 +288,9 @@ avelea_site/
 │       └── f63c89e8e32f_initial_schema.py   # Baseline (создаёт всю схему)
 │
 ├── tests/
-│   ├── conftest.py                 # Фикстуры: TestClient, admin_client, CSRF
+│   ├── conftest.py                 # Фикстуры: TestClient, admin_client, CSRF, очистка uploads
 │   ├── test_smoke.py               # Публичные страницы, robots.txt, sitemap.xml, 404
-│   └── test_admin.py               # Админка: логин, CSRF, 2FA, CRUD, загрузки
+│   └── test_admin.py               # Админка: логин, CSRF, 2FA, CRUD, загрузки, откаты
 │
 ├── .venv/                          # Виртуальное окружение (в .gitignore)
 ├── .gitignore
@@ -141,6 +301,7 @@ avelea_site/
 ├── start.sh                        # Запуск сервера (активация venv + python run.py)
 ├── install.sh                      # Создание venv + установка зависимостей
 └── README.md
+```
 
 ---
 
