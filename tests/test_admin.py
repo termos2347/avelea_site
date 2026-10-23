@@ -3,13 +3,8 @@ import io
 import pytest
 from PIL import Image
 
-from app.core.config import BASE_DIR
 from tests.conftest import extract_csrf
 
-
-# UPLOADS_DIR и SITE_DIR указывают на временные папки, куда
-# тестовый storage перенаправлен в conftest.py.
-# Боевые static/uploads/ и static/site/ тесты не трогают.
 from app.services.storage import (
     _backend as _storage_backend,
     _site_backend as _site_storage_backend,
@@ -58,6 +53,7 @@ def _payload(**overrides) -> dict:
         "volume_unit": "мл",
         "description": "Описание для теста",
         "categories": [_first_category_name()],
+        "is_active": "1",
     }
     data.update(overrides)
     return data
@@ -163,11 +159,10 @@ def test_login_success_resets_counter(client):
 # ============== Logout ==============
 
 def test_logout_via_get_does_not_work(admin_client):
-    """GET /admin/logout → 405, не выкидывает. Вектор <img> закрыт."""
+    """GET /admin/logout → 405, не выкидывает."""
     r = admin_client.get("/admin/logout", follow_redirects=False)
     assert r.status_code == 405
 
-    # Сессия всё ещё работает
     r = admin_client.get("/admin/products")
     assert r.status_code == 200
 
@@ -178,7 +173,6 @@ def test_logout_via_post_works(admin_client):
     assert r.status_code == 303
     assert r.headers["location"] == "/admin/login"
 
-    # Сессия очищена — админка снова 404
     r = admin_client.get("/admin/products", follow_redirects=False)
     assert r.status_code == 404
 
@@ -186,7 +180,6 @@ def test_logout_via_post_works(admin_client):
 # ============== CSRF ==============
 
 def test_post_without_csrf_is_forbidden(client):
-    """Без csrf_token форма входа рендерится заново с понятной ошибкой."""
     r = client.post("/admin/login", data={"password": "test-password-123"})
     assert r.status_code == 403
     assert "Сессия истекла" in r.text
@@ -230,7 +223,6 @@ def test_create_product(admin_client):
 
 
 def test_delete_category_with_products(admin_client):
-    """Удаление категории с товарами — не 500, товар остаётся без категории."""
     from app.core.database import SessionLocal
     from app.data.models import Product, Category
 
@@ -376,14 +368,13 @@ def test_upload_rejects_too_large(admin_client, monkeypatch):
 
 
 def test_upload_rejects_decompression_bomb(admin_client, monkeypatch):
-    """PNG с огромным числом пикселей (но маленьким файлом) не сохраняется."""
     from PIL import Image as PILImage
     monkeypatch.setattr(PILImage, "MAX_IMAGE_PIXELS", 10)
 
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
-    png = _png(size=(8, 8))  # 64 пикселя > 2*10
+    png = _png(size=(8, 8))
     data = _payload(name="Бомба", price="1")
     data["csrf_token"] = token
     r = admin_client.post(
@@ -403,8 +394,6 @@ def test_upload_rejects_decompression_bomb(admin_client, monkeypatch):
 # ============== Видео (mp4) ==============
 
 def test_upload_mp4_video_saves(admin_client):
-    """MP4 с правильными magic bytes сохраняется в static/uploads/."""
-    # ftyp на смещении 4, бренд isom на 8-12 — так _sniff_ext определяет .mp4
     fake_mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2" + b"\x00" * 1000
 
     r = admin_client.get("/admin/products")
@@ -426,7 +415,6 @@ def test_upload_mp4_video_saves(admin_client):
 
 
 def test_upload_rejects_too_large_video(admin_client, monkeypatch):
-    """Видео больше MAX_VIDEO_UPLOAD_BYTES отклоняется, товар создаётся без файла."""
     monkeypatch.setattr("app.services.storage.MAX_VIDEO_UPLOAD_BYTES", 100)
 
     fake_mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2" + b"x" * 200
@@ -498,7 +486,6 @@ def test_create_product_rejects_negative_price(admin_client):
 
 
 def test_create_product_rejects_non_numeric_price(admin_client):
-    """Нечисловая цена — флеш-сообщение, а не 400 HTML."""
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
 
@@ -560,7 +547,6 @@ def test_update_product_rejects_negative_price(admin_client):
 # ============== Утечка файлов при ошибках БД ==============
 
 def test_create_product_rolls_back_files_on_db_error(admin_client, monkeypatch):
-    """Если db.commit() падает — загруженные файлы удаляются с диска."""
     from sqlalchemy.orm import Session
 
     def boom(self, *args, **kwargs):
@@ -588,7 +574,6 @@ def test_create_product_rolls_back_files_on_db_error(admin_client, monkeypatch):
 # ============== Варианты ==============
 
 def test_create_product_with_variants_sets_min_price(admin_client):
-    """Цена товара = минимальная цена варианта."""
     from app.core.database import SessionLocal
     from app.data.models import Product
 
@@ -616,7 +601,6 @@ def test_create_product_with_variants_sets_min_price(admin_client):
 
 
 def test_update_product_removing_all_variants_warns(admin_client):
-    """Удалили все варианты — flash-сообщение о базовой цене."""
     from app.core.database import SessionLocal
     from app.data.models import Product
 
@@ -658,10 +642,9 @@ def test_update_product_removing_all_variants_warns(admin_client):
         assert len(p.variants) == 0
 
 
-# ============== AJAX-ошибки возвращаются JSON'ом ==============
+# ============== AJAX-ошибки ==============
 
 def test_ajax_csrf_error_returns_json(admin_client):
-    """AJAX-запрос с невалидным CSRF — JSON, не HTML."""
     r = admin_client.post(
         "/admin/products/new",
         data={"name": "x", "price": "1", "csrf_token": "подделка"},
@@ -676,7 +659,6 @@ def test_ajax_csrf_error_returns_json(admin_client):
 
 
 def test_non_ajax_csrf_error_returns_html(admin_client):
-    """Без X-Requested-With — обычная HTML-страница 403."""
     r = admin_client.post(
         "/admin/products/new",
         data={"name": "x", "price": "1", "csrf_token": "подделка"},
@@ -687,7 +669,6 @@ def test_non_ajax_csrf_error_returns_html(admin_client):
 
 
 def test_ajax_404_returns_json(admin_client):
-    """AJAX 404 — JSON, не HTML."""
     r = admin_client.get(
         "/admin/products/999999/edit",
         headers={"X-Requested-With": "XMLHttpRequest"},
@@ -706,7 +687,6 @@ def test_admin_site_page_renders(admin_client):
 
 
 def test_admin_site_text_save(admin_client):
-    """AJAX-сохранение текста. Проверяем значение в БД."""
     from app.core.database import SessionLocal
     from app.data.models import Setting
     from app.data import cache
@@ -731,7 +711,6 @@ def test_admin_site_text_save(admin_client):
 
 
 def test_admin_site_text_clear(admin_client):
-    """Пустой текст → None в БД → рендерится default из settings.py."""
     from app.core.database import SessionLocal
     from app.data.models import Setting
     from app.data import cache
@@ -760,7 +739,6 @@ def test_admin_site_text_clear(admin_client):
 
 
 def test_admin_site_image_upload(admin_client):
-    """Загрузка картинки → файл на диске + url в JSON."""
     for f in SITE_DIR.iterdir():
         if f.is_file():
             f.unlink()
@@ -786,7 +764,6 @@ def test_admin_site_image_upload(admin_client):
 
 
 def test_admin_site_image_remove(admin_client):
-    """remove=1 → Setting очищается, файл удаляется."""
     from app.core.database import SessionLocal
     from app.data.models import Setting
     from app.data import cache
@@ -824,7 +801,6 @@ def test_admin_site_image_remove(admin_client):
 
 
 def test_admin_site_image_rollback_on_db_error(admin_client, monkeypatch):
-    """Если db.commit() упал — новый файл удаляется с диска."""
     from sqlalchemy.exc import SQLAlchemyError
     from sqlalchemy.orm import Session
 
@@ -853,7 +829,6 @@ def test_admin_site_image_rollback_on_db_error(admin_client, monkeypatch):
 
 
 def test_admin_site_text_ajax_csrf_invalid(admin_client):
-    """AJAX-запрос с невалидным CSRF → JSON 403, не HTML."""
     r = admin_client.post(
         "/admin/site/footer_phone/text",
         data={"value": "x", "csrf_token": "подделка"},
@@ -919,7 +894,6 @@ def test_admin_brands_edit(admin_client):
 
 
 def test_admin_brands_delete_clears_product_brand(admin_client):
-    """Удаление бренда — у товаров brand_id становится NULL."""
     from app.core.database import SessionLocal
     from app.data.models import Brand, Product
     from app.data import cache
@@ -1001,6 +975,119 @@ def test_admin_categories_edit_duplicate(admin_client):
         follow_redirects=True,
     )
     assert "уже существует" in r.text
+
+
+# ============== Автоперегенерация slug при переименовании ==============
+
+def test_renaming_product_regenerates_slug(admin_client):
+    """При переименовании slug перегенерируется из нового названия."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+    from app.data import cache
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    _post_new_product(admin_client, token, name="Старое имя", price="100")
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.name == "Старое имя").one()
+        pid = p.id
+        old_slug = p.slug
+        assert old_slug == "staroe-imya"
+
+    r = admin_client.get(f"/admin/products/{pid}/edit")
+    token = extract_csrf(r.text)
+    data = _payload(name="Новое имя", price="100")
+    data["csrf_token"] = token
+    png = _png()
+    r = admin_client.post(
+        f"/admin/products/{pid}/edit",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == pid).one()
+        assert p.slug == "novoe-imya"
+
+    r = admin_client.get("/product/novoe-imya")
+    assert r.status_code == 200
+
+    r = admin_client.get(f"/product/{old_slug}")
+    assert r.status_code == 404
+
+
+def test_renaming_product_rejects_duplicate_name(admin_client):
+    """Если новый name даёт slug, занятый другим товаром — flash_error, не сохраняется."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+    from app.data import cache
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    _post_new_product(admin_client, token, name="Новое имя", price="100")
+    _post_new_product(admin_client, token, name="Другой", price="100")
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        pid = db.query(Product).filter(Product.name == "Другой").one().id
+
+    r = admin_client.get(f"/admin/products/{pid}/edit")
+    token = extract_csrf(r.text)
+    data = _payload(name="Новое имя", price="100")
+    data["csrf_token"] = token
+    png = _png()
+    r = admin_client.post(
+        f"/admin/products/{pid}/edit",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=True,
+    )
+    assert r.status_code == 200
+    assert "уже существует" in r.text
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == pid).one()
+        assert p.name == "Другой"
+
+
+def test_editing_description_does_not_change_slug(admin_client):
+    """Редактирование описания (без смены name) не трогает slug."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+    from app.data import cache
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    _post_new_product(admin_client, token, name="Стабильное имя", price="100")
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.name == "Стабильное имя").one()
+        pid = p.id
+        original_slug = p.slug
+
+    r = admin_client.get(f"/admin/products/{pid}/edit")
+    token = extract_csrf(r.text)
+    data = _payload(name="Стабильное имя", price="100", description="Новое описание")
+    data["csrf_token"] = token
+    png = _png()
+    admin_client.post(
+        f"/admin/products/{pid}/edit",
+        data=data,
+        files={"image_1": ("test.png", png, "image/png")},
+        follow_redirects=False,
+    )
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.id == pid).one()
+        assert p.slug == original_slug
 
 
 # ============== Telegram 2FA ==============
@@ -1127,7 +1214,6 @@ def test_2fa_wrong_code_too_many_attempts(client, monkeypatch):
 
 
 def test_2fa_purge_removes_expired_only():
-    """_purge_expired удаляет только протухшие коды, живые не трогает."""
     import time
     from app.routers.admin import auth as auth_mod
 

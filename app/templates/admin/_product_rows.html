@@ -1,0 +1,142 @@
+<template data-table-rows>
+  {% for p in products %}
+  <tr class="row-item" data-name="{{ p.name|lower }}" data-id="{{ p.id }}">
+    <td class="adm-col-id adm-table-id">{{ p.id }}</td>
+    <td class="adm-col-hide-mobile">
+      {% if p.image_url %}
+        {% if is_video(p.image) %}
+          <video src="{{ p.image_url }}" muted playsinline class="adm-table-thumb"></video>
+        {% else %}
+          <img src="{{ p.image_url }}" alt="" loading="lazy" decoding="async" class="adm-table-thumb">
+        {% endif %}
+      {% else %}
+        <div class="adm-table-thumb">{{ p.name[:2].upper() }}</div>
+      {% endif %}
+    </td>
+    <td class="adm-col-name">
+      <div style="font-weight: 500;">{{ p.name }}</div>
+      {% if p.popular %}
+      <span class="adm-tag adm-tag-accent" style="margin-top: 0.25rem;">популярное</span>
+      {% endif %}
+      {% if not p.is_active %}
+      <span class="adm-tag adm-tag-hidden" style="margin-top: 0.25rem;">скрыт</span>
+      {% endif %}
+    </td>
+    <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">
+      {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
+    </td>
+    <td class="adm-col-hide-mobile" style="color: var(--adm-muted);">{{ p.brand or "—" }}</td>
+    <td class="adm-col-hide-mobile" style="text-align: right; font-weight: 500;">{{ p.price|int }} ₽</td>
+    <td class="adm-col-actions" style="text-align: right; white-space: nowrap;">
+      <a href="/admin/products/{{ p.id }}/edit"
+         hx-get="/admin/products/{{ p.id }}/edit"
+         hx-target="#edit-product-dialog-content"
+         hx-swap="innerHTML"
+         class="adm-btn adm-btn-ghost" title="Редактировать">
+        <i class="fas fa-pen"></i>
+      </a>
+      <button type="button"
+              class="adm-btn adm-btn-ghost"
+              title="Информация"
+              data-action="open-info"
+              data-info-id="{{ p.id }}"
+              data-info-name="{{ p.name }}"
+              data-info-price="{{ p.price }}"
+              data-info-brand="{{ p.brand or '' }}"
+              data-info-volume="{{ p.volume or '' }}"
+              data-info-cats="{{ p.categories|map(attribute='name')|join(', ') }}"
+              data-info-desc="{{ p.description or '' }}"
+              data-info-image="{{ p.image_url or '' }}"
+              data-info-popular="{{ '1' if p.popular else '0' }}">
+        <i class="fas fa-circle-info"></i>
+      </button>
+      <form method="post" action="/admin/products/{{ p.id }}/delete"
+            data-confirm="Удалить «{{ p.name }}»?"
+            hx-boost="false"
+            style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <button type="submit" class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
+          <i class="fas fa-trash"></i>
+        </button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</template>
+
+<template data-card-items>
+  {% for p in products %}
+  <div class="adm-product-card row-item {% if not p.is_active %}is-hidden-card{% endif %}"
+       data-name="{{ p.name|lower }}"
+       data-id="{{ p.id }}">
+    <div class="adm-product-thumb">
+      {% if p.image_url %}
+        {% if is_video(p.image) %}
+          <video src="{{ p.image_url }}" muted playsinline></video>
+        {% else %}
+          <img src="{{ p.image_url }}" alt="{{ p.name }}" loading="lazy" decoding="async">
+        {% endif %}
+      {% else %}
+        {{ p.name[:2].upper() }}
+      {% endif %}
+      {% if p.popular %}
+      <span class="adm-product-badge">популярное</span>
+      {% endif %}
+      {% if not p.is_active %}
+      <span class="adm-hidden-flag" title="Товар скрыт от клиентов">
+        <i class="fas fa-eye-slash"></i>
+      </span>
+      {% endif %}
+      <div class="adm-product-actions">
+        <a href="/admin/products/{{ p.id }}/edit"
+           hx-get="/admin/products/{{ p.id }}/edit"
+           hx-target="#edit-product-dialog-content"
+           hx-swap="innerHTML"
+           class="act-edit" title="Редактировать">
+          <i class="fas fa-pen"></i>
+        </a>
+        <button type="button"
+                class="act-info" title="Информация"
+                data-action="open-info"
+                data-info-id="{{ p.id }}"
+                data-info-name="{{ p.name }}"
+                data-info-price="{{ p.price }}"
+                data-info-brand="{{ p.brand or '' }}"
+                data-info-volume="{{ p.volume or '' }}"
+                data-info-cats="{{ p.categories|map(attribute='name')|join(', ') }}"
+                data-info-desc="{{ p.description or '' }}"
+                data-info-image="{{ p.image_url or '' }}"
+                data-info-popular="{{ '1' if p.popular else '0' }}">
+          <i class="fas fa-circle-info"></i>
+        </button>
+        <form method="post" action="/admin/products/{{ p.id }}/delete"
+              data-confirm="Удалить «{{ p.name }}»?"
+              hx-boost="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+          <button type="submit" class="act-del" title="Удалить">
+            <i class="fas fa-trash"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+    <div class="adm-product-body">
+      <h3 class="adm-product-name">{{ p.name }}</h3>
+      <div class="adm-product-cats">
+        {% if p.categories %}{{ p.categories|map(attribute='name')|join(', ') }}{% else %}—{% endif %}
+      </div>
+      <div class="adm-product-footer">
+        <span class="adm-product-price">{{ p.price|int }} ₽</span>
+        {% if p.brand %}
+        <span class="adm-product-brand">{{ p.brand }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</template>
+
+<div data-infinite-meta
+     data-page="{{ page }}"
+     data-total-pages="{{ total_pages }}"
+     data-has-next="{{ '1' if page < total_pages else '0' }}"
+     hidden></div>

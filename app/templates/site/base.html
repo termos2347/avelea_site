@@ -55,13 +55,12 @@
 </head>
 <body class="bg-[var(--bg-soft)] overflow-x-hidden flex flex-col min-h-screen" hx-boost="true">
 
-    <!-- Прогресс-полоска сверху -->
+    {# Скрипт для анимации ДО того, как отрисуется контент #}
+    <script src="/static/js/scroll-init.js"></script>
+
     <div id="htmx-progress"
          class="fixed top-0 left-0 h-0.5 bg-[var(--ink)] w-0 transition-all duration-200 z-50 opacity-0"></div>
 
-    {# ============================================================
-       СКЕЛЕТОН-ОКНО
-       ============================================================ #}
     <div id="skeleton-overlay" class="skeleton-overlay" aria-hidden="true">
         <div class="skeleton-container">
             <div class="sk-variant" data-sk="home">
@@ -132,15 +131,10 @@
         </div>
     </div>
 
-    {# ============================================================
-       ОСНОВНОЙ КОНТЕЙНЕР
-       ============================================================ #}
     <div class="mx-auto px-4 md:px-6 max-w-screen-2xl w-full flex flex-col flex-1">
 
-        {# ================= ШАПКА ================= #}
         <nav class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-5 border-b border-[var(--line)]">
 
-            {# Слева — Бургер и Поиск #}
             <div class="flex items-center justify-start gap-1">
                 <button type="button" id="open-menu" class="w-10 h-10 -ml-2 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
                     <i class="fas fa-bars text-lg"></i>
@@ -150,12 +144,10 @@
                 </button>
             </div>
 
-            {# Центр — Логотип #}
             <a href="/" class="brand-logo text-center text-[var(--ink)] hover:opacity-70 transition-opacity">
                 avelea
             </a>
 
-            {# Справа — Иконки навигации #}
             <div class="flex items-center justify-end gap-1">
                 <a href="/" title="Главная" aria-label="Главная"
                    class="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-[var(--ink)] hover:bg-[var(--line-soft)] transition">
@@ -172,14 +164,12 @@
             </div>
         </nav>
 
-        {# ================= КОНТЕНТ СТРАНИЦЫ ================= #}
         <main class="{% block main_class %}pt-6 pb-6{% endblock %} flex-1">
             {% block content %}{% endblock %}
         </main>
 
     </div>
 
-    {# ================= ФУТЕР ================= #}
     <footer class="mt-16 bg-gradient-to-br from-pink-50 via-pink-100 to-pink-200/60 border-t border-pink-200">
         <div class="mx-auto px-6 max-w-screen-xl py-16 md:py-20 flex flex-col items-center">
 
@@ -269,9 +259,6 @@
         </div>
     </footer>
 
-    {# ============================================================
-       ОВЕРЛЕИ (МЕНЮ И ПОИСК)
-       ============================================================ #}
     <div id="menu-backdrop" class="fixed inset-0 z-[90] bg-black/40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
     <div id="mobile-menu" class="fixed top-0 left-0 bottom-0 w-full max-w-[320px] z-[100] bg-[var(--bg)] transform -translate-x-full transition-transform duration-300 ease-in-out shadow-2xl">
@@ -297,9 +284,6 @@
         </div>
     </div>
 
-    {# ============================================================
-       ПОИСКОВЫЙ ОВЕРЛЕЙ
-       ============================================================ #}
     <div id="search-overlay" class="search-overlay" aria-hidden="true">
         <div class="search-overlay__backdrop" data-search-close></div>
 
@@ -352,5 +336,6 @@
     </div>
 
     <script src="/static/js/site.js"></script>
+    <script src="/static/js/catalog.js"></script>
 </body>
 </html>

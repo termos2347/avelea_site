@@ -90,6 +90,10 @@ AUTO_MIGRATE = _bool("AUTO_MIGRATE", default=True)
 SESSION_HTTPS_ONLY = _bool("SESSION_HTTPS_ONLY", default=False)
 SESSION_SAME_SITE  = _str("SESSION_SAME_SITE", "lax")
 SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
+# Idle timeout: если админ не делал ни одного запроса к /admin/*
+# дольше N секунд — сессия инвалидируется. Защита от «оставил
+# открытую админку на чужом компьютере». 0 = отключено.
+SESSION_IDLE_TIMEOUT = _int("SESSION_IDLE_TIMEOUT", 12 * 3600)
 
 MAX_UPLOAD_MB    = _int("MAX_UPLOAD_MB", 5)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024

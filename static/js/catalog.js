@@ -8,26 +8,16 @@
     const panel     = () => document.getElementById('filters-panel');
     const backdrop  = () => document.getElementById('filters-backdrop');
 
-    // Ширина вертикального скроллбара. На мобиле / macOS-оверлейных
-    // скроллбарах будет 0 — тогда компенсация не нужна.
     function getScrollbarWidth() {
         return window.innerWidth - document.documentElement.clientWidth;
     }
 
     function open()  {
-        // Компенсация исчезающего скроллбара — иначе весь контент
-        // прыгает вправо на его ширину. Считаем ДО того, как выставим
-        // overflow: hidden (класс filters-open).
         const sbw = getScrollbarWidth();
-        if (sbw > 0) {
-            body.style.paddingRight = sbw + 'px';
-        }
-
+        if (sbw > 0) body.style.paddingRight = sbw + 'px';
         body.classList.add('filters-open');
-
         const btn = toggleBtn();
         if (btn) btn.setAttribute('aria-expanded', 'true');
-
         setTimeout(() => {
             const first = panel() && panel().querySelector('input, select, button');
             if (first) first.focus({ preventScroll: true });
@@ -36,9 +26,7 @@
 
     function close() {
         body.classList.remove('filters-open');
-        // Снимаем компенсацию — возвращаем layout как был.
         body.style.paddingRight = '';
-
         const btn = toggleBtn();
         if (btn) btn.setAttribute('aria-expanded', 'false');
     }
@@ -48,12 +36,11 @@
         else open();
     }
 
-    // ===== Клики =====
+    // ===== Клики по фильтрам =====
     document.addEventListener('click', (e) => {
         if (e.target.closest('#filters-toggle')) { toggle(); return; }
         if (e.target.closest('#filters-close'))  { close();  return; }
         if (e.target.closest('#filters-cancel')) { close();  return; }
-        // Клик по затемнению (вне окна) — закрыть
         if (e.target === backdrop()) { close(); return; }
     });
 
@@ -81,4 +68,117 @@
     document.body.addEventListener('htmx:beforeSwap', () => {
         if (body.classList.contains('filters-open')) close();
     });
+
+    // ============================================================
+    // INFINITE SCROLL
+    // ============================================================
+    let infiniteScroll = null;
+
+    function initInfiniteScroll() {
+        const grid = document.getElementById('catalog-grid');
+        if (!grid) return;
+        if (grid.hasAttribute('data-inf-ready')) return;
+        grid.setAttribute('data-inf-ready', '1');
+
+        document.querySelectorAll('[data-pagination]').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        const loader   = document.getElementById('catalog-loader');
+        const endMsg   = document.getElementById('catalog-end');
+        const sentinel = document.getElementById('catalog-sentinel');
+
+        if (!loader || !sentinel) {
+            console.warn('catalog: нет #catalog-loader или #catalog-sentinel');
+            return;
+        }
+
+        let loading = false;
+
+        const initialPage  = parseInt(grid.dataset.page, 10) || 1;
+        const initialTotal = parseInt(grid.dataset.totalPages, 10) || 1;
+        if (initialPage >= initialTotal && endMsg) {
+            endMsg.hidden = false;
+        }
+
+        async function loadNext() {
+            if (loading) return;
+
+            const page       = parseInt(grid.dataset.page, 10) || 1;
+            const totalPages = parseInt(grid.dataset.totalPages, 10) || 1;
+
+            if (page >= totalPages) {
+                if (endMsg) endMsg.hidden = false;
+                return;
+            }
+
+            loading = true;
+            loader.classList.add('is-loading');
+
+            try {
+                const params = new URLSearchParams(window.location.search);
+                params.set('page', String(page + 1));
+
+                const resp = await fetch('/catalog/more?' + params.toString(), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+                const html = await resp.text();
+
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+
+                const cards = Array.from(tmp.querySelectorAll('a.group'));
+                const meta = tmp.querySelector('[data-catalog-meta]');
+
+                cards.forEach(el => {
+                    el.classList.add('catalog-item-new');
+                    grid.appendChild(el);
+                    setTimeout(() => el.classList.remove('catalog-item-new'), 400);
+                });
+
+                // ВАЖНО: подключаем новые карточки к анимации появления
+                if (window.refreshScrollObserver) window.refreshScrollObserver();
+
+                if (meta) {
+                    const nextPage = meta.dataset.loadedPage;
+                    const hasNext  = meta.dataset.hasNext === '1';
+                    grid.dataset.page = nextPage;
+                    if (!hasNext && endMsg) endMsg.hidden = false;
+                }
+            } catch (e) {
+                console.error('Infinite scroll error:', e);
+            } finally {
+                loading = false;
+                loader.classList.remove('is-loading');
+            }
+        }
+
+        infiniteScroll = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) loadNext();
+                });
+            },
+            { rootMargin: '400px 0px' }
+        );
+
+        infiniteScroll.observe(sentinel);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initInfiniteScroll);
+    } else {
+        initInfiniteScroll();
+    }
+
+    document.body.addEventListener('htmx:afterSettle', () => {
+        if (infiniteScroll) {
+            infiniteScroll.disconnect();
+            infiniteScroll = null;
+        }
+        initInfiniteScroll();
+    });
+
 })();

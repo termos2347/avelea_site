@@ -3,13 +3,13 @@
 Все роутеры, кроме about, объявлены `def` (не `async def`). Причина:
 внутри синхронный доступ к кэшу (cache.get_products()), который при
 холодном кэше дёргает SQLAlchemy → блокирует event loop. FastAPI
-автоматически выносит `def`-роутеры в threadpool, event loop остаётся
-свободным для других запросов.
+автоматически выносит `def`-роутеры в threadpool.
 
 about — чистый шаблон без I/O, оставлен `async def`.
 """
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from markupsafe import Markup
 
 from app.data import cache
 from app.utils.helpers import (
@@ -25,21 +25,15 @@ router = APIRouter(tags=["site"])
 PER_PAGE = 12
 
 
-@router.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    products = [p for p in cache.get_products() if p.is_active]
-    categories = cache.get_categories()
+# ============================================================
+# Общая логика каталога
+# ============================================================
+def _build_catalog_context(request: Request) -> dict:
+    """Фильтрует, сортирует и пагинирует каталог.
 
-    popular = [p for p in products if p.popular][:6]
-
-    return site_templates.TemplateResponse(request, "index.html", {
-        "popular": popular,
-        "categories": categories,
-    })
-
-
-@router.get("/catalog", response_class=HTMLResponse)
-def catalog(request: Request):
+    Вынесено из catalog(), чтобы использовать и в catalog_more()
+    (endpoint для infinite scroll, возвращает только items).
+    """
     params = request.query_params
 
     q = (params.get("q") or "").strip().lower()
@@ -56,7 +50,6 @@ def catalog(request: Request):
     if page < 1:
         page = 1
 
-    # Только активные товары видны клиентам.
     all_products = [p for p in cache.get_products() if p.is_active]
     all_categories = cache.get_categories()
     all_brands_used = cache.get_brand_names()
@@ -64,11 +57,6 @@ def catalog(request: Request):
     filtered = []
     for p in all_products:
         if q:
-            # Ищем по p.name.lower(), а не по p.name_lower.
-            # name_lower — денормализованная колонка для индексируемого
-            # SQL-поиска (админка). На сайте товаров немного, кэш уже
-            # в памяти — p.name надёжнее (источник правды, .lower()
-            # в Python корректно работает с кириллицей).
             if q not in (p.name or "").lower():
                 continue
 
@@ -149,7 +137,7 @@ def catalog(request: Request):
     start_idx = start + 1 if total_count else 0
     end_idx = min(end, total_count)
 
-    return site_templates.TemplateResponse(request, "catalog.html", {
+    return {
         "products": products,
         "total_count": total_count,
         "start_idx": start_idx,
@@ -167,7 +155,59 @@ def catalog(request: Request):
         "page_items": make_page_items(page, total_pages, params),
         "active_filters": active_filters,
         "reset_url": build_reset_url(),
+    }
+
+
+# ============================================================
+# Страницы
+# ============================================================
+
+@router.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    products = [p for p in cache.get_products() if p.is_active]
+    categories = cache.get_categories()
+
+    popular = [p for p in products if p.popular][:6]
+
+    return site_templates.TemplateResponse(request, "index.html", {
+        "popular": popular,
+        "categories": categories,
     })
+
+
+@router.get("/catalog", response_class=HTMLResponse)
+def catalog(request: Request):
+    return site_templates.TemplateResponse(
+        request, "catalog.html", _build_catalog_context(request),
+    )
+
+
+@router.get("/catalog/more", response_class=HTMLResponse)
+def catalog_more(request: Request):
+    """Фрагмент для infinite scroll: только карточки + мета-данные.
+
+    Рендерит макрос product_card напрямую через Jinja-модуль, без
+    отдельного шаблона-обёртки. Это позволяет не заводить
+    _catalog_items.html ради 10 строк.
+    """
+    ctx = _build_catalog_context(request)
+
+    macros = site_templates.env.get_template("_macros.html").module
+    cards = Markup("").join(
+        macros.product_card(p) for p in ctx["products"]
+    )
+
+    has_next = ctx["page"] < ctx["total_pages"]
+    next_page = ctx["page"] + 1 if has_next else ""
+    meta = (
+        f'<div data-catalog-meta '
+        f'data-next-page="{next_page}" '
+        f'data-has-next="{"1" if has_next else "0"}" '
+        f'data-loaded-page="{ctx["page"]}" '
+        f'data-total-pages="{ctx["total_pages"]}" hidden></div>'
+    )
+
+    return HTMLResponse(content=str(cards) + meta)
 
 
 @router.get("/product/{slug_or_id}")
@@ -212,10 +252,9 @@ def product_page(request: Request, slug_or_id: str):
 
 @router.get("/brands", response_class=HTMLResponse)
 def brands_page(request: Request):
-    """Страница всех брендов с алфавитным указателем (только A-Z, 0-9)."""
+    """Страница всех брендов с алфавитным указателем."""
     brands = cache.get_brands()
 
-    # Простая транслитерация первой буквы на случай кириллицы
     cyr_to_lat = {
         'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E',
         'Ж': 'Z', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
@@ -231,25 +270,21 @@ def brands_page(request: Request):
 
         first_char = brand.name.strip()[0].upper()
 
-        # Определяем ключ группы
         if first_char.isdigit():
             key = "0 - 9"
         elif first_char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
             key = first_char
         else:
-            # Пробуем транслитерировать
             lat_char = cyr_to_lat.get(first_char)
             if lat_char and lat_char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
                 key = lat_char
             else:
-                # Всё остальное (символы и т.д.) кидаем в цифры
                 key = "0 - 9"
 
         if key not in grouped:
             grouped[key] = []
         grouped[key].append(brand)
 
-    # Сортируем: сначала цифры, потом буквы по алфавиту
     def sort_key(k):
         if k == "0 - 9":
             return "0"
@@ -257,7 +292,6 @@ def brands_page(request: Request):
 
     sorted_grouped = sorted(grouped.items(), key=lambda x: sort_key(x[0]))
 
-    # Алфавит только английский + цифры
     alphabet = ["0 - 9"] + list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     existing_keys = {k for k, v in sorted_grouped}
 

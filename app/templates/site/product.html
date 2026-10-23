@@ -282,7 +282,7 @@
     </div>
 </div>
 
-{# ================= ПОХОЖИЕ ТОВАРЫ ================= #}
+{# ================= ПОХОЖИЕ ТОВАРЫ (горизонтальный рейл) ================= #}
 {% if similar %}
 <section class="mb-6 md:mb-8">
     <div class="flex items-end justify-between mb-4 md:mb-5">
@@ -295,11 +295,21 @@
         </a>
     </div>
 
-    <div class="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {% from "_macros.html" import product_card %}
-        {% for p in similar %}
-            {{ product_card(p) }}
-        {% endfor %}
+    <div class="product-rail-wrap">
+        <button type="button" class="product-rail-btn product-rail-btn-prev"
+                data-rail-prev aria-label="Прокрутить влево">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <div class="product-rail">
+            {% from "_macros.html" import product_card %}
+            {% for p in similar %}
+                {{ product_card(p) }}
+            {% endfor %}
+        </div>
+        <button type="button" class="product-rail-btn product-rail-btn-next"
+                data-rail-next aria-label="Прокрутить вправо">
+            <i class="fas fa-chevron-right"></i>
+        </button>
     </div>
 </section>
 {% endif %}

@@ -13,6 +13,11 @@ CSRF-проверка на /admin/login и /admin/login/2fa делается в�
 а не через Depends(check_csrf): при невалидном токене рендерим форму
 с понятным сообщением, а не глобальную HTML-страницу 403.
 
+Idle timeout реализован в AdminAuthGuardMiddleware (middleware.py):
+если админ не делал запросов к /admin/* дольше SESSION_IDLE_TIMEOUT —
+сессия инвалидируется. Здесь только ставим session["last_seen"] при
+успешном логине.
+
 Тип роутеров:
     - admin_login_submit — async def, потому что await _send_telegram_code
       (httpx.AsyncClient — реальный async I/O).
@@ -32,6 +37,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.config import (
     ADMIN_PASSWORD,
+    SESSION_IDLE_TIMEOUT,
     TELEGRAM_2FA_ENABLED,
     TELEGRAM_ADMIN_ID,
     TELEGRAM_BOT_TOKEN,
@@ -54,26 +60,13 @@ router = APIRouter(prefix="/admin", tags=["admin-auth"])
 
 # ============================================================
 # Хранилище ожидающих кодов (server-side)
-# ------------------------------------------------------------
-# Клиенту в сессию кладём только opaque-token. Сам код живёт
-# здесь — иначе его можно было бы выковырять из cookie
-# (SessionMiddleware подписывает, но НЕ шифрует).
-#
-# Формат: token -> {"code": "123456", "expires": ts, "attempts": 0}
-#
-# RLock: _purge_expired может вызываться как самостоятельный хелпер
-# (без внешнего lock), так и из-под _codes_lock — нужен re-entrant.
 # ============================================================
 _pending_codes: dict[str, dict] = {}
 _codes_lock = threading.RLock()
 
 
 def _purge_expired(now: float | None = None) -> None:
-    """Убирает протухшие коды.
-
-    RLock берёт сам — безопасно вызывать из любого места,
-    в том числе из-под уже захваченного _codes_lock.
-    """
+    """Убирает протухшие коды. RLock берёт сам."""
     if now is None:
         now = time.time()
     with _codes_lock:
@@ -83,21 +76,7 @@ def _purge_expired(now: float | None = None) -> None:
 
 
 async def purge_loop(interval: int = 60) -> None:
-    """Фоново чистит протухшие коды 2FA.
-
-    Без этой задачи код, который пользователь не ввёл, висит
-    в _pending_codes до перезапуска приложения — _purge_expired()
-    вызывается только при следующем auth-действии. Каждый код
-    ~200 байт, но держать мёртвые записи всё равно некрасиво.
-
-    Запускается из lifespan в main.py только если 2FA включён
-    (иначе коды не создаются, чистить нечего). Отменяется
-    при shutdown через .cancel().
-
-    interval=60s при TTL=180s: код живёт в памяти максимум
-    на минуту дольше положенного. Точнее — не нужно, при
-    следующем логине всё равно почистится.
-    """
+    """Фоново чистит протухшие коды 2FA."""
     try:
         while True:
             await asyncio.sleep(interval)
@@ -121,10 +100,7 @@ def _new_code_entry() -> tuple[str, str]:
 
 
 def _verify_code(token: str, user_code: str) -> tuple[bool, str]:
-    """Проверяет код. Возвращает (ok, error_message).
-
-    Может удалить запись при превышении попыток или истечении TTL.
-    """
+    """Проверяет код. Возвращает (ok, error_message)."""
     if not token:
         return False, "Сессия истекла. Начните вход заново."
 
@@ -168,16 +144,35 @@ def _csrf_ok(request: Request, submitted: str) -> bool:
     return safe_str_compare(submitted, session_token)
 
 
+def _session_valid(request: Request) -> bool:
+    """True, если сессия валидна и не просрочена по idle timeout.
+
+    Проверяется в admin_login_form: если админ с истёкшей сессией
+    зайдёт на /admin/login, покажем форму логина вместо редиректа
+    на /admin/products (где middleware выкинет 404 — цикл).
+    """
+    if not request.session.get("admin"):
+        return False
+    if SESSION_IDLE_TIMEOUT <= 0:
+        return True
+    last_seen = int(request.session.get("last_seen", 0))
+    return (int(time.time()) - last_seen) <= SESSION_IDLE_TIMEOUT
+
+
+def _login_success(request: Request) -> RedirectResponse:
+    """Успешный логин: чистая сессия + admin + last_seen."""
+    request.session.clear()
+    request.session["admin"] = True
+    request.session["last_seen"] = int(time.time())
+    return RedirectResponse(url="/admin/products", status_code=303)
+
+
 # ============================================================
 # Отправка кода в Telegram
 # ============================================================
 
 async def _send_telegram_code(code: str) -> tuple[bool, str]:
-    """Отправляет код в Telegram админу. Возвращает (ok, error_text).
-
-    Таймаут 10 секунд — если Telegram не отвечает, лучше сказать
-    пользователю «не получилось», чем держать воркер.
-    """
+    """Отправляет код в Telegram админу. Возвращает (ok, error_text)."""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     text = (
         "🔐 Вход в админку Avelea\n\n"
@@ -209,8 +204,13 @@ async def _send_telegram_code(code: str) -> tuple[bool, str]:
 
 @router.get("/login", response_class=HTMLResponse)
 async def admin_login_form(request: Request):
-    if request.session.get("admin"):
+    if _session_valid(request):
         return RedirectResponse(url="/admin/products", status_code=303)
+
+    # Если admin-флаг есть, но сессия просрочена по idle timeout —
+    # чистим, чтобы middleware не выкинул 404 после редиректа.
+    if request.session.get("admin"):
+        request.session.clear()
 
     if TELEGRAM_2FA_ENABLED and request.session.get("pending_2fa_token"):
         return RedirectResponse(url="/admin/login/2fa", status_code=303)
@@ -265,10 +265,7 @@ async def admin_login_submit(
     reset(key)
 
     if not TELEGRAM_2FA_ENABLED:
-        request.session["admin"] = True
-        request.session.pop("csrf_token", None)
-        request.session.pop("pending_2fa_token", None)
-        return RedirectResponse(url="/admin/products", status_code=303)
+        return _login_success(request)
 
     code_key = f"login-code:{key}"
     if is_blocked(code_key, max_attempts=3, window=300):
@@ -305,7 +302,7 @@ async def admin_login_submit(
 
 @router.get("/login/2fa", response_class=HTMLResponse)
 async def admin_login_2fa_form(request: Request):
-    if request.session.get("admin"):
+    if _session_valid(request):
         return RedirectResponse(url="/admin/products", status_code=303)
 
     token = request.session.get("pending_2fa_token")
@@ -329,7 +326,7 @@ def admin_login_2fa_submit(
     code: str = Form(...),
     csrf_token: str = Form(""),
 ):
-    if request.session.get("admin"):
+    if _session_valid(request):
         return RedirectResponse(url="/admin/products", status_code=303)
 
     token = request.session.get("pending_2fa_token")
@@ -364,10 +361,7 @@ def admin_login_2fa_submit(
             status_code=401,
         )
 
-    request.session["admin"] = True
-    request.session.pop("pending_2fa_token", None)
-    request.session.pop("csrf_token", None)
-    return RedirectResponse(url="/admin/products", status_code=303)
+    return _login_success(request)
 
 
 # ============================================================
@@ -379,18 +373,11 @@ async def admin_logout(request: Request):
     """Выход из админки.
 
     POST, не GET — чтобы `<img src="/admin/logout">` с чужого сайта
-    не мог выкинуть админа. GET-версия была уязвима: достаточно
-    вставить картинку на любую страницу, и сессия админа рвётся.
+    не мог выкинуть админа.
 
     CSRF осознанно НЕ проверяется: выкидывание из сессии — не
     деструктивная операция (не удаляет данные, не меняет состояние
-    на сервере). CSRF-атака на logout = максимум DoS (выкинуть
-    пользователя), не компрометация. Размен «нет CSRF» <
-    «защита от <img>» — оправдан.
-
-    Побочный эффект: при POST без CSRF-токена (например, из
-    сторонней формы) пользователь тоже выйдет. Это некритично
-    и осознанно.
+    на сервере). CSRF-атака на logout = максимум DoS, не компрометация.
     """
     token = request.session.get("pending_2fa_token")
     if token:

@@ -189,7 +189,6 @@
         });
         root.addEventListener('touchcancel', () => { x0 = null; });
 
-        // --- Клавиатурная навигация ---
         if (!root.hasAttribute('tabindex')) {
             root.setAttribute('tabindex', '0');
         }
@@ -255,7 +254,7 @@
     document.body.addEventListener('htmx:afterSettle', initRails);
 
     // ============================================================
-    // МЕНЮ И ПОИСК (с делегированием для работы после HTMX)
+    // МЕНЮ И ПОИСК
     // ============================================================
     (function initHeaderInteractions() {
         function openMenu() {
@@ -278,8 +277,6 @@
             search.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
             const input = search.querySelector('input[name="q"]');
-            // Задержка совпадает с началом анимации (inner появляется
-            // через 320ms, но фокус лучше ставить пораньше — 180ms).
             if (input) setTimeout(() => input.focus(), 180);
         }
         function closeSearch() {
@@ -291,17 +288,14 @@
         }
 
         document.addEventListener('click', function (e) {
-            // Меню
             if (e.target.closest('#open-menu')) { openMenu(); return; }
             if (e.target.closest('#close-menu')) { closeMenu(); return; }
             if (e.target.closest('#menu-backdrop')) { closeMenu(); return; }
 
-            // Поиск
             if (e.target.closest('#open-search')) { openSearch(); return; }
             if (e.target.closest('#close-search')) { closeSearch(); return; }
             if (e.target.closest('[data-search-close]')) { closeSearch(); return; }
 
-            // Закрыть меню при клике по ссылке внутри него
             if (e.target.closest('#mobile-menu a')) { closeMenu(); }
         });
 
@@ -324,10 +318,9 @@
     });
 
     // ============================================================
-    // ВЫБОР ВАРИАНТА ТОВАРА — кастомный dropdown
+    // ВЫБОР ВАРИАНТА ТОВАРА
     // ============================================================
     (function initVariantPicker() {
-
         function closeAll(except) {
             document.querySelectorAll('[data-variant-picker].is-open')
                 .forEach(function (p) {
@@ -339,7 +332,6 @@
         }
 
         document.addEventListener('click', function (e) {
-            // --- Открыть/закрыть по клику на триггер ---
             var trigger = e.target.closest('[data-variant-trigger]');
             if (trigger) {
                 var picker = trigger.closest('[data-variant-picker]');
@@ -350,7 +342,6 @@
                 return;
             }
 
-            // --- Клик по опции — обновить всё ---
             var option = e.target.closest('[data-variant-option]');
             if (option) {
                 var picker = option.closest('[data-variant-picker]');
@@ -379,17 +370,73 @@
                 return;
             }
 
-            // --- Клик вне — закрыть всё ---
             if (!e.target.closest('[data-variant-picker]')) {
                 closeAll(null);
             }
         });
 
-        // Escape закрывает.
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeAll(null);
         });
-
     })();
+
+    // ============================================================
+    // SCROLL-REVEAL: анимация карточек при скролле
+    // ============================================================
+    let scrollObserver = null;
+
+    function initScrollAnimations() {
+        document.body.classList.add('scroll-anim-ready');
+
+        if (scrollObserver) {
+            scrollObserver.disconnect();
+        }
+
+        scrollObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                } else {
+                    entry.target.classList.remove('is-visible');
+                }
+            });
+        }, {
+            rootMargin: '-5% 0px -5% 0px',
+            threshold: 0,
+        });
+
+        const deadTop    = window.innerHeight * 0.05;
+        const deadBottom = window.innerHeight * 0.95;
+
+        document.querySelectorAll('.reveal-item').forEach(el => {
+            const r = el.getBoundingClientRect();
+            if (r.bottom > deadTop && r.top < deadBottom) {
+                el.classList.add('is-visible');
+            }
+            scrollObserver.observe(el);
+        });
+    }
+
+    // Экспортируем для catalog.js
+    window.refreshScrollObserver = function() {
+        if (!scrollObserver) return;
+        document.querySelectorAll('.reveal-item').forEach(el => {
+            scrollObserver.observe(el);
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initScrollAnimations);
+    } else {
+        initScrollAnimations();
+    }
+
+    let _lastUrl = window.location.href;
+    document.body.addEventListener('htmx:afterSettle', () => {
+        if (window.location.href !== _lastUrl) {
+            _lastUrl = window.location.href;
+            initScrollAnimations();
+        }
+    });
 
 })();

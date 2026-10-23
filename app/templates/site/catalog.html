@@ -3,14 +3,11 @@
 
 {% block content %}
 
-{# ================= БАННЕР КАТАЛОГА ================= #}
 <section class="relative mb-6 md:mb-8 rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
     <div class="absolute inset-0">
         {% set catalog_banner = site_image('catalog_banner_image', '') %}
         {% if catalog_banner %}
-            <img src="{{ catalog_banner }}"
-                 alt="Каталог Avelea"
-                 class="w-full h-full object-cover">
+            <img src="{{ catalog_banner }}" alt="Каталог Avelea" class="w-full h-full object-cover">
             <div class="absolute inset-0 bg-gradient-to-r from-pink-100/95 via-pink-50/90 to-fuchsia-100/70"></div>
         {% else %}
             <div class="absolute inset-0 bg-gradient-to-br from-pink-50 via-pink-100 to-fuchsia-50"></div>
@@ -40,11 +37,8 @@
 
 <form method="get" action="/catalog" id="filters-form" autocomplete="off">
 
-    {# ================= ВЕРХНЯЯ СТРОКА ================= #}
     <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-
         <div class="flex items-center gap-3 flex-wrap">
-
             <button type="button" id="filters-toggle"
                     aria-expanded="false" aria-controls="filters-panel"
                     class="inline-flex items-center gap-2 border border-pink-200 rounded-full px-4 py-1.5 text-sm font-medium text-pink-700 bg-white hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 transition">
@@ -56,10 +50,6 @@
                 </span>
                 {% endif %}
             </button>
-
-            <span class="text-sm text-pink-500">
-                {% if total_count %}{{ start_idx }}–{{ end_idx }} из {{ total_count }}{% endif %}
-            </span>
         </div>
 
         <div class="flex items-center gap-2">
@@ -75,7 +65,6 @@
         </div>
     </div>
 
-    {# ================= АКТИВНЫЕ ЧИПЫ ================= #}
     {% if active_filters %}
     <div class="flex flex-wrap gap-1.5 mb-4">
         {% for f in active_filters %}
@@ -88,17 +77,32 @@
     </div>
     {% endif %}
 
-    {# ================= СЕТКА ТОВАРОВ ================= #}
     <div id="catalog-content">
         {% if products %}
-        <div class="product-grid">
+        <div id="catalog-grid"
+             class="product-grid"
+             data-page="{{ page }}"
+             data-total-pages="{{ total_pages }}">
             {% for product in products %}
                 {{ product_card(product) }}
             {% endfor %}
         </div>
 
+        {# Sentinel: 1px маркер, за которым следит IntersectionObserver.
+           НЕ hidden — иначе observer его не увидит. #}
+        <div id="catalog-sentinel" aria-hidden="true" style="height: 1px;"></div>
+
+        <div id="catalog-loader" class="catalog-loader">
+            <div class="catalog-loader-spinner"></div>
+        </div>
+
+        <div id="catalog-end" class="catalog-end" hidden>
+            <i class="fas fa-check-circle mr-2"></i>
+            Вы посмотрели все товары
+        </div>
+
         {% if total_pages > 1 %}
-        <nav class="mt-8 flex flex-wrap items-center justify-center gap-1">
+        <nav class="catalog-pagination mt-8 flex flex-wrap items-center justify-center gap-1" data-pagination>
             {% if page > 1 %}
             <a href="{{ build_page_url(request.query_params, page - 1) }}"
                class="w-10 h-10 flex items-center justify-center rounded-full border border-pink-200 bg-white hover:bg-pink-50 text-pink-700 text-sm transition">
@@ -166,13 +170,9 @@
         {% endif %}
     </div>
 
-    {# ============================================================
-       МОДАЛ ФИЛЬТРОВ
-       ============================================================ #}
     <div id="filters-backdrop" aria-hidden="true"></div>
 
     <aside id="filters-panel" role="dialog" aria-modal="true" aria-labelledby="filters-title">
-
         <header class="filters-header">
             <h2 id="filters-title" class="text-lg md:text-xl font-semibold text-pink-900">
                 Фильтры
@@ -186,8 +186,6 @@
 
         <div class="filters-body">
             <div class="space-y-3">
-
-                {# Поиск #}
                 <div class="bg-white border border-pink-200 rounded-2xl p-4 md:p-5">
                     <label class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
                         <i class="fas fa-magnifying-glass text-pink-500 text-xs"></i>
@@ -198,7 +196,6 @@
                            class="w-full border border-pink-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400">
                 </div>
 
-                {# Категории #}
                 {% if categories %}
                 <div class="bg-white border border-pink-200 rounded-2xl p-4 md:p-5">
                     <h3 class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
@@ -219,7 +216,6 @@
                 </div>
                 {% endif %}
 
-                {# Бренды #}
                 {% if brands %}
                 <div class="bg-white border border-pink-200 rounded-2xl p-4 md:p-5">
                     <h3 class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
@@ -240,7 +236,6 @@
                 </div>
                 {% endif %}
 
-                {# Цена #}
                 <div class="bg-white border border-pink-200 rounded-2xl p-4 md:p-5">
                     <h3 class="flex items-center gap-2 text-sm font-semibold text-pink-900 mb-3">
                         <i class="fas fa-ruble-sign text-pink-500 text-xs"></i>
@@ -279,5 +274,4 @@
 
 </form>
 
-<script src="/static/js/catalog.js"></script>
 {% endblock %}

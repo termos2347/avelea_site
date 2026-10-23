@@ -20,6 +20,13 @@
             <input type="text" name="name" required maxlength="200"
                    value="{{ product.name if product else '' }}"
                    class="adm-input" placeholder="Например: Увлажняющий крем">
+            {% if product %}
+            <div class="adm-hint">
+                При изменении названия URL товара (slug) перегенерируется
+                автоматически. <strong style="color: #b45309;">Старые ссылки
+                на товар перестанут работать.</strong>
+            </div>
+            {% endif %}
         </div>
 
         {# ============ КАТЕГОРИИ ============ #}

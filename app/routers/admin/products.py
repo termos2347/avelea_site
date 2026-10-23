@@ -56,6 +56,7 @@ def _product_form_context(db: Session, product: Product | None):
         "all_brands": cache.get_brands(),
         "volume_amount": volume_amount,
         "volume_unit": volume_unit,
+        "current_slug": product.slug if product else "",
     }
 
 
@@ -162,12 +163,11 @@ def _save_variants(
     return warnings
 
 
-@router.get("", response_class=HTMLResponse)
-def admin_products(
-    request: Request,
-    db: Session = Depends(get_db),
-    _: bool = Depends(require_admin),
-):
+# ============================================================
+# Общая логика списка
+# ============================================================
+
+def _build_products_context(request: Request, db: Session) -> dict:
     params = request.query_params
     q = (params.get("q") or "").strip()
 
@@ -203,9 +203,7 @@ def admin_products(
     start_idx = (page - 1) * ADMIN_PRODUCTS_PER_PAGE + 1 if total_count else 0
     end_idx = min(page * ADMIN_PRODUCTS_PER_PAGE, total_count)
 
-    flash_error = request.session.pop("flash_error", None)
-
-    return admin_templates.TemplateResponse(request, "products.html", {
+    return {
         "products": products,
         "all_categories": cache.get_categories(),
         "all_brands": cache.get_brands(),
@@ -224,9 +222,38 @@ def admin_products(
             build_page_url(params, page + 1, "/admin/products")
             if page < total_pages else None
         ),
-        "flash_error": flash_error,
-    })
+    }
 
+
+# ============================================================
+# Список и подгрузка
+# ============================================================
+
+@router.get("", response_class=HTMLResponse)
+def admin_products(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+):
+    ctx = _build_products_context(request, db)
+    ctx["flash_error"] = request.session.pop("flash_error", None)
+    return admin_templates.TemplateResponse(request, "products.html", ctx)
+
+
+@router.get("/more", response_class=HTMLResponse)
+def admin_products_more(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+):
+    """Фрагмент для кнопки «Показать ещё»."""
+    ctx = _build_products_context(request, db)
+    return admin_templates.TemplateResponse(request, "_product_rows.html", ctx)
+
+
+# ============================================================
+# Создание
+# ============================================================
 
 @router.get("/new", response_class=HTMLResponse)
 def admin_product_new(request: Request, _: bool = Depends(require_admin)):
@@ -239,6 +266,7 @@ def admin_product_create(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
     name: str = Form(..., max_length=MAX_NAME_LEN),
+    slug: str = Form(""),
     categories: list[str] = Form([]),
     brand_id: str = Form(None),
     price: str = Form(""),
@@ -334,6 +362,10 @@ def admin_product_create(
     return RedirectResponse(url="/admin/products", status_code=303)
 
 
+# ============================================================
+# Редактирование
+# ============================================================
+
 @router.get("/{product_id}/edit", response_class=HTMLResponse)
 def admin_product_edit(
     request: Request,
@@ -362,6 +394,7 @@ def admin_product_update(
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
     name: str = Form(..., max_length=MAX_NAME_LEN),
+    slug: str = Form(""),
     categories: list[str] = Form([]),
     brand_id: str = Form(None),
     price: str = Form(""),
@@ -480,6 +513,10 @@ def admin_product_update(
 
     return RedirectResponse(url="/admin/products", status_code=303)
 
+
+# ============================================================
+# Удаление
+# ============================================================
 
 @router.post("/{product_id}/delete")
 def admin_product_delete(

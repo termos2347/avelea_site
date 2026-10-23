@@ -1,18 +1,14 @@
 /* ============================================================
-   Защита от горизонтального overflow
+   Защита от горизонтального скролла на мобильных
    ============================================================
-   Некоторые элементы (hero на главной) используют `100vw`,
-   который включает ширину скроллбара → контент шире вьюпорта
-   → страница «съезжает» вправо на мобильных.
-
-   `overflow-x: clip` — надёжнее, чем `hidden` (запрещает и
-   программный скролл тоже). `hidden` оставлен fallback'ом
-   для старых браузеров (Safari < 16).
+   `overflow-x: hidden` на body без html иногда не работает
+   в Safari/Chrome (iOS/Android) — body прокручивается,
+   контент «съезжает» вправо. Ставим и на html, и на body.
+   `max-width: 100%` — страховка от w-full + padding.
    ============================================================ */
 html,
 body {
     overflow-x: hidden;
-    overflow-x: clip;
     max-width: 100%;
 }
 
@@ -181,7 +177,7 @@ body.filters-open {
     #filters-panel {
         top: 0;
         bottom: 0;
-        width: 100vw;
+        width: 100%; /* было 100vw — может вылезать за скроллбар */
         border-radius: 0;
         transform: scale(1) translateY(24px);
     }
@@ -1014,6 +1010,96 @@ body.filters-open {
         transition: none;
     }
     .search-overlay__inner {
+        transform: none;
+    }
+}
+
+/* ============================================================
+   Каталог: infinite scroll
+   ============================================================ */
+
+/* Контейнер под спиннер. Всегда в DOM (не hidden) — чтобы
+   IntersectionObserver мог за ним следить. Спиннер внутри
+   скрыт, пока не добавлен класс is-loading. */
+.catalog-loader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1.5rem 1rem;
+    min-height: 1px;
+}
+
+.catalog-loader-spinner {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    border: 3px solid var(--line);
+    border-top-color: var(--ink);
+    animation: catalog-spin 700ms linear infinite;
+    opacity: 0;
+    transition: opacity 160ms ease;
+}
+
+.catalog-loader.is-loading .catalog-loader-spinner {
+    opacity: 1;
+}
+
+@keyframes catalog-spin {
+    to { transform: rotate(360deg); }
+}
+
+.catalog-end {
+    text-align: center;
+    padding: 2rem 1rem 1rem;
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+.catalog-end i {
+    color: var(--ink-muted);
+    opacity: 0.6;
+}
+
+.catalog-item-new {
+    animation: catalog-item-appear 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes catalog-item-appear {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .catalog-loader-spinner { animation-duration: 1.4s; }
+    .catalog-item-new { animation: none; }
+}
+
+/* ============================================================
+   Scroll-reveal: плавное появление/затухание карточек при скролле
+   ============================================================ */
+body.scroll-anim-enabled .reveal-item {
+    transition: opacity 450ms ease-out,
+                transform 450ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+body.scroll-anim-enabled .reveal-item:not(.is-visible) {
+    opacity: 0;
+    transform: translateY(24px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.scroll-anim-enabled .reveal-item {
+        transition: none;
+    }
+    body.scroll-anim-enabled .reveal-item:not(.is-visible) {
+        opacity: 1;
         transform: none;
     }
 }

@@ -63,7 +63,7 @@
                     <th style="width: 7rem; text-align: right;">Действия</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="adm-products-tbody">
                 {% for p in products %}
                 <tr class="row-item" data-name="{{ p.name|lower }}" data-id="{{ p.id }}">
                     <td class="adm-col-id adm-table-id">{{ p.id }}</td>
@@ -120,8 +120,7 @@
                               hx-boost="false"
                               style="display: inline;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                            <button type="submit"
-                                    class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
+                            <button type="submit" class="adm-btn adm-btn-ghost adm-btn-danger" title="Удалить">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
@@ -135,14 +134,12 @@
 
 {# ================= РЕЖИМ «КАРТОЧКИ» ================= #}
 <div class="adm-products-view" data-view="cards">
-    <div class="adm-product-grid">
+    <div class="adm-product-grid" id="adm-products-grid">
         {% for p in products %}
         <div class="adm-product-card row-item {% if not p.is_active %}is-hidden-card{% endif %}"
              data-name="{{ p.name|lower }}"
              data-id="{{ p.id }}">
-
             <div class="adm-product-thumb">
-
                 {% if p.image_url %}
                     {% if is_video(p.image) %}
                         <video src="{{ p.image_url }}" muted playsinline></video>
@@ -152,17 +149,14 @@
                 {% else %}
                     {{ p.name[:2].upper() }}
                 {% endif %}
-
                 {% if p.popular %}
                 <span class="adm-product-badge">популярное</span>
                 {% endif %}
-
                 {% if not p.is_active %}
                 <span class="adm-hidden-flag" title="Товар скрыт от клиентов">
                     <i class="fas fa-eye-slash"></i>
                 </span>
                 {% endif %}
-
                 <div class="adm-product-actions">
                     <a href="/admin/products/{{ p.id }}/edit"
                        hx-get="/admin/products/{{ p.id }}/edit"
@@ -195,7 +189,6 @@
                     </form>
                 </div>
             </div>
-
             <div class="adm-product-body">
                 <h3 class="adm-product-name">{{ p.name }}</h3>
                 <div class="adm-product-cats">
@@ -213,30 +206,16 @@
     </div>
 </div>
 
-{% if total_pages > 1 %}
-<nav class="adm-pagination">
-    {% if prev_url %}
-    <a href="{{ prev_url }}"><i class="fas fa-chevron-left" style="font-size: 0.7rem;"></i></a>
-    {% else %}
-    <span class="is-disabled"><i class="fas fa-chevron-left" style="font-size: 0.7rem;"></i></span>
-    {% endif %}
-
-    {% for it in page_items %}
-        {% if it.ellipsis %}
-        <span class="is-ellipsis">…</span>
-        {% elif it.current %}
-        <span class="is-current">{{ it.num }}</span>
-        {% else %}
-        <a href="{{ it.url }}">{{ it.num }}</a>
-        {% endif %}
-    {% endfor %}
-
-    {% if next_url %}
-    <a href="{{ next_url }}"><i class="fas fa-chevron-right" style="font-size: 0.7rem;"></i></a>
-    {% else %}
-    <span class="is-disabled"><i class="fas fa-chevron-right" style="font-size: 0.7rem;"></i></span>
-    {% endif %}
-</nav>
+{# ================= КНОПКА «ПОКАЗАТЬ ЕЩЁ» ================= #}
+{% if page < total_pages %}
+<div id="adm-load-more-container" class="adm-load-more-wrap">
+    <button type="button" id="adm-load-more-btn" class="adm-load-more-btn"
+            data-page="{{ page }}" data-total-pages="{{ total_pages }}"
+            data-q="{{ q }}">
+        <span class="adm-load-more-text">Показать ещё</span>
+        <i class="fas fa-spinner fa-spin adm-load-more-spinner" style="display:none;"></i>
+    </button>
+</div>
 {% endif %}
 
 {% else %}

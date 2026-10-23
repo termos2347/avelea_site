@@ -161,28 +161,44 @@ class Setting(Base):
     value = Column(String(200), nullable=True)
 
 
+def _slug_from_name(name: str) -> str:
+    from slugify import slugify
+
+    return slugify(
+        name or "",
+        max_length=200,
+        word_boundary=True,
+        replacements=[
+            ("я", "ya"),
+            ("Я", "Ya"),
+        ],
+    ) or "product"
+
 @event.listens_for(Product, "before_insert")
 @event.listens_for(Product, "before_update")
 def _sync_product_name_lower(mapper, connection, target):  # noqa: ARG001
     target.name_lower = (target.name or "").strip().lower()
 
 
-def _make_unique_slug(connection, name: str) -> str:
-    base = slugify(name, max_length=200, word_boundary=True) or "product"
-    candidate = base
-    n = 1
-    while True:
-        row = connection.execute(
-            sa_text("SELECT 1 FROM products WHERE slug = :s LIMIT 1"),
-            {"s": candidate},
-        ).first()
-        if row is None:
-            return candidate
-        n += 1
-        candidate = f"{base}-{n}"
-
-
 @event.listens_for(Product, "before_insert")
 def _generate_slug_on_insert(mapper, connection, target):  # noqa: ARG001
     if not target.slug:
-        target.slug = _make_unique_slug(connection, target.name or "")
+        target.slug = _slug_from_name(target.name)
+
+
+@event.listens_for(Product, "before_update")
+def _regenerate_slug_on_rename(mapper, connection, target):  # noqa: ARG001
+    """При изменении name — перегенерировать slug.
+
+    Если новый slug совпадает с чужим — IntegrityError при commit,
+    router покажет flash_error «товар с таким названием уже существует».
+
+    Если name не менялось — slug не трогаем (правим описание, цену,
+    картинки — slug остаётся прежним).
+    """
+    from sqlalchemy.orm.attributes import get_history
+
+    if not get_history(target, "name").has_changes():
+        return
+
+    target.slug = _slug_from_name(target.name)

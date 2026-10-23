@@ -1996,3 +1996,97 @@ body[data-products-view="cards"] .adm-products-view[data-view="cards"] { display
 }
 .site-toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 .site-toast.is-error { background: var(--adm-danger); }
+
+/* ============================================================
+   Кнопка «Показать ещё» в списке товаров
+   ============================================================ */
+.adm-load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 2rem 0 1rem;
+}
+
+.adm-load-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 2rem;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: 9999px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--adm-text);
+    cursor: pointer;
+    transition: all 160ms ease;
+    min-width: 12rem;
+}
+
+.adm-load-more-btn:hover {
+    background: var(--adm-border-soft);
+    border-color: var(--adm-muted-soft);
+}
+
+.adm-load-more-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+/* Скрываем кнопку, если сработал клиентский поиск (фильтр строк)
+   и видимых элементов меньше, чем загружено. */
+body.has-active-search .adm-load-more-wrap {
+    display: none;
+}
+
+/* ============================================================
+   Анимация появления строк/карточек после «Показать ещё»
+   ============================================================ */
+.adm-load-more-new {
+    animation: adm-load-more-appear 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes adm-load-more-appear {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Уважаем настройки ОС: если анимации отключены — просто появляются */
+@media (prefers-reduced-motion: reduce) {
+    .adm-load-more-new {
+        animation: none;
+    }
+}
+
+/* ============================================================
+   Scroll-reveal: плавное появление/затухание товаров при скролле
+   ============================================================ */
+body.scroll-anim-enabled .row-item,
+body.scroll-anim-enabled .adm-product-card {
+    transition: opacity 400ms ease-out,
+                transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.scroll-anim-enabled .row-item:not(.is-visible),
+body.scroll-anim-enabled .adm-product-card:not(.is-visible) {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.scroll-anim-enabled .row-item,
+    body.scroll-anim-enabled .adm-product-card {
+        transition: none;
+    }
+    body.scroll-anim-enabled .row-item:not(.is-visible),
+    body.scroll-anim-enabled .adm-product-card:not(.is-visible) {
+        opacity: 1;
+        transform: none;
+    }
+}

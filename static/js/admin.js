@@ -5,6 +5,68 @@
 
     let hideTimer = null;
 
+    // ============================================================
+    // SCROLL-REVEAL: товары плавно появляются/затухают при скролле
+    // ============================================================
+    let scrollObserver = null;
+
+    function initScrollAnimations() {
+        document.body.classList.add('scroll-anim-ready');
+
+        if (scrollObserver) {
+            scrollObserver.disconnect();
+        }
+
+        scrollObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                } else {
+                    entry.target.classList.remove('is-visible');
+                }
+            });
+        }, {
+            // «Мёртвые зоны» 10% сверху и снизу: элементы появляются/
+            // затухают чуть раньше, чем касаются края экрана.
+            rootMargin: '-10% 0px -10% 0px',
+            threshold: 0,
+        });
+
+        const deadTop    = window.innerHeight * 0.1;
+        const deadBottom = window.innerHeight * 0.9;
+
+        document.querySelectorAll('.row-item, .adm-product-card').forEach(el => {
+            const r = el.getBoundingClientRect();
+            if (r.bottom > deadTop && r.top < deadBottom) {
+                el.classList.add('is-visible');
+            }
+            scrollObserver.observe(el);
+        });
+    }
+
+    function refreshScrollObserver() {
+        if (!scrollObserver) return;
+        document.querySelectorAll('.row-item, .adm-product-card').forEach(el => {
+            scrollObserver.observe(el);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initScrollAnimations);
+    } else {
+        initScrollAnimations();
+    }
+
+    // Переинициализируем при навигации (htmx). Отслеживаем смену URL,
+    // чтобы не сбрасывать анимацию при открытии модалок.
+    let _lastUrl = window.location.href;
+    document.body.addEventListener('htmx:afterSettle', () => {
+        if (window.location.href !== _lastUrl) {
+            _lastUrl = window.location.href;
+            initScrollAnimations();
+        }
+    });
+
     // ===== HTMX: прогресс-бар =====
     document.body.addEventListener('htmx:beforeRequest', () => {
         const bar = document.getElementById('htmx-progress');
@@ -833,10 +895,6 @@
 
     // ============================================================
     // SITE CONTENT (перенос из site_content.html <script>)
-    // Работает только на странице /admin/site — проверка наличия
-    // .site-page. При htmx-переходе на эту страницу admin.js уже
-    // выполнен, поэтому init() вызывается на htmx:afterSettle.
-    // data-ready на .site-page защищает от повторной инициализации.
     // ============================================================
     (function initSiteContent() {
         function init() {
@@ -867,7 +925,6 @@
                 return el ? el.value : '';
             }
 
-            // ----- UNSAVED STATE -----
             function isDirty(root) {
                 var input = root.querySelector('[data-text-input]');
                 if (!input) return false;
@@ -910,7 +967,6 @@
                 updateDirtyState(root);
             });
 
-            // ----- Предупреждение при уходе -----
             function warnIfDirty() {
                 var n = getDirtyCount();
                 if (n === 0) return true;
@@ -932,7 +988,6 @@
                 }
             });
 
-            // ----- Аккордеон -----
             var STORAGE_PREFIX = 'site_page_open_';
 
             document.querySelectorAll('.site-page').forEach(function (details) {
@@ -967,7 +1022,6 @@
             if (expandBtn) expandBtn.addEventListener('click', function () { setAll(true); });
             if (collapseBtn) collapseBtn.addEventListener('click', function () { setAll(false); });
 
-            // ----- КАРТИНКИ -----
             function renderMeta(root, info) {
                 var meta = root.querySelector('[data-meta]');
                 if (!meta) return;
@@ -1138,7 +1192,6 @@
                 }
             });
 
-            // ----- ТЕКСТЫ -----
             document.querySelectorAll('[data-site-text]').forEach(function (root) {
                 var input = root.querySelector('[data-text-input]');
                 var saveBtn = root.querySelector('[data-save-text]');
@@ -1199,6 +1252,80 @@
         }
 
         document.body.addEventListener('htmx:afterSettle', init);
+    })();
+
+    // ============================================================
+    // КНОПКА «ПОКАЗАТЬ ЕЩЁ»
+    // ============================================================
+    (function initLoadMore() {
+        const btn = document.getElementById('adm-load-more-btn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async function () {
+            const tbody = document.getElementById('adm-products-tbody');
+            const grid  = document.getElementById('adm-products-grid');
+            const container = document.getElementById('adm-load-more-container');
+
+            const textSpan = btn.querySelector('.adm-load-more-text');
+            const spinner  = btn.querySelector('.adm-load-more-spinner');
+
+            let page = parseInt(btn.dataset.page, 10);
+            const totalPages = parseInt(btn.dataset.totalPages, 10);
+            const q = btn.dataset.q || '';
+
+            if (page >= totalPages) return;
+
+            btn.disabled = true;
+            textSpan.style.display = 'none';
+            spinner.style.display = 'inline-block';
+
+            try {
+                const params = new URLSearchParams();
+                params.set('page', String(page + 1));
+                if (q) params.set('q', q);
+
+                const resp = await fetch('/admin/products/more?' + params.toString(), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+                const html = await resp.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                const tableTpl = doc.querySelector('template[data-table-rows]');
+                if (tableTpl && tbody) {
+                    tbody.appendChild(tableTpl.content.cloneNode(true));
+                }
+
+                const cardTpl = doc.querySelector('template[data-card-items]');
+                if (cardTpl && grid) {
+                    grid.appendChild(cardTpl.content.cloneNode(true));
+                }
+
+                // Регистрируем новые элементы в scroll observer
+                refreshScrollObserver();
+
+                const meta = doc.querySelector('[data-infinite-meta]');
+                if (meta) {
+                    page = parseInt(meta.dataset.page, 10);
+                    const hasNext = meta.dataset.hasNext === '1';
+                    btn.dataset.page = page;
+
+                    if (!hasNext && container) {
+                        container.style.transition = 'opacity 200ms ease';
+                        container.style.opacity = '0';
+                        setTimeout(() => { container.style.display = 'none'; }, 200);
+                    }
+                }
+            } catch (e) {
+                console.error('Load more error:', e);
+                alert('Не удалось загрузить ещё товары.');
+            } finally {
+                btn.disabled = false;
+                textSpan.style.display = 'inline-block';
+                spinner.style.display = 'none';
+            }
+        });
     })();
 
 })();

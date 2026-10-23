@@ -22,6 +22,10 @@
 </head>
 <body style="background: var(--adm-bg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;" hx-boost="true">
 
+    {# Подключаем скрипт для анимации ДО того, как отрисуются товары.
+       Это предотвращает вспышку видимых элементов. #}
+    <script src="/static/js/scroll-init.js"></script>
+
     <div id="htmx-progress"></div>
 
     {% set path = request.url.path %}

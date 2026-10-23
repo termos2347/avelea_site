@@ -1,13 +1,14 @@
 """HTTP-мидлвари приложения."""
+import time
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.core.config import SESSION_HTTPS_ONLY
+from app.core.config import SESSION_HTTPS_ONLY, SESSION_IDLE_TIMEOUT
 
 
 # CSP разрешает только нужные CDN.
 # script-src: без 'unsafe-inline' — все скрипты вынесены в /static/js/.
-#             Это закрывает XSS через inline-инъекции в HTML.
 # style-src:  'unsafe-inline' вынужденно — Tailwind JIT вставляет
 #             inline-стили динамически. При vendoring Tailwind — убрать.
 _CSP = (
@@ -132,7 +133,15 @@ class StaticCacheMiddleware(BaseHTTPMiddleware):
 
 
 class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
-    """Единая защита /admin/*."""
+    """Единая защита /admin/*.
+
+    Помимо проверки session["admin"], реализует idle timeout:
+    если админ не делал ни одного запроса к /admin/* дольше
+    SESSION_IDLE_TIMEOUT секунд — сессия инвалидируется.
+
+    /admin/login и /admin/login/2fa пропускаются без проверки —
+    иначе после истечения idle нельзя было бы залогиниться заново.
+    """
 
     _NOT_FOUND_HTML = (
         "<!DOCTYPE html>"
@@ -164,15 +173,27 @@ class AdminAuthGuardMiddleware(BaseHTTPMiddleware):
             return self._add_noindex(response)
 
         if not request.session.get("admin"):
-            from starlette.responses import HTMLResponse
-            response = HTMLResponse(
-                content=self._NOT_FOUND_HTML,
-                status_code=404,
-            )
-            return self._add_noindex(response)
+            return self._add_noindex(self._render_404())
+
+        # Idle timeout: проверяем, сколько прошло с последнего действия.
+        # SESSION_IDLE_TIMEOUT <= 0 — отключено.
+        if SESSION_IDLE_TIMEOUT > 0:
+            now = int(time.time())
+            last_seen = int(request.session.get("last_seen", now))
+            if now - last_seen > SESSION_IDLE_TIMEOUT:
+                request.session.clear()
+                return self._add_noindex(self._render_404())
+            request.session["last_seen"] = now
 
         response = await call_next(request)
         return self._add_noindex(response)
+
+    def _render_404(self):
+        from starlette.responses import HTMLResponse
+        return HTMLResponse(
+            content=self._NOT_FOUND_HTML,
+            status_code=404,
+        )
 
     @staticmethod
     def _add_noindex(response):
