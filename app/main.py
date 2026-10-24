@@ -243,6 +243,10 @@ async def robots_txt(request: Request):
 def sitemap_xml(request: Request):
     base = str(request.base_url).rstrip("/")
 
+    cached = cache.get_sitemap(base)
+    if cached is not None:
+        return Response(content=cached, media_type="application/xml")
+
     urls = [
         f"{base}/",
         f"{base}/catalog",
@@ -260,6 +264,7 @@ def sitemap_xml(request: Request):
         body += f"  <url><loc>{escape(u)}</loc></url>\n"
     body += "</urlset>\n"
 
+    cache.set_sitemap(base, body)
     return Response(content=body, media_type="application/xml")
 
 _ERROR_PAGES: dict[int, dict] = {

@@ -1399,4 +1399,40 @@
         document.querySelectorAll('input[data-brand-name]').forEach(validate);
     })();
 
+    // ============================================================
+    // ЛЕНИВОЕ ВОСПРОИЗВЕДЕНИЕ ВИДЕО В СПИСКАХ
+    // ============================================================
+    // В списке товаров может быть 20+ <video>. autoplay в HTML
+    // запустил бы все сразу — лишний CPU и трафик. Вместо этого
+    // play()/pause() вешает IntersectionObserver.
+    (function initLazyVideos() {
+        if (!('IntersectionObserver' in window)) return;
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                const v = entry.target;
+                if (entry.isIntersecting) {
+                    v.play().catch(() => { /* браузер может блокировать */ });
+                } else {
+                    v.pause();
+                }
+            });
+        }, { rootMargin: '200px 0px' });
+
+        function scan() {
+            document.querySelectorAll('video:not([data-video-observed])').forEach((v) => {
+                v.setAttribute('data-video-observed', '1');
+                observer.observe(v);
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', scan);
+        } else {
+            scan();
+        }
+
+        document.body.addEventListener('htmx:afterSettle', scan);
+    })();
+
 })();

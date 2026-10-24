@@ -10,10 +10,15 @@ def test_catalog(client):
     assert "Каталог" in r.text
 
 
-def test_catalog_search(client):
+def test_catalog_search_query_is_echoed(client):
+    """Значение q попадает в поле поиска (без него нельзя
+    отредактировать запрос). Это — минимальное свойство UI;
+    фактическую фильтрацию проверяет
+    test_catalog_search_cyrillic_case_insensitive.
+    """
     r = client.get("/catalog?q=крем")
     assert r.status_code == 200
-    assert "крем" in r.text.lower()
+    assert 'value="крем"' in r.text
 
 
 def test_catalog_search_cyrillic_case_insensitive(client):

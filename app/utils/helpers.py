@@ -15,12 +15,17 @@ from app.data.models import Brand, Category
 # ============================================================
 
 def is_ajax(request) -> bool:
-    """True, если запрос инициирован XHR/HTMX — клиент ждёт JSON.
+    """True, если клиент ждёт JSON, а не HTML.
 
-    Используется в exception handlers (main.py), middleware.py и
-    admin/site_content.py, чтобы решить, отдавать JSON или HTML.
+    HTMX ставит HX-Request: true. Ручные fetch/XHR в admin.js ставят
+    X-Requested-With: XMLHttpRequest (совместимость со старым кодом).
+    Учитываем оба — иначе HTMX-запрос при ошибке получит HTML-страницу
+    ошибки вместо JSON, и фронт не сможет показать сообщение.
     """
-    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+    return (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or request.headers.get("hx-request") == "true"
+    )
 
 
 # ============================================================

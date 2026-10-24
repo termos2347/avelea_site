@@ -86,6 +86,10 @@ async def require_admin(request: Request) -> bool:
 
 _lock = Lock()
 _attempts: dict[str, deque[float]] = defaultdict(deque)
+# Окно (сек) для каждого ключа — чтобы периодическая чистка
+# не срезала запись раньше времени, если ключ регистрировался
+# с нестандартным window.
+_windows: dict[str, int] = {}
 
 # Верхняя граница ключей. Защита от memory-DoS: атакующий с 1M
 # уникальных XFF иначе раздует dict на сотни MB.
@@ -121,12 +125,13 @@ def is_blocked(
         return len(q) >= max_attempts
 
 
-def register_failure(key: str) -> None:
+def register_failure(key: str, window: int = DEFAULT_WINDOW) -> None:
     """Отмечает одну неудачную попытку.
 
     Не даёт dict расти безгранично: при достижении лимита ключей
     новые не отслеживаются (fail-open, чтобы не жечь RAM).
-    Периодически чистит пустые deque (раз в минуту).
+    Периодически чистит пустые deque (раз в минуту), с учётом
+    окна каждого ключа.
     """
     global _last_purge
     now = time.monotonic()
@@ -134,20 +139,24 @@ def register_failure(key: str) -> None:
         if key not in _attempts and len(_attempts) >= _MAX_TRACKED_KEYS:
             return
         _attempts[key].append(now)
+        _windows[key] = window
 
         if now - _last_purge > 60:
             _last_purge = now
             for k in list(_attempts.keys()):
                 q = _attempts[k]
-                _prune(q, now, DEFAULT_WINDOW)
+                w = _windows.get(k, DEFAULT_WINDOW)
+                _prune(q, now, w)
                 if not q:
                     del _attempts[k]
+                    _windows.pop(k, None)
 
 
 def reset(key: str) -> None:
     """Сбрасывает счётчик после успешного входа."""
     with _lock:
         _attempts.pop(key, None)
+        _windows.pop(key, None)
 
 
 def reset_all() -> None:
@@ -155,6 +164,7 @@ def reset_all() -> None:
     global _last_purge
     with _lock:
         _attempts.clear()
+        _windows.clear()
         _last_purge = 0.0
 
 

@@ -658,6 +658,20 @@ def test_ajax_csrf_error_returns_json(admin_client):
     assert "Сессия" in data["error"]
 
 
+def test_ajax_hx_request_csrf_error_returns_json(admin_client):
+    """HTMX шлёт HX-Request: true, а не X-Requested-With.
+    is_ajax должен учитывать оба."""
+    r = admin_client.post(
+        "/admin/products/new",
+        data={"name": "x", "price": "1", "csrf_token": "подделка"},
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
+    data = r.json()
+    assert data["ok"] is False
+
+
 def test_non_ajax_csrf_error_returns_html(admin_client):
     r = admin_client.post(
         "/admin/products/new",
@@ -1231,7 +1245,7 @@ def test_2fa_purge_removes_expired_only():
 
     assert "alive" in auth_mod._pending_codes
     assert "dead" not in auth_mod._pending_codes
-    
+
 # ============== Бренды: только латиница ==============
 
 def test_admin_brands_reject_cyrillic(admin_client):
@@ -1477,17 +1491,39 @@ def test_rate_limit_is_blocked_does_not_grow_dict():
     assert len(security._attempts) == 0
 
 
+def test_rate_limit_windows_tracked_per_key():
+    """Периодическая чистка не должна срезать запись раньше её
+    собственного window. Раньше _windows не было — чистка шла
+    всегда по DEFAULT_WINDOW."""
+    from app.core import security
+    security.reset_all()
+
+    security.register_failure("long-window-key", window=3600)
+    security.register_failure("short-window-key", window=60)
+
+    assert security._windows["long-window-key"] == 3600
+    assert security._windows["short-window-key"] == 60
+
+    # reset_all() чистит и _windows тоже.
+    security.reset_all()
+    assert security._windows == {}
+
+
 # ============== Видео в админке ==============
 
-def test_admin_video_preview_has_autoplay(admin_client):
+def test_admin_video_preview_is_lazy(admin_client):
+    """Видео в админке: preload="metadata", autoplay управляется JS.
+
+    autoplay в HTML при 20 товарах запустил бы 20 видео одновременно.
+    Теперь play()/pause() вешает IntersectionObserver в admin.js.
+    """
     import re
 
-    # Товар с фейковым mp4, чтобы на странице появился <video>.
     fake_mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2" + b"\x00" * 1000
 
     r = admin_client.get("/admin/products")
     token = extract_csrf(r.text)
-    data = _payload(name="Video Autoplay Test", price="100")
+    data = _payload(name="Video Lazy Test", price="100")
     data["csrf_token"] = token
     admin_client.post(
         "/admin/products/new",
@@ -1500,10 +1536,16 @@ def test_admin_video_preview_has_autoplay(admin_client):
     videos = re.findall(r"<video[^>]*>", r.text)
     assert videos, "нет <video> на странице товаров после загрузки видео"
     for v in videos:
-        assert "autoplay" in v, f"у <video> нет autoplay: {v}"
+        assert "autoplay" not in v, (
+            f"autoplay в admin не должен быть — грузит все видео разом: {v}"
+        )
+        assert 'preload="metadata"' in v, (
+            f"у <video> нет preload=\"metadata\": {v}"
+        )
         assert "muted" in v, f"у <video> нет muted: {v}"
         assert "loop" in v, f"у <video> нет loop: {v}"
-        
+
+
 # ============== Регрессии: HTMX на логине/логауте ==============
 
 def test_login_form_has_hx_boost_false(client):
@@ -1692,7 +1734,7 @@ def test_cleanup_orphans_removes_real_orphans(monkeypatch):
     result = st.cleanup_orphans(min_age_minutes=0, dry_run=False)
     assert test_file in result["site"]
     assert not (st._site_backend.folder / test_file).exists()
-    
+
 # ============== Транслитерация «ю» и «ё» в slug ==============
 
 def test_slug_transliterates_yu_and_yo():

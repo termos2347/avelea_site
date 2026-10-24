@@ -23,9 +23,20 @@ _state = {
     "settings": None,     # dict[str, str] — все ключи Setting
 }
 
+# Кэш sitemap.xml по base_url. Сбрасывается в invalidate() вместе с
+# остальным кэшем. Ключ — base_url, чтобы http://localhost:8000
+# и https://avelea.ru не смешивались.
+_sitemap_cache: dict[str, str] = {}
+
 
 def reload_all() -> None:
-    """Полностью перечитывает кэш из БД."""
+    """Полностью перечитывает кэш из БД.
+
+    ВАЖНО: DB-запросы выполняются ВНЕ _lock. Под локом — только
+    присваивание готовых данных. Иначе на холодном кэше
+    (после рестарта или invalidate) все читатели ждут, пока
+    SQLAlchemy сходит в БД.
+    """
     db = SessionLocal()
     try:
         products = db.query(Product).order_by(Product.id.asc()).all()
@@ -40,6 +51,7 @@ def reload_all() -> None:
         _state["categories"] = categories
         _state["brands"] = brands
         _state["settings"] = settings
+        _sitemap_cache.clear()
 
 
 def invalidate() -> None:
@@ -49,12 +61,20 @@ def invalidate() -> None:
         _state["categories"] = None
         _state["brands"] = None
         _state["settings"] = None
+        _sitemap_cache.clear()
 
 
 def _ensure_loaded() -> None:
+    """Double-checked locking: проверяем под локом, грузим — снаружи.
+
+    Два потока, одновременно промахнувшихся мимо кэша, оба вызовут
+    reload_all() — это idempotent, просто немного лишней работы.
+    Никаких блокировок читателей на время DB-запроса.
+    """
     with _lock:
-        if _state["products"] is None:
-            reload_all()
+        if _state["products"] is not None:
+            return
+    reload_all()
 
 
 def get_products() -> list[Product]:
@@ -81,3 +101,15 @@ def get_settings() -> dict[str, str]:
     """Копия dict'а настроек. None-значения заменены на пустые строки."""
     _ensure_loaded()
     return {k: (v or "") for k, v in _state["settings"].items()}
+
+
+def get_sitemap(base_url: str) -> str | None:
+    """Закэшированный sitemap.xml для данного base_url, если есть."""
+    _ensure_loaded()
+    with _lock:
+        return _sitemap_cache.get(base_url)
+
+
+def set_sitemap(base_url: str, xml: str) -> None:
+    with _lock:
+        _sitemap_cache[base_url] = xml

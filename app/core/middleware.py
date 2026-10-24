@@ -30,7 +30,13 @@ _CSP = (
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Отклоняет запросы, у которых Content-Length больше лимита."""
+    """Отклоняет запросы, у которых Content-Length больше лимита.
+
+    Также отклоняет chunked-upload без Content-Length на POST/PUT/PATCH:
+    иначе проверка обходится (Transfer-Encoding: chunked не несёт
+    длины). Формы браузера всегда шлют Content-Length — на реальный
+    UX это не влияет.
+    """
 
     def __init__(self, app, max_bytes: int):
         super().__init__(app)
@@ -41,6 +47,15 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
             cl = request.headers.get("content-length")
             if cl and cl.isdigit() and int(cl) > self.max_bytes:
                 return self._render_413(request)
+
+            # Chunked-upload без Content-Length: посчитать размер
+            # до чтения тела нельзя. Отклоняем — иначе лимит
+            # обходится тривиально.
+            if not cl:
+                te = request.headers.get("transfer-encoding", "").lower()
+                if "chunked" in te:
+                    return self._render_413(request)
+
         return await call_next(request)
 
     def _render_413(self, request):

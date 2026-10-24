@@ -288,7 +288,7 @@ async def admin_login_submit(
             },
             status_code=429,
         )
-    register_failure(code_key)
+    register_failure(code_key, window=300)
 
     token, code = _new_code_entry()
     request.session["pending_2fa_token"] = token
