@@ -11,6 +11,19 @@ from app.data.models import Brand, Category
 
 
 # ============================================================
+# HTTP helpers
+# ============================================================
+
+def is_ajax(request) -> bool:
+    """True, если запрос инициирован XHR/HTMX — клиент ждёт JSON.
+
+    Используется в exception handlers (main.py), middleware.py и
+    admin/site_content.py, чтобы решить, отдавать JSON или HTML.
+    """
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+# ============================================================
 # URL-билдеры для каталога и пагинации
 # ============================================================
 

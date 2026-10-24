@@ -212,7 +212,15 @@ async def admin_login_form(request: Request):
     if request.session.get("admin"):
         request.session.clear()
 
-    if TELEGRAM_2FA_ENABLED and request.session.get("pending_2fa_token"):
+    pending = request.session.get("pending_2fa_token")
+    if pending and not _has_pending(pending):
+        # Код истёк или вычищен purge_loop'ом — забываем токен,
+        # чтобы не крутить пользователя по циклу
+        # /admin/login → /admin/login/2fa → «код истёк» → /admin/login.
+        request.session.pop("pending_2fa_token", None)
+        pending = None
+
+    if TELEGRAM_2FA_ENABLED and pending:
         return RedirectResponse(url="/admin/login/2fa", status_code=303)
 
     return admin_templates.TemplateResponse(request, "login.html", {
@@ -267,8 +275,11 @@ async def admin_login_submit(
     if not TELEGRAM_2FA_ENABLED:
         return _login_success(request)
 
+    # Отдельный лимит на отправку 2FA-кодов (пароль уже верный).
+    # 5 запросов за 5 минут: 3 слишком мало, если админ
+    # перенастраивает магазин и перезаходит подряд.
     code_key = f"login-code:{key}"
-    if is_blocked(code_key, max_attempts=3, window=300):
+    if is_blocked(code_key, max_attempts=5, window=300):
         return admin_templates.TemplateResponse(
             request, "login.html",
             {
@@ -306,7 +317,9 @@ async def admin_login_2fa_form(request: Request):
         return RedirectResponse(url="/admin/products", status_code=303)
 
     token = request.session.get("pending_2fa_token")
-    if not token:
+    if not token or not _has_pending(token):
+        if token:
+            request.session.pop("pending_2fa_token", None)
         return RedirectResponse(url="/admin/login", status_code=303)
 
     return admin_templates.TemplateResponse(request, "login.html", {
@@ -360,6 +373,11 @@ def admin_login_2fa_submit(
             },
             status_code=401,
         )
+
+    # Успех — сбрасываем счётчик запросов кода. Без этого
+    # 5 успешных входов за 5 минут залипали бы в 429 на 6-й
+    # (register_failure вызывается до отправки, а reset — нет).
+    reset(f"login-code:{client_key(request)}")
 
     return _login_success(request)
 

@@ -1,7 +1,6 @@
-from slugify import slugify
 from sqlalchemy import (
     Column, Integer, String, Boolean, Text, Table, ForeignKey, DateTime,
-    Index, event, func, text as sa_text,
+    Index, event, func,
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -162,6 +161,25 @@ class Setting(Base):
 
 
 def _slug_from_name(name: str) -> str:
+    """Слаг из названия с человеческой транслитерацией.
+
+    python-slugify → unidecode транслитерирует кириллицу не всегда
+    очевидно:
+        «я» → «ia»    («Старое имя» → «staroe-imia»)
+        «ю» → «iu»    («Юла»        → «iula»)
+        «ё» → «e»     («Ёлка»       → «elka»)
+
+    Все три варианта технически валидны, но URL читается не по-русски.
+    Переопределяем их явно через replacements (срабатывают ДО unidecode,
+    так что «Ёлка» → «Yoлка» → unidecode → «Yolka» → lower → «yolka»).
+
+    Замечание про «й»: unidecode даёт «i» («Йод» → «iod»). Фонетически
+    тоже неверно, но:
+      - «й» в названиях товаров встречается редко;
+      - отличие «й» от латинской «i» постфактум невозможно —
+        уже существующие slug'и с «i» могут быть и от «й», и от «i»;
+    Поэтому «й» не трогаем — оставляем поведение unidecode как есть.
+    """
     from slugify import slugify
 
     return slugify(
@@ -169,10 +187,12 @@ def _slug_from_name(name: str) -> str:
         max_length=200,
         word_boundary=True,
         replacements=[
-            ("я", "ya"),
-            ("Я", "Ya"),
+            ("я", "ya"), ("Я", "Ya"),
+            ("ю", "yu"), ("Ю", "Yu"),
+            ("ё", "yo"), ("Ё", "Yo"),
         ],
     ) or "product"
+
 
 @event.listens_for(Product, "before_insert")
 @event.listens_for(Product, "before_update")

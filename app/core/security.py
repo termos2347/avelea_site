@@ -34,10 +34,12 @@ def safe_str_compare(a: str, b: str) -> bool:
 def get_csrf_token(request: Request) -> str:
     """Возвращает текущий CSRF-токен сессии, создавая его при необходимости.
 
-    Возвращает пустую строку, если SessionMiddleware нет в цепочке
-    (например, 413 от BodySizeLimitMiddleware срабатывает до Session).
-    Пустой токен = CSRF-проверка потом отклонит форму, но страница
-    отрендерится без 500.
+    Возвращает пустую строку, если SessionMiddleware нет в цепочке.
+    В основном приложении (app/main.py) SessionMiddleware подключён
+    раньше BodySizeLimitMiddleware, поэтому request.session всегда
+    доступен — включая ответ 413. Исключение ловим на случай запуска
+    мидлварей на «голом» FastAPI() без Session (как в
+    tests/test_admin.py::test_body_size_limit_returns_413).
     """
     try:
         token = request.session.get("csrf_token")

@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.core.config import SESSION_HTTPS_ONLY, SESSION_IDLE_TIMEOUT
+from app.utils.helpers import is_ajax
 
 
 # CSP разрешает только нужные CDN.
@@ -18,7 +19,7 @@ _CSP = (
     "style-src 'self' 'unsafe-inline' "
     "https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
     "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-    "img-src 'self' data: blob: https://images.unsplash.com; "
+    "img-src 'self' data: blob:; "
     "media-src 'self' blob:; "
     "connect-src 'self'; "
     "object-src 'none'; "
@@ -26,10 +27,6 @@ _CSP = (
     "base-uri 'self'; "
     "form-action 'self';"
 )
-
-
-def _is_ajax(request) -> bool:
-    return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
@@ -49,7 +46,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     def _render_413(self, request):
         limit_mb = self.max_bytes // (1024 * 1024)
 
-        if _is_ajax(request):
+        if is_ajax(request):
             return JSONResponse(
                 {
                     "ok": False,

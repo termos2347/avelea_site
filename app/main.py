@@ -50,6 +50,7 @@ from app.data import cache
 from app.data.seed import seed_database
 from app.routers import site
 from app.routers.admin import auth, catalog, products, site_content
+from app.utils.helpers import is_ajax
 
 (BASE_DIR / "instance").mkdir(exist_ok=True)
 (BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
@@ -311,10 +312,6 @@ _JSON_ERROR_MESSAGES: dict[int, str] = {
 }
 
 
-def _is_ajax(request: Request) -> bool:
-    return request.headers.get("x-requested-with") == "XMLHttpRequest"
-
-
 def _json_error_message(status_code: int) -> str:
     return _JSON_ERROR_MESSAGES.get(status_code, "Ошибка.")
 
@@ -381,7 +378,7 @@ async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    if _is_ajax(request):
+    if is_ajax(request):
         return JSONResponse(
             {"ok": False, "error": _json_error_message(exc.status_code)},
             status_code=exc.status_code,
@@ -391,13 +388,11 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    if _is_ajax(request):
+    if is_ajax(request):
         return JSONResponse(
             {"ok": False, "error": "Некорректные данные формы."},
             status_code=400,
         )
-    if request.url.path.startswith("/product/"):
-        return _render_error(request, 404)
     return _render_error(request, 400)
 
 
@@ -405,7 +400,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def unhandled_exception_handler(request: Request, exc: Exception):
     log.exception("Необработанная ошибка на %s", request.url.path)
 
-    if _is_ajax(request):
+    if is_ajax(request):
         return JSONResponse(
             {"ok": False, "error": _json_error_message(500)},
             status_code=500,

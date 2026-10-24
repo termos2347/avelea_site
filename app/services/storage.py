@@ -553,19 +553,25 @@ def cleanup_orphans(min_age_minutes: int = 60, dry_run: bool = True) -> dict:
                         быть ещё не привязана (между save и commit).
       dry_run         — True: только найти, не удалять.
 
-    ВНИМАНИЕ: для referenced_site критерий — s.key.endswith("_image").
-    Если добавите ключ картинки с другим суффиксом (_banner, _photo),
-    он попадёт в orphans и будет удалён. Расширьте условие ниже.
+    Файлы, для которых stat() вернул None (ошибка доступа/сети),
+    пропускаются: не знаем, живые они или нет. Иначе один сетевой
+    блип на S3/NFS удаляет все картинки сайта в lifespan
+    (там dry_run=False).
     """
     import time
     from app.core.database import SessionLocal
     from app.data.models import Product, Setting
+    from app.data.settings import SITE_CONTENT_KEYS
 
     db = SessionLocal()
     try:
+        # Только ключи, которые реестр SITE_CONTENT_KEYS считает
+        # картинками. Проверка по суффиксу («_image») удаляла бы
+        # файлы ключей вроде home_banner_bg, если такие появятся.
         referenced_site = {
             s.value for s in db.query(Setting).all()
-            if s.key and s.key.endswith("_image") and s.value
+            if s.value
+            and SITE_CONTENT_KEYS.get(s.key, {}).get("type") == "image"
         }
         referenced_uploads = set()
         for p in db.query(Product).all():
@@ -588,11 +594,19 @@ def cleanup_orphans(min_age_minutes: int = 60, dry_run: bool = True) -> dict:
                 continue
 
             info = backend.stat(name)
-            if info is not None and not info.get("missing"):
-                modified_ts = info.get("modified_ts")
-                if modified_ts is not None and modified_ts > cutoff:
-                    # Свежий файл — пропускаем (защита от race).
-                    continue
+
+            # Ошибка доступа/сети: не знаем, что с файлом — не трогаем.
+            if info is None:
+                continue
+
+            # Файла и так нет — не считаем orphan'ом.
+            if info.get("missing"):
+                continue
+
+            modified_ts = info.get("modified_ts")
+            if modified_ts is not None and modified_ts > cutoff:
+                # Свежий файл — защита от race (save без commit ещё).
+                continue
 
             result[kind].append(name)
 

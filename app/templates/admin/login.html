@@ -39,7 +39,7 @@
                 </div>
                 {% endif %}
 
-                <form method="post" action="/admin/login" autocomplete="off">
+                <form method="post" action="/admin/login" autocomplete="off" hx-boost="false">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <div style="margin-bottom: 1rem;">
                         <label class="adm-label">Пароль</label>
@@ -67,7 +67,7 @@
                 </div>
                 {% endif %}
 
-                <form method="post" action="/admin/login/2fa" autocomplete="off">
+                <form method="post" action="/admin/login/2fa" autocomplete="off" hx-boost="false">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <div style="margin-bottom: 1rem;">
                         <label class="adm-label">Код из Telegram</label>

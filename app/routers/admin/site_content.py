@@ -22,6 +22,7 @@ from app.services.storage import (
     site_image_info,
     site_image_public_url,
 )
+from app.utils.helpers import is_ajax
 
 log = logging.getLogger(__name__)
 
@@ -31,10 +32,6 @@ _COMMIT_ERROR_MSG = (
     "Не удалось сохранить — временная ошибка базы данных. "
     "Попробуйте ещё раз через минуту."
 )
-
-
-def _is_ajax(request: Request) -> bool:
-    return request.headers.get("x-requested-with") == "XMLHttpRequest"
 
 
 @router.get("", response_class=HTMLResponse)
@@ -99,7 +96,7 @@ def admin_site_image_upload(
     image: UploadFile = File(None),
     remove: str = Form(None),
 ):
-    ajax = _is_ajax(request)
+    ajax = is_ajax(request)
 
     item = SITE_CONTENT_KEYS.get(key)
     if not item or item["type"] != "image":
@@ -176,7 +173,7 @@ def admin_site_text_save(
     _: bool = Depends(require_admin),
     value: str = Form(""),
 ):
-    ajax = _is_ajax(request)
+    ajax = is_ajax(request)
 
     item = SITE_CONTENT_KEYS.get(key)
     if not item or item["type"] != "text":

@@ -15,7 +15,8 @@ from sqlalchemy import text
 
 from app.core.config import BASE_DIR
 from app.core.database import SessionLocal, engine
-from app.data.models import Product, ProductVariant, Brand, Category, Setting
+from app.data.models import Product, Setting
+from app.data.settings import SITE_CONTENT_KEYS
 
 
 FAILED = []
@@ -181,9 +182,13 @@ def check_media_files(db) -> None:
     else:
         ok("все картинки товаров на месте")
 
+    # Проверяем только те ключи, которые реестр SITE_CONTENT_KEYS
+    # считает картинками. Раньше было `key.endswith("_image")` —
+    # это сломалось бы, если появится ключ вроде home_banner_bg
+    # (без суффикса `_image`, но с типом image).
     missing_site = []
     for s in db.query(Setting).all():
-        if not (s.key and s.key.endswith("_image")):
+        if SITE_CONTENT_KEYS.get(s.key, {}).get("type") != "image":
             continue
         if s.value and not (_site_backend.folder / s.value).exists():
             missing_site.append((s.key, s.value))
@@ -237,18 +242,38 @@ def check_stats(db) -> None:
     print("\n[9] Статистика (не проверка, просто смотрим)")
 
     for label, q in [
-        ("товаров всего",        "SELECT COUNT(*) FROM products"),
-        ("из них активных",      "SELECT COUNT(*) FROM products WHERE is_active"),
-        ("популярных",           "SELECT COUNT(*) FROM products WHERE popular"),
-        ("с картинкой",          "SELECT COUNT(*) FROM products WHERE image IS NOT NULL AND image != ''"),
-        ("с вариантами",         "SELECT COUNT(DISTINCT product_id) FROM product_variants"),
-        ("брендов",              "SELECT COUNT(*) FROM brands"),
-        ("категорий",            "SELECT COUNT(*) FROM categories"),
-        ("настроек",             "SELECT COUNT(*) FROM settings"),
-        ("настроек с картинкой", "SELECT COUNT(*) FROM settings WHERE key LIKE '%\\_image' ESCAPE '\\' AND value IS NOT NULL AND value != ''"),
+        ("товаров всего",   "SELECT COUNT(*) FROM products"),
+        ("из них активных", "SELECT COUNT(*) FROM products WHERE is_active"),
+        ("популярных",      "SELECT COUNT(*) FROM products WHERE popular"),
+        ("с картинкой",     "SELECT COUNT(*) FROM products WHERE image IS NOT NULL AND image != ''"),
+        ("с вариантами",    "SELECT COUNT(DISTINCT product_id) FROM product_variants"),
+        ("брендов",         "SELECT COUNT(*) FROM brands"),
+        ("категорий",       "SELECT COUNT(*) FROM categories"),
+        ("настроек",        "SELECT COUNT(*) FROM settings"),
     ]:
         v = db.execute(text(q)).scalar()
         print(f"     {label}: {v}")
+
+    # Настроек с картинкой — через реестр SITE_CONTENT_KEYS, а не
+    # через `key LIKE '%\_image' ESCAPE '\'`. Второе сломается, если
+    # появится ключ картинки без суффикса `_image` (home_banner_bg).
+    image_keys = [
+        k for k, v in SITE_CONTENT_KEYS.items()
+        if v.get("type") == "image"
+    ]
+    if image_keys:
+        n = (
+            db.query(Setting)
+            .filter(
+                Setting.key.in_(image_keys),
+                Setting.value.isnot(None),
+                Setting.value != "",
+            )
+            .count()
+        )
+    else:
+        n = 0
+    print(f"     настроек с картинкой: {n} из {len(image_keys)} возможных")
 
 
 def main() -> int:

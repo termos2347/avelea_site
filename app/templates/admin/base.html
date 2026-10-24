@@ -37,7 +37,10 @@
                         <i class="fas fa-external-link-alt"></i>
                         <span>На сайт</span>
                     </a>
-                    <form method="post" action="/admin/logout" class="adm-logout-form">
+                    {# hx-boost="false" — логаут POST-форма. Если её обработает
+                       HTMX, 303 → GET /admin/login произойдёт без смены URL,
+                       и перезагрузка браузером повторит POST. #}
+                    <form method="post" action="/admin/logout" class="adm-logout-form" hx-boost="false">
                         <button type="submit">
                             <i class="fas fa-sign-out-alt"></i>
                             <span>Выйти</span>

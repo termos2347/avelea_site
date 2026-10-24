@@ -1503,3 +1503,258 @@ def test_admin_video_preview_has_autoplay(admin_client):
         assert "autoplay" in v, f"у <video> нет autoplay: {v}"
         assert "muted" in v, f"у <video> нет muted: {v}"
         assert "loop" in v, f"у <video> нет loop: {v}"
+        
+# ============== Регрессии: HTMX на логине/логауте ==============
+
+def test_login_form_has_hx_boost_false(client):
+    """Форма пароля не должна идти через HTMX.
+
+    Иначе POST обрабатывается XHR'ом, 303 → GET происходит внутри
+    HTMX без смены URL. Перезагрузка страницы в браузере повторяет
+    POST → CSRF-токен устарел → 403.
+    """
+    import re
+    r = client.get("/admin/login")
+    m = re.search(r'<form[^>]*action="/admin/login"[^>]*>', r.text)
+    assert m, "форма логина не найдена"
+    assert 'hx-boost="false"' in m.group(0), (
+        "форма логина должна иметь hx-boost=\"false\", "
+        "иначе CSRF-токен устареет при обновлении страницы"
+    )
+
+
+def test_2fa_form_has_hx_boost_false(client, monkeypatch):
+    """Форма 2FA — та же проблема, что и у пароля."""
+    import re
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    client.post(
+        "/admin/login",
+        data={"password": "test-password-123", "csrf_token": token},
+        follow_redirects=False,
+    )
+
+    r = client.get("/admin/login/2fa")
+    m = re.search(r'<form[^>]*action="/admin/login/2fa"[^>]*>', r.text)
+    assert m, "форма 2FA не найдена"
+    assert 'hx-boost="false"' in m.group(0)
+
+
+def test_logout_form_has_hx_boost_false(admin_client):
+    """Логаут — POST-форма, должна идти нативно, не через HTMX."""
+    import re
+    r = admin_client.get("/admin/products")
+    m = re.search(r'<form[^>]*action="/admin/logout"[^>]*>', r.text)
+    assert m, "форма логаута не найдена"
+    assert 'hx-boost="false"' in m.group(0)
+
+
+# ============== Регрессии: протухший pending_2fa_token ==============
+
+def test_login_skips_expired_pending_2fa_token(client, monkeypatch):
+    """Если pending_2fa_token в сессии, но код истёк —
+    /admin/login показывает форму пароля, а не редиректит на /2fa."""
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    client.post(
+        "/admin/login",
+        data={"password": "test-password-123", "csrf_token": token},
+        follow_redirects=False,
+    )
+
+    # «Протухаем» код — вычищаем всё хранилище.
+    from app.routers.admin import auth as auth_mod
+    with auth_mod._codes_lock:
+        auth_mod._pending_codes.clear()
+
+    r = client.get("/admin/login", follow_redirects=False)
+    assert r.status_code == 200
+    assert 'name="password"' in r.text
+
+
+def test_2fa_form_redirects_to_login_when_token_gone(client, monkeypatch):
+    """Если pending_2fa_token есть в сессии, но кода уже нет —
+    GET /admin/login/2fa редиректит на /admin/login."""
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    client.post(
+        "/admin/login",
+        data={"password": "test-password-123", "csrf_token": token},
+        follow_redirects=False,
+    )
+
+    from app.routers.admin import auth as auth_mod
+    with auth_mod._codes_lock:
+        auth_mod._pending_codes.clear()
+
+    r = client.get("/admin/login/2fa", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/admin/login"
+
+
+# ============== Регрессии: rate-limit 2FA сбрасывается ==============
+
+def test_2fa_success_resets_code_rate_limit(client, monkeypatch):
+    """5 успешных 2FA-логинов подряд не должны залипать в 429.
+
+    Раньше register_failure('login-code:*') не сбрасывался никогда,
+    и 6-я попытка получала «Слишком много запросов кода».
+    """
+    sink: dict = {}
+    _enable_2fa(monkeypatch, sink)
+
+    for i in range(5):
+        r = client.get("/admin/login")
+        token = extract_csrf(r.text)
+        r = client.post(
+            "/admin/login",
+            data={"password": "test-password-123", "csrf_token": token},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303, f"попытка {i+1} (пароль): {r.status_code}"
+
+        r = client.get("/admin/login/2fa")
+        code_token = extract_csrf(r.text)
+        r = client.post(
+            "/admin/login/2fa",
+            data={"code": sink["last_code"], "csrf_token": code_token},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303, f"попытка {i+1} (код): {r.status_code}"
+
+        client.post("/admin/logout", follow_redirects=False)
+
+
+# ============== Регрессии: cleanup_orphans ==============
+
+def test_cleanup_orphans_skips_files_with_stat_error(monkeypatch):
+    """Если stat() вернул None (ошибка доступа/сети) — файл не трогаем.
+
+    Иначе один сетевой блип на S3 удалит все картинки сайта
+    в lifespan (dry_run=False).
+    """
+    from app.services import storage as st
+
+    test_file = "orphan_stat_error_test.png"
+    (st._site_backend.folder / test_file).write_bytes(b"fake")
+
+    monkeypatch.setattr(st._site_backend, "stat", lambda f: None)
+
+    result = st.cleanup_orphans(min_age_minutes=0, dry_run=False)
+
+    assert test_file not in result["site"], (
+        "файл со сбоем stat() не должен попадать в orphans"
+    )
+    assert (st._site_backend.folder / test_file).exists(), (
+        "файл должен остаться на месте — stat вернул None"
+    )
+
+
+def test_cleanup_orphans_skips_missing_files(monkeypatch):
+    """Файлы, которых нет на диске, — не «orphan» и не в result."""
+    from app.services import storage as st
+
+    test_file = "orphan_missing_test.png"
+    (st._site_backend.folder / test_file).write_bytes(b"fake")
+
+    monkeypatch.setattr(
+        st._site_backend, "stat",
+        lambda f: {
+            "filename": f, "size_kb": 0,
+            "missing": True, "modified_ts": None,
+        },
+    )
+
+    result = st.cleanup_orphans(min_age_minutes=0, dry_run=False)
+    assert test_file not in result["site"]
+
+
+def test_cleanup_orphans_removes_real_orphans(monkeypatch):
+    """Обычный orphan (нет в БД, stat успешен) — удаляется при dry_run=False."""
+    from app.services import storage as st
+
+    test_file = "orphan_real_test.png"
+    (st._site_backend.folder / test_file).write_bytes(b"fake")
+
+    result = st.cleanup_orphans(min_age_minutes=0, dry_run=True)
+    assert test_file in result["site"]
+    assert (st._site_backend.folder / test_file).exists()
+
+    result = st.cleanup_orphans(min_age_minutes=0, dry_run=False)
+    assert test_file in result["site"]
+    assert not (st._site_backend.folder / test_file).exists()
+    
+# ============== Транслитерация «ю» и «ё» в slug ==============
+
+def test_slug_transliterates_yu_and_yo():
+    """«ю» → «yu», «ё» → «yo» (вместо дефолтных «iu» и «e»)."""
+    from app.data.models import _slug_from_name
+
+    assert _slug_from_name("Юла") == "yula"
+    assert _slug_from_name("Ёлка") == "yolka"
+    assert _slug_from_name("ёлка") == "yolka"
+    assert _slug_from_name("Королёв") == "korolyov"
+
+    # «й» намеренно НЕ трогаем — unidecode даёт «i».
+    # Отличить «й от i» от латинской «i» постфактум невозможно,
+    # поэтому оставляем как есть. Тест фиксирует это поведение,
+    # чтобы кто-то случайно не «пофиксил» — иначе старые slug'и
+    # с латинской «i» сломаются.
+    assert _slug_from_name("Лёгкий крем") == "lyogkii-krem"
+
+    # «я» продолжает работать.
+    assert _slug_from_name("Старое имя") == "staroe-imya"
+
+    # Латиница не ломается.
+    assert _slug_from_name("Elemis Pro-Collagen") == "elemis-pro-collagen"
+
+def test_create_product_with_yu_in_name(admin_client):
+    """Товар с «ю» в названии получает slug с «yu», а не «iu»."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+    from app.data import cache
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    _post_new_product(admin_client, token, name="Юла", price="100")
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.name == "Юла").one()
+        assert p.slug == "yula"
+        pid = p.id
+
+    r = admin_client.get(f"/product/{pid}", follow_redirects=False)
+    assert r.status_code == 301
+    assert r.headers["location"] == "/product/yula"
+
+    r = admin_client.get("/product/yula")
+    assert r.status_code == 200
+
+
+def test_create_product_with_yo_in_name(admin_client):
+    """Товар с «ё» в названии получает slug с «yo», а не «e»."""
+    from app.core.database import SessionLocal
+    from app.data.models import Product
+    from app.data import cache
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    _post_new_product(admin_client, token, name="Ёлка", price="100")
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        p = db.query(Product).filter(Product.name == "Ёлка").one()
+        assert p.slug == "yolka"
+
+    r = admin_client.get("/product/yolka")
+    assert r.status_code == 200
