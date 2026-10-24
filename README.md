@@ -81,11 +81,12 @@ Alembic в lifespan запускается N раз параллельно.
 | `DATABASE_URL` | локальный Postgres | **с `?sslmode=require`** | Облачный Postgres (Neon, Supabase) требует TLS |
 | `SECRET_KEY` | любой | **64+ случайных** | `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ADMIN_PASSWORD` | `test-password-123` | **16+ символов, не из словаря** | Это единственный барьер перед админкой, если 2FA выключен |
+| `TRUSTED_PROXIES` | `127.0.0.1,::1` | **IP вашего nginx** | XFF и `X-Forwarded-Proto` учитываются только от этих адресов. Если nginx на другом хосте (Docker, Cloudflare) — вписать его IP, иначе все клиенты схлопнутся в один bucket rate-limit'а, а OG-картинки в Telegram будут вести на `127.0.0.1` |
 
 **Проверить одним глазом:**
 
 ```bash
-grep -E '^(UVICORN_RELOAD|UVICORN_WORKERS|AUTO_MIGRATE|SESSION_HTTPS_ONLY|SEED_DEMO_PRODUCT)=' .env
+grep -E '^(UVICORN_RELOAD|UVICORN_WORKERS|AUTO_MIGRATE|SESSION_HTTPS_ONLY|SEED_DEMO_PRODUCT|TRUSTED_PROXIES)=' .env
 ```
 
 Ожидаемо на проде:
@@ -96,6 +97,7 @@ UVICORN_WORKERS=1
 AUTO_MIGRATE=false
 SESSION_HTTPS_ONLY=true
 SEED_DEMO_PRODUCT=0
+TRUSTED_PROXIES=127.0.0.1,::1
 ```
 
 ### Systemd unit — пример
@@ -205,7 +207,6 @@ sudo journalctl -u avelea -f
 | HTTPS | нет | nginx + certbot |
 | `SESSION_HTTPS_ONLY` | `false` | `true` |
 
-
 ### Ротация SECRET_KEY
 
 `SECRET_KEY` подписывает cookie сессии. При смене **все активные сессии
@@ -237,6 +238,37 @@ sudo systemctl restart avelea
 
 **Что ломается:** активные сессии (нужно перелогиниться), незавершённые
 2FA-логины (нужно получить новый код в Telegram).
+
+### Прокси, X-Forwarded-* и HTTPS
+
+Приложение работает за nginx. Nginx шлёт заголовки `X-Forwarded-For`
+(реальный IP клиента), `X-Forwarded-Proto` (`https`), `X-Forwarded-Host`.
+Приложение использует их в двух местах:
+
+1. **Rate-limit логина** (`security.client_key`) — для bucket'а по IP.
+2. **Генерация абсолютных URL** (`request.base_url` в OG-тегах). Должно
+   быть `https://avelea.ru/…`, а не `http://127.0.0.1:8000/…`.
+
+Оба механизма доверяют заголовкам **только** от адресов из `TRUSTED_PROXIES`.
+
+**Типичные ошибки:**
+| Что | Почему плохо |
+|---|---|
+| nginx на другом хосте, `TRUSTED_PROXIES` дефолтный | Все клиенты = один IP. Первый брутфорс заблокирует админку. OG-картинки сломаны |
+| Docker: nginx в контейнере | IP nginx `172.17.0.x`. Вписать в `TRUSTED_PROXIES` |
+| `TRUSTED_PROXIES` пуст, но есть прокси | Заголовки игнорируются, то же самое |
+
+### S3 хранилище (опционально)
+
+Сейчас картинки хранятся локально (`STORAGE_BACKEND=local`).
+Если захотите вынести всё в S3/R2/Selectel:
+
+1. В `.env` прописать `STORAGE_BACKEND=s3` и заполнить `S3_ENDPOINT`,
+   `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PUBLIC_URL`.
+2. В `requirements.txt` уже есть `boto3`.
+3. Картинки товаров **и** контентных страниц (`static/site/`) уедут в S3.
+
+`cleanup_orphans` в `lifespan` умеет чистить и локальные папки, и S3.
 
 ---
 
@@ -351,7 +383,8 @@ avelea_site/
 | Добавить настройку через `.env` | `app/core/config.py` |
 | Изменить миграции БД | `migrations/versions/ (Alembic)` |
 | Изменить стартовые данные | `app/data/seed.py` |
-| Поменять хранилище картинок | `app/services/storage.py` |
+| Поменять хранилище картинок (Local / S3) | `app/services/storage.py` + `.env` |
+| Настроить trusted proxies / XFF | `app/core/config.py` (`TRUSTED_PROXIES`) + `app/main.py` (`ProxyHeadersMiddleware`) |
 | Изменить security-заголовки | `app/core/middleware.py` |
 | Настроить Telegram 2FA | `app/routers/admin/auth.py` + `.env` |
 | Изменить страницы ошибок | `app/main.py` (`_ERROR_PAGES`, `_pick_error_preset`) |

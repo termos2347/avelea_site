@@ -1,5 +1,17 @@
 {% extends "base.html" %}
+
 {% block title %}О нас — Avelea{% endblock %}
+
+{% block og_title %}О нас — Avelea{% endblock %}
+{% block og_description %}AVELEA — тщательно отобранная коллекция оригинальной косметики из разных уголков мира. Мы не просто продаём косметику — мы выбираем то, во что влюблены сами.{% endblock %}
+{% block og_image %}
+    {%- set hero = site_image('about_hero_image', '') -%}
+    {%- if hero -%}
+        {{ request.base_url }}{{ hero.lstrip('/') }}
+    {%- else -%}
+        {{ super() }}
+    {%- endif -%}
+{% endblock %}
 
 {% block content %}
 
@@ -7,7 +19,6 @@
 <section class="relative mb-10 md:mb-14 overflow-hidden">
     <div class="relative rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
 
-        {# Фото на фоне hero — пусто, если не загружено #}
         <div class="absolute inset-0">
             {% set about_hero = site_image('about_hero_image', '') %}
             {% if about_hero %}
@@ -39,7 +50,6 @@
 <section class="mb-10 md:mb-14">
     <div class="grid md:grid-cols-2 gap-0 rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200">
 
-        {# Фото слева #}
         <div class="relative h-64 md:h-auto">
             {% set about_idea = site_image('about_idea_image', '') %}
             {% if about_idea %}
@@ -54,7 +64,6 @@
             {% endif %}
         </div>
 
-        {# Текст справа #}
         <div class="bg-gradient-to-br from-pink-50 to-fuchsia-50 p-6 md:p-10 flex flex-col justify-center">
             <div class="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mb-4">
                 <i class="fas fa-seedling text-pink-600 text-xl"></i>

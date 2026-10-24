@@ -181,6 +181,25 @@ class StorageBackend(ABC):
     def exists(self, filename: str) -> bool: ...
     @abstractmethod
     def public_url(self, filename: str) -> str: ...
+    @abstractmethod
+    def stat(self, filename: str) -> dict | None:
+        """Информация о файле.
+
+        Возвращает dict с ключами:
+          - filename: str
+          - size_kb: float
+          - missing: bool — True если файла нет
+          - modified_ts: float | None — Unix-время модификации
+                                        (None если бэкенд не умеет)
+
+        Возвращает None, если произошла ошибка доступа/сети
+        (не путать с missing=True — тот случай значит «файла нет»).
+        """
+        ...
+    @abstractmethod
+    def list_files(self) -> list[str]:
+        """Возвращает имена всех файлов в хранилище."""
+        ...
 
 
 def _make_filename(content: bytes, ext: str, prefix: str) -> str:
@@ -222,6 +241,36 @@ class LocalStorage(StorageBackend):
 
     def public_url(self, filename: str) -> str:
         return f"{self.url_prefix}/{filename}"
+
+    def stat(self, filename: str) -> dict | None:
+        if not filename or "/" in filename or ".." in filename:
+            return None
+        path = self.folder / filename
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            return {
+                "filename": filename,
+                "size_kb": 0,
+                "missing": True,
+                "modified_ts": None,
+            }
+        except OSError as e:
+            log.warning("Не удалось получить stat %s: %s", filename, e)
+            return None
+        return {
+            "filename": filename,
+            "size_kb": round(st.st_size / 1024, 1),
+            "missing": False,
+            "modified_ts": st.st_mtime,
+        }
+
+    def list_files(self) -> list[str]:
+        if not self.folder.exists():
+            return []
+        return [
+            f.name for f in self.folder.iterdir() if f.is_file()
+        ]
 
 
 class S3Storage(StorageBackend):
@@ -289,6 +338,46 @@ class S3Storage(StorageBackend):
     def public_url(self, filename: str) -> str:
         return f"{self.base_url}/{filename}"
 
+    def stat(self, filename: str) -> dict | None:
+        if not filename or "/" in filename or ".." in filename:
+            return None
+        try:
+            resp = self.client.head_object(Bucket=self.bucket, Key=filename)
+        except Exception as e:
+            # boto3 на 404 отдаёт ClientError с кодом в .response
+            resp_err = getattr(e, "response", None) or {}
+            code = str(resp_err.get("Error", {}).get("Code", ""))
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return {
+                    "filename": filename,
+                    "size_kb": 0,
+                    "missing": True,
+                    "modified_ts": None,
+                }
+            log.warning("S3 stat failed для %s: %s", filename, e)
+            return None
+
+        size = resp.get("ContentLength", 0)
+        last_mod = resp.get("LastModified")
+        modified_ts = last_mod.timestamp() if last_mod else None
+        return {
+            "filename": filename,
+            "size_kb": round(size / 1024, 1),
+            "missing": False,
+            "modified_ts": modified_ts,
+        }
+
+    def list_files(self) -> list[str]:
+        result: list[str] = []
+        try:
+            paginator = self.client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=self.bucket):
+                for obj in page.get("Contents", []):
+                    result.append(obj["Key"])
+        except Exception as e:
+            log.warning("S3 list_files failed: %s", e)
+        return result
+
 
 def _make_backend() -> StorageBackend:
     if STORAGE_BACKEND == "s3":
@@ -305,7 +394,28 @@ def _make_backend() -> StorageBackend:
     )
 
 
+def _make_site_backend() -> StorageBackend:
+    """Тот же выбор бэкенда, что и для товаров.
+
+    Если STORAGE_BACKEND=s3 — контентные картинки сайта тоже идут в S3.
+    Для витрины на одном сервере — local.
+    """
+    if STORAGE_BACKEND == "s3":
+        return S3Storage(
+            endpoint=S3_ENDPOINT,
+            bucket=S3_BUCKET,
+            access_key=S3_ACCESS_KEY,
+            secret_key=S3_SECRET_KEY,
+            base_url=S3_PUBLIC_URL,
+        )
+    return LocalStorage(
+        folder=BASE_DIR / "static" / "site",
+        url_prefix="/static/site",
+    )
+
+
 _backend = _make_backend()
+_site_backend = _make_site_backend()
 
 
 # ============================================================
@@ -375,12 +485,6 @@ delete_image = delete_media
 # ============================================================
 # Картинки сайта (about, hero и т.п.)
 # ============================================================
-_site_backend = LocalStorage(
-    folder=BASE_DIR / "static" / "site",
-    url_prefix="/static/site",
-)
-
-
 def save_site_image(file, key: str) -> tuple[str | None, str | None]:
     if not file or not file.filename:
         return None, None
@@ -426,15 +530,7 @@ def site_image_public_url(filename: str | None) -> str | None:
 def site_image_info(filename: str | None) -> dict | None:
     if not filename:
         return None
-    path = _site_backend.folder / filename
-    if not path.exists():
-        return {"filename": filename, "size_kb": 0, "missing": True}
-    size = path.stat().st_size
-    return {
-        "filename": filename,
-        "size_kb": round(size / 1024, 1),
-        "missing": False,
-    }
+    return _site_backend.stat(filename)
 
 
 # ============================================================
@@ -448,14 +544,18 @@ def cleanup_orphans(min_age_minutes: int = 60, dry_run: bool = True) -> dict:
       - старый файл не удалился из-за OSError (readonly FS, права);
       - ручное вмешательство в БД.
 
+    Работает через StorageBackend.list_files/stat/delete — подходит
+    и для local, и для S3.
+
     Параметры:
-      min_age_minutes — не трогать файлы младше N минут. Защита от race:
-                        только что загруженная картинка товара может
-                        быть ещё не привязана (между save_media и commit).
+      min_age_minutes — не трогать файлы младше N минут. Защита от
+                        race: только что загруженная картинка может
+                        быть ещё не привязана (между save и commit).
       dry_run         — True: только найти, не удалять.
 
-    Возвращает {"site": [...], "uploads": [...]} — имена файлов,
-    которые были найдены (и удалены, если dry_run=False).
+    ВНИМАНИЕ: для referenced_site критерий — s.key.endswith("_image").
+    Если добавите ключ картинки с другим суффиксом (_banner, _photo),
+    он попадёт в orphans и будет удалён. Расширьте условие ниже.
     """
     import time
     from app.core.database import SessionLocal
@@ -483,26 +583,24 @@ def cleanup_orphans(min_age_minutes: int = 60, dry_run: bool = True) -> dict:
         (_site_backend, referenced_site, "site"),
         (_backend, referenced_uploads, "uploads"),
     ):
-        if not backend.folder.exists():
-            continue
-        for f in backend.folder.iterdir():
-            if not f.is_file():
-                continue
-            if f.name in refs:
-                continue
-            try:
-                if f.stat().st_mtime > cutoff:
-                    continue
-            except OSError:
+        for name in backend.list_files():
+            if name in refs:
                 continue
 
-            result[kind].append(f.name)
+            info = backend.stat(name)
+            if info is not None and not info.get("missing"):
+                modified_ts = info.get("modified_ts")
+                if modified_ts is not None and modified_ts > cutoff:
+                    # Свежий файл — пропускаем (защита от race).
+                    continue
+
+            result[kind].append(name)
 
             if not dry_run:
                 try:
-                    f.unlink()
-                except OSError as e:
-                    log.warning("cleanup_orphans: не удалось удалить %s: %s", f, e)
+                    backend.delete(name)
+                except Exception as e:
+                    log.warning("cleanup_orphans: не удалось удалить %s: %s", name, e)
 
     result["site"].sort()
     result["uploads"].sort()

@@ -22,6 +22,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config import (
     AUTO_MIGRATE,
@@ -33,6 +34,7 @@ from app.core.config import (
     SESSION_MAX_AGE,
     SESSION_SAME_SITE,
     TELEGRAM_2FA_ENABLED,
+    TRUSTED_PROXIES,
     UVICORN_WORKERS,
 )
 from app.core.database import SessionLocal
@@ -189,6 +191,16 @@ app.add_middleware(
 
 app.add_middleware(StaticCacheMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# ProxyHeaders — самый внешний (добавляется последним).
+# Подменяет scope["scheme"]/["server"]/["client"] по X-Forwarded-*
+# ТОЛЬКО если запрос пришёл от доверенного прокси (TRUSTED_PROXIES).
+# Без этого за nginx с HTTPS request.base_url будет
+# http://127.0.0.1:8000/ — и OG-картинки товаров сломаются.
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts=list(TRUSTED_PROXIES),
+)
 
 app.mount(
     "/static",

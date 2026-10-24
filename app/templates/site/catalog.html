@@ -1,6 +1,27 @@
 {% extends "base.html" %}
 {% from "_macros.html" import product_card %}
 
+{% block title %}Каталог — Avelea{% endblock %}
+
+{% block og_title %}Каталог — Avelea{% endblock %}
+{% block og_description %}
+    {%- if total_count -%}
+        {{ total_count }} {{ "товар" if total_count % 10 == 1 and total_count % 100 != 11
+           else ("товара" if 2 <= total_count % 10 <= 4 and not (12 <= total_count % 100 <= 14)
+           else "товаров") }} в наличии. Натуральная косметика, уход, парфюмерия от мировых брендов.
+    {%- else -%}
+        Натуральная косметика и парфюмерия от мировых брендов. Доставка 5–10 дней.
+    {%- endif -%}
+{% endblock %}
+{% block og_image %}
+    {%- set banner = site_image('catalog_banner_image', '') -%}
+    {%- if banner -%}
+        {{ request.base_url }}{{ banner.lstrip('/') }}
+    {%- else -%}
+        {{ super() }}
+    {%- endif -%}
+{% endblock %}
+
 {% block content %}
 
 <section class="relative mb-6 md:mb-8 rounded-2xl md:rounded-3xl overflow-hidden border border-pink-200/70">
