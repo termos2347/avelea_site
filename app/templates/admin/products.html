@@ -70,7 +70,7 @@
                     <td class="adm-col-hide-mobile">
                         {% if p.image_url %}
                             {% if is_video(p.image) %}
-                                <video src="{{ p.image_url }}" muted playsinline class="adm-table-thumb"></video>
+                                <video src="{{ p.image_url }}" autoplay muted loop playsinline class="adm-table-thumb"></video>
                             {% else %}
                                 <img src="{{ p.image_url }}" alt="" loading="lazy" decoding="async" class="adm-table-thumb">
                             {% endif %}
@@ -142,7 +142,7 @@
             <div class="adm-product-thumb">
                 {% if p.image_url %}
                     {% if is_video(p.image) %}
-                        <video src="{{ p.image_url }}" muted playsinline></video>
+                        <video src="{{ p.image_url }}" autoplay muted loop playsinline></video>
                     {% else %}
                         <img src="{{ p.image_url }}" alt="{{ p.name }}" loading="lazy" decoding="async">
                     {% endif %}

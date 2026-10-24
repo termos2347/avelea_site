@@ -1231,3 +1231,275 @@ def test_2fa_purge_removes_expired_only():
 
     assert "alive" in auth_mod._pending_codes
     assert "dead" not in auth_mod._pending_codes
+    
+# ============== Бренды: только латиница ==============
+
+def test_admin_brands_reject_cyrillic(admin_client):
+    r = admin_client.get("/admin/brands")
+    token = extract_csrf(r.text)
+    r = admin_client.post(
+        "/admin/brands/new",
+        data={"name": "Летуаль", "csrf_token": token},
+        follow_redirects=True,
+    )
+    assert "должно быть на английском" in r.text
+
+    from app.core.database import SessionLocal
+    from app.data.models import Brand
+    with SessionLocal() as db:
+        assert db.query(Brand).filter(Brand.name == "Летуаль").first() is None
+
+
+def test_admin_brands_reject_mixed(admin_client):
+    r = admin_client.get("/admin/brands")
+    token = extract_csrf(r.text)
+    r = admin_client.post(
+        "/admin/brands/new",
+        data={"name": "Chanel Шанель", "csrf_token": token},
+        follow_redirects=True,
+    )
+    assert "должно быть на английском" in r.text
+
+
+def test_admin_brands_accept_accented_latin(admin_client):
+    r = admin_client.get("/admin/brands")
+    token = extract_csrf(r.text)
+    r = admin_client.post(
+        "/admin/brands/new",
+        data={"name": "L'Oréal", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+
+def test_admin_brands_edit_reject_cyrillic(admin_client):
+    from app.core.database import SessionLocal
+    from app.data.models import Brand
+    from app.data import cache
+
+    r = admin_client.get("/admin/brands")
+    token = extract_csrf(r.text)
+    admin_client.post("/admin/brands/new", data={"name": "KeepName", "csrf_token": token})
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        bid = db.query(Brand).filter(Brand.name == "KeepName").one().id
+
+    r = admin_client.post(
+        f"/admin/brands/{bid}/edit",
+        data={"name": "Летуаль", "csrf_token": token},
+        follow_redirects=True,
+    )
+    assert "должно быть на английском" in r.text
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        assert db.query(Brand).filter(Brand.id == bid).one().name == "KeepName"
+
+
+# ============== Модалка редактирования бренда ==============
+
+def test_edit_dialog_has_description_field(admin_client):
+    r = admin_client.get("/admin/brands")
+    assert 'id="edit-description"' in r.text
+    assert 'id="edit-description-wrap"' in r.text
+
+def test_brand_create_modal_has_live_validation(admin_client):
+    """Модалка создания бренда содержит live-валидацию на латиницу."""
+    r = admin_client.get("/admin/brands")
+    html = r.text
+
+    assert 'id="create-name"' in html
+    assert 'data-brand-name' in html
+    assert 'data-brand-name-error' in html
+    assert 'Бренды пишутся только латиницей' in html
+
+
+def test_edit_dialog_has_no_hardcoded_pattern(admin_client):
+    """В #edit-name НЕ должно быть pattern — иначе категории
+    с кириллицей («Лицо», «Макияж») не отредактировать.
+    """
+    import re
+    r = admin_client.get("/admin/brands")
+    html = r.text
+
+    m = re.search(r'<input[^>]*id="edit-name"[^>]*>', html)
+    assert m, "input#edit-name не найден"
+    assert "pattern=" not in m.group(0), (
+        "у #edit-name не должно быть pattern — сломает категории"
+    )
+
+    # А live-валидация для брендов есть — через data-brand-name-error
+    assert 'data-brand-name-error' in html
+
+
+def test_edit_category_with_cyrillic_name_via_dialog(admin_client):
+    """После убирания pattern категорию с кириллицей можно
+    редактировать через модалку (name попадает в БД как есть).
+    """
+    from app.core.database import SessionLocal
+    from app.data.models import Category
+    from app.data import cache
+
+    r = admin_client.get("/admin/categories")
+    token = extract_csrf(r.text)
+    admin_client.post(
+        "/admin/categories/new",
+        data={"name": "Лицо", "csrf_token": token},
+    )
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        cid = db.query(Category).filter(Category.name == "Лицо").one().id
+
+    r = admin_client.post(
+        f"/admin/categories/{cid}/edit",
+        data={"name": "Уход за лицом", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        assert db.query(Category).filter(Category.id == cid).one().name == "Уход за лицом"
+
+
+def test_brand_edit_preserves_description(admin_client):
+    from app.core.database import SessionLocal
+    from app.data.models import Brand
+    from app.data import cache
+
+    r = admin_client.get("/admin/brands")
+    token = extract_csrf(r.text)
+    admin_client.post(
+        "/admin/brands/new",
+        data={"name": "HasDesc", "description": "Важное описание", "csrf_token": token},
+    )
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        bid = db.query(Brand).filter(Brand.name == "HasDesc").one().id
+
+    admin_client.post(
+        f"/admin/brands/{bid}/edit",
+        data={"name": "Renamed", "description": "Важное описание", "csrf_token": token},
+        follow_redirects=False,
+    )
+
+    cache.invalidate()
+    with SessionLocal() as db:
+        b = db.query(Brand).filter(Brand.id == bid).one()
+        assert b.name == "Renamed"
+        assert b.description == "Важное описание"
+
+
+# ============== Rate-limit: XFF ==============
+
+def test_rate_limit_ignores_xff_from_untrusted(client):
+    """XFF от не-прокси не создаёт новый bucket."""
+    for i in range(10):
+        r = client.get("/admin/login")
+        token = extract_csrf(r.text)
+        client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+            headers={"X-Forwarded-For": f"1.2.3.{i}"},
+        )
+
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "test-password-123", "csrf_token": token},
+    )
+    assert r.status_code == 429
+
+
+def test_rate_limit_honors_xff_from_trusted_proxy(client, monkeypatch):
+    # TestClient ходит с client.host == "testclient"
+    monkeypatch.setattr(
+        "app.core.security.TRUSTED_PROXIES", {"testclient"}, raising=False,
+    )
+
+    # Разные XFF = разные клиенты, каждый получает свой bucket.
+    # 6 клиентов с разными XFF — все 401, никто не блокируется.
+    for i in range(6):
+        r = client.get("/admin/login")
+        token = extract_csrf(r.text)
+        r = client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+            headers={"X-Forwarded-For": f"9.9.9.{i}"},
+        )
+        assert r.status_code == 401, (
+            f"клиент 9.9.9.{i} должен получать 401, а не 429"
+        )
+
+    # Один и тот же XFF долбит 5 раз — каждая попытка 401.
+    for _ in range(5):
+        r = client.get("/admin/login")
+        token = extract_csrf(r.text)
+        r = client.post(
+            "/admin/login",
+            data={"password": "wrong", "csrf_token": token},
+            headers={"X-Forwarded-For": "9.9.9.100"},
+        )
+        assert r.status_code == 401
+
+    # 6-я попытка с тем же XFF — блок.
+    r = client.get("/admin/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/admin/login",
+        data={"password": "wrong", "csrf_token": token},
+        headers={"X-Forwarded-For": "9.9.9.100"},
+    )
+    assert r.status_code == 429
+
+
+def test_rate_limit_attempts_dict_bounded():
+    from app.core import security
+    security.reset_all()
+
+    for i in range(security._MAX_TRACKED_KEYS + 500):
+        security.register_failure(f"k-{i}")
+
+    assert len(security._attempts) <= security._MAX_TRACKED_KEYS
+
+
+def test_rate_limit_is_blocked_does_not_grow_dict():
+    from app.core import security
+    security.reset_all()
+
+    for i in range(1000):
+        security.is_blocked(f"probe-{i}")
+
+    assert len(security._attempts) == 0
+
+
+# ============== Видео в админке ==============
+
+def test_admin_video_preview_has_autoplay(admin_client):
+    import re
+
+    # Товар с фейковым mp4, чтобы на странице появился <video>.
+    fake_mp4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2" + b"\x00" * 1000
+
+    r = admin_client.get("/admin/products")
+    token = extract_csrf(r.text)
+    data = _payload(name="Video Autoplay Test", price="100")
+    data["csrf_token"] = token
+    admin_client.post(
+        "/admin/products/new",
+        data=data,
+        files={"image_1": ("test.mp4", fake_mp4, "video/mp4")},
+        follow_redirects=False,
+    )
+
+    r = admin_client.get("/admin/products")
+    videos = re.findall(r"<video[^>]*>", r.text)
+    assert videos, "нет <video> на странице товаров после загрузки видео"
+    for v in videos:
+        assert "autoplay" in v, f"у <video> нет autoplay: {v}"
+        assert "muted" in v, f"у <video> нет muted: {v}"
+        assert "loop" in v, f"у <video> нет loop: {v}"

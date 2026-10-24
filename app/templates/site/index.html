@@ -151,7 +151,7 @@
         {% for c in categories %}
         {% set img_key = cat_meta.get(c.name, '') %}
         {% set img_src = site_image(img_key, '') if img_key else '' %}
-        <a href="/catalog?category={{ c.name }}"
+        <a href="/catalog?category={{ c.name|urlq }}"
            class="group relative rounded-2xl overflow-hidden h-40 md:h-56 block reveal-item">
             {% if img_src %}
                 <img src="{{ img_src }}" alt="{{ c.name }}"

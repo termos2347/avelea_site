@@ -252,48 +252,38 @@ def product_page(request: Request, slug_or_id: str):
 
 @router.get("/brands", response_class=HTMLResponse)
 def brands_page(request: Request):
-    """Страница всех брендов с алфавитным указателем."""
+    """Страница всех брендов с алфавитным указателем (0-9, A-Z)."""
     brands = cache.get_brands()
 
-    cyr_to_lat = {
-        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E',
-        'Ж': 'Z', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
-        'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
-        'Ф': 'F', 'Х': 'H', 'Ц': 'T', 'Ч': 'C', 'Ш': 'S', 'Щ': 'S', 'Ъ': 'Z',
-        'Ы': 'Y', 'Ь': 'Z', 'Э': 'E', 'Ю': 'Y', 'Я': 'Y'
-    }
-
-    grouped = {}
+    grouped: dict[str, list] = {}
     for brand in brands:
         if not brand.name:
             continue
 
-        first_char = brand.name.strip()[0].upper()
+        first = brand.name.strip()[0].upper()
 
-        if first_char.isdigit():
+        if first.isdigit():
             key = "0 - 9"
-        elif first_char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-            key = first_char
+        elif first in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            key = first
         else:
-            lat_char = cyr_to_lat.get(first_char)
-            if lat_char and lat_char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-                key = lat_char
-            else:
-                key = "0 - 9"
+            # Валидация в админке не пропустит такое. Если бренд
+            # с нелатинской буквой всё же попал в БД — просто
+            # не показываем его в указателе.
+            continue
 
-        if key not in grouped:
-            grouped[key] = []
-        grouped[key].append(brand)
+        grouped.setdefault(key, []).append(brand)
 
-    def sort_key(k):
-        if k == "0 - 9":
-            return "0"
-        return k
+    for items in grouped.values():
+        items.sort(key=lambda b: b.name.lower())
 
-    sorted_grouped = sorted(grouped.items(), key=lambda x: sort_key(x[0]))
+    sorted_grouped = sorted(
+        grouped.items(),
+        key=lambda x: (0 if x[0] == "0 - 9" else 1, x[0]),
+    )
 
     alphabet = ["0 - 9"] + list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-    existing_keys = {k for k, v in sorted_grouped}
+    existing_keys = set(grouped.keys())
 
     return site_templates.TemplateResponse(request, "brands.html", {
         "grouped_brands": sorted_grouped,

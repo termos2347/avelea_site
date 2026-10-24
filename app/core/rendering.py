@@ -1,4 +1,6 @@
 """Общие Jinja2-окружения и регистрация глобалов."""
+from urllib.parse import quote
+
 from markupsafe import Markup, escape
 from fastapi.templating import Jinja2Templates
 
@@ -14,6 +16,14 @@ site_templates = Jinja2Templates(
 admin_templates = Jinja2Templates(
     directory=BASE_DIR / "app" / "templates" / "admin"
 )
+
+
+def _urlq(value) -> str:
+    """URL-кодирование значения для подстановки в query-string."""
+    return quote(str(value or ""), safe="")
+
+
+site_templates.env.filters["urlq"] = _urlq
 
 
 def _nav_categories() -> list[str]:

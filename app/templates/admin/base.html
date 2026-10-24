@@ -6,13 +6,10 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta name="view-transition" content="same-origin">
 
-    {# Админка не для поисковиков. Плюс AdminGuardMiddleware отдаёт
-       неавторизованным 404 — но noindex как дополнительный сигнал. #}
     <meta name="robots" content="noindex, nofollow">
 
     <title>{% block title %}Админка — avelea{% endblock %}</title>
 
-    {# Favicon: серая точка с буквой «a» (в тон --adm-primary). #}
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23111827'/><text x='50' y='68' font-size='60' font-family='-apple-system,sans-serif' font-weight='600' fill='white' text-anchor='middle'>a</text></svg>">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,19 +19,13 @@
 </head>
 <body style="background: var(--adm-bg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;" hx-boost="true">
 
-    {# Подключаем скрипт для анимации ДО того, как отрисуются товары.
-       Это предотвращает вспышку видимых элементов. #}
     <script src="/static/js/scroll-init.js"></script>
 
     <div id="htmx-progress"></div>
 
     {% set path = request.url.path %}
 
-    {# ============================================================
-       СТРОКА 1: бренд + действия пользователя
-       ============================================================ #}
     <div class="adm-topbar-block">
-
         <div class="adm-header">
             <div class="adm-header-inner">
                 <a href="/admin/products" class="adm-brand">
@@ -46,8 +37,6 @@
                         <i class="fas fa-external-link-alt"></i>
                         <span>На сайт</span>
                     </a>
-                    {# Logout — POST, не GET: <img src="/admin/logout">
-                       с чужого сайта не должен выкидывать админа. #}
                     <form method="post" action="/admin/logout" class="adm-logout-form">
                         <button type="submit">
                             <i class="fas fa-sign-out-alt"></i>
@@ -58,7 +47,6 @@
             </div>
         </div>
 
-        {# ---- СТРОКА 2: навигация + кнопка действия ---- #}
         <div class="adm-nav-row">
             <div class="adm-nav-inner">
                 <nav class="adm-nav">
@@ -89,21 +77,15 @@
                 </div>
             </div>
         </div>
-
     </div>
 
-    {# ============================================================
-       КОНТЕНТ
-       ============================================================ #}
     <main class="adm-main">
         <div class="adm-content">
             {% block admin_content %}{% endblock %}
         </div>
     </main>
 
-    {# ============================================================
-       МОДАЛ ПОДТВЕРЖДЕНИЯ
-       ============================================================ #}
+    {# ============ МОДАЛ ПОДТВЕРЖДЕНИЯ ============ #}
     <div class="adm-modal" id="confirm-dialog" role="dialog" aria-modal="true">
         <div class="adm-modal-backdrop" data-modal-close="confirm-dialog"></div>
         <div class="adm-dialog-card adm-dialog-card-sm">
@@ -127,9 +109,7 @@
         </div>
     </div>
 
-    {# ============================================================
-       МОДАЛ ИНФОРМАЦИИ + ПРЕДПРОСМОТР
-       ============================================================ #}
+    {# ============ МОДАЛ ИНФОРМАЦИИ + ПРЕДПРОСМОТР ============ #}
     <div class="adm-modal" id="info-dialog" role="dialog" aria-modal="true">
         <div class="adm-modal-backdrop" data-modal-close="info-dialog"></div>
         <div class="adm-dialog-card adm-dialog-card-wide">
@@ -142,7 +122,6 @@
 
             <div class="adm-info-body">
                 <div class="adm-info-layout">
-
                     <div class="adm-info-meta-col">
                         <div class="adm-info-top">
                             <div id="info-image" class="adm-info-image">—</div>
@@ -163,7 +142,6 @@
                         <div class="adm-preview-stage">
                             <div class="group border border-pink-100 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-pink-200/60 hover:border-pink-300 transition-all bg-white p-3 flex flex-col"
                                  style="width: 220px;">
-
                                 <div class="aspect-square w-full rounded-xl mb-3 overflow-hidden flex items-center justify-center
                                             bg-gradient-to-br from-pink-100 to-fuchsia-100 text-2xl font-bold text-pink-500">
                                     <img id="info-preview-img" src="" alt=""
@@ -193,7 +171,6 @@
                             Так товар будет выглядеть в каталоге на сайте.
                         </div>
                     </div>
-
                 </div>
             </div>
 
@@ -213,9 +190,7 @@
         </div>
     </div>
 
-    {# ============================================================
-       МОДАЛ РЕДАКТИРОВАНИЯ (бренды/категории)
-       ============================================================ #}
+    {# ============ МОДАЛ РЕДАКТИРОВАНИЯ (бренды/категории) ============ #}
     <div class="adm-modal" id="edit-dialog" role="dialog" aria-modal="true">
         <div class="adm-modal-backdrop" data-modal-close="edit-dialog"></div>
         <div class="adm-dialog-card">
@@ -232,6 +207,21 @@
                     <label class="adm-label">Название</label>
                     <input type="text" name="name" id="edit-name" required
                            autocomplete="off" class="adm-input">
+
+                    <div class="adm-field-error" data-brand-name-error style="margin: 0 0 0.85rem;">
+                        <i class="fas fa-exclamation-circle"></i>
+                        Бренды пишутся только латиницей. Примеры: Avelea, Chanel, Lush.
+                    </div>
+
+                    <div id="edit-description-wrap" style="margin-top: 0.85rem; display: none;">
+                        <label class="adm-label">Описание</label>
+                        <textarea name="description" id="edit-description"
+                                  rows="4" maxlength="2000" class="adm-textarea"
+                                  placeholder="Пара предложений о бренде"></textarea>
+                        <div class="adm-hint">
+                            Показывается в карточке товара под названием бренда.
+                        </div>
+                    </div>
                 </div>
                 <div class="adm-dialog-footer">
                     <button type="button" data-action="close-edit-dialog" class="adm-btn adm-btn-secondary">
@@ -245,9 +235,7 @@
         </div>
     </div>
 
-    {# ============================================================
-       ПОЛНОЭКРАННЫЙ ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА
-       ============================================================ #}
+    {# ============ ПОЛНОЭКРАННЫЙ ИНДИКАТОР СОХРАНЕНИЯ ТОВАРА ============ #}
     <div id="adm-saving-overlay" class="adm-saving-overlay" aria-hidden="true">
         <div class="adm-saving-card">
             <div class="adm-saving-spinner"></div>

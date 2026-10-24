@@ -26,8 +26,6 @@
                 }
             });
         }, {
-            // «Мёртвые зоны» 10% сверху и снизу: элементы появляются/
-            // затухают чуть раньше, чем касаются края экрана.
             rootMargin: '-10% 0px -10% 0px',
             threshold: 0,
         });
@@ -57,8 +55,6 @@
         initScrollAnimations();
     }
 
-    // Переинициализируем при навигации (htmx). Отслеживаем смену URL,
-    // чтобы не сбрасывать анимацию при открытии модалок.
     let _lastUrl = window.location.href;
     document.body.addEventListener('htmx:afterSettle', () => {
         if (window.location.href !== _lastUrl) {
@@ -219,9 +215,17 @@
                 if (modal) closeModal(modal);
                 break;
             }
-            case 'open-create-dialog':
+            case 'open-create-dialog': {
+                // Сбрасываем прошлое состояние (бренд или категория).
+                const createName = document.getElementById('create-name');
+                if (createName) {
+                    createName.value = '';
+                    createName.setCustomValidity('');
+                    createName.dispatchEvent(new Event('input', { bubbles: true }));
+                }
                 openModal(document.getElementById('create-dialog'), '#create-name');
                 break;
+            }
             case 'close-create-dialog':
                 closeModal(document.getElementById('create-dialog'));
                 break;
@@ -270,12 +274,27 @@
         form.action = actionUrl;
         form.setAttribute('action', actionUrl);
 
-        document.getElementById('edit-name').value = name;
+        const nameInput = document.getElementById('edit-name');
+        nameInput.value = name;
+        nameInput.setCustomValidity('');
+
+        const isBrand = title.toLowerCase().indexOf('бренд') !== -1;
+        const nameErr = form.querySelector('[data-brand-name-error]');
+        const submit = form.querySelector('button[type="submit"]');
+
+        if (isBrand) {
+            // Включаем live-валидацию только для брендов.
+            nameInput.setAttribute('data-brand-name', '');
+        } else {
+            nameInput.removeAttribute('data-brand-name');
+            if (nameErr) nameErr.classList.remove('is-visible');
+            if (submit) submit.disabled = false;
+        }
 
         const descField = document.getElementById('edit-description');
         const descWrap = document.getElementById('edit-description-wrap');
         if (descField && descWrap) {
-            if (title.toLowerCase().indexOf('бренд') !== -1) {
+            if (isBrand) {
                 descWrap.style.display = '';
                 descField.value = description || '';
             } else {
@@ -285,6 +304,11 @@
         }
 
         openModal(dlg, '#edit-name');
+
+        if (isBrand) {
+            // Проверить текущее значение (вдруг name уже с кириллицей).
+            nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     }
 
     // ============================================================
@@ -1302,7 +1326,6 @@
                     grid.appendChild(cardTpl.content.cloneNode(true));
                 }
 
-                // Регистрируем новые элементы в scroll observer
                 refreshScrollObserver();
 
                 const meta = doc.querySelector('[data-infinite-meta]');
@@ -1326,6 +1349,54 @@
                 spinner.style.display = 'none';
             }
         });
+    })();
+
+    // ============================================================
+    // LIVE-ВАЛИДАЦИЯ ИМЕНИ БРЕНДА (только латиница)
+    // ============================================================
+    (function initBrandNameLiveValidation() {
+        // True, если в строке есть буква не из латинского скрипта.
+        // Работает так же, как серверный _validate_brand_name в
+        // app/routers/admin/catalog.py: цифры/пунктуация пропускаются,
+        // любая нелатинская буква (кириллица, CJK, греческий) — блочит.
+        function hasNonLatinLetter(str) {
+            for (const ch of str) {
+                if (/\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function validate(input) {
+            if (!input.hasAttribute('data-brand-name')) return;
+            const form = input.closest('form');
+            if (!form) return;
+
+            const err = form.querySelector('[data-brand-name-error]');
+            const submit = form.querySelector('button[type="submit"]');
+
+            const bad = hasNonLatinLetter(input.value);
+
+            if (err) err.classList.toggle('is-visible', bad);
+
+            // Нативный tooltip браузера при попытке сабмита
+            input.setCustomValidity(bad
+                ? 'Бренды пишутся только латиницей. Примеры: Avelea, Chanel, Lush.'
+                : '');
+
+            // Блокируем кнопку — пользователь сразу видит, что нельзя
+            if (submit) submit.disabled = bad;
+        }
+
+        document.addEventListener('input', (e) => {
+            const input = e.target.closest('input[data-brand-name]');
+            if (input) validate(input);
+        });
+
+        // Инициализация при загрузке: проверяем все помеченные
+        // поля (для create-name в /admin/brands).
+        document.querySelectorAll('input[data-brand-name]').forEach(validate);
     })();
 
 })();

@@ -95,6 +95,15 @@ SESSION_MAX_AGE    = _int("SESSION_MAX_AGE", 14 * 24 * 3600)
 # открытую админку на чужом компьютере». 0 = отключено.
 SESSION_IDLE_TIMEOUT = _int("SESSION_IDLE_TIMEOUT", 12 * 3600)
 
+# Доверенные прокси для учёта X-Forwarded-For в rate-limit.
+# XFF принимается ТОЛЬКО от этих адресов — иначе подделывается клиентом.
+# 127.0.0.1,::1 — nginx на том же хосте (типичный прод).
+# Для Cloudflare/ALB — добавить IP прокси.
+TRUSTED_PROXIES = {
+    p.strip() for p in _str("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
+    if p.strip()
+}
+
 MAX_UPLOAD_MB    = _int("MAX_UPLOAD_MB", 5)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 

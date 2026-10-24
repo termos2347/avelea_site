@@ -318,7 +318,7 @@
                 <div class="search-overlay__section-label">Популярные категории</div>
                 <div class="search-overlay__chips">
                     {% for c in cats %}
-                    <a href="/catalog?category={{ c }}" class="search-overlay__chip">
+                    <a href="/catalog?category={{ c|urlq }}" class="search-overlay__chip">
                         <i class="fas fa-tag"></i>
                         <span>{{ c }}</span>
                     </a>

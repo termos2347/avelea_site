@@ -1,5 +1,6 @@
 """Админка: бренды и категории."""
 import logging
+import unicodedata
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +23,28 @@ _COMMIT_ERROR_MSG = (
     "Не удалось сохранить — временная ошибка базы данных. "
     "Попробуйте ещё раз через минуту."
 )
+
+_BRAND_NAME_ERR = (
+    "Имя бренда должно быть на английском (латиницей). "
+    "Примеры: Avelea, Chanel, Lush, Dr. Jart+. "
+    "Магазины-посредники («Летуаль», «Золотое Яблоко») — это не бренды."
+)
+
+
+def _validate_brand_name(name: str) -> str | None:
+    """Latin-only. Разрешает акцентированную латиницу (L'Oréal),
+    цифры, пробелы, пунктуацию. Режет кириллицу, CJK, эмодзи.
+    """
+    has_letter = False
+    for ch in name:
+        if not ch.isalpha():
+            continue
+        has_letter = True
+        if "LATIN" not in unicodedata.name(ch, ""):
+            return _BRAND_NAME_ERR
+    if not has_letter:
+        return "Имя бренда должно содержать хотя бы одну латинскую букву."
+    return None
 
 
 # ============================================================
@@ -188,6 +211,10 @@ def admin_brand_create(
     if not name:
         return RedirectResponse(url="/admin/brands", status_code=303)
 
+    if (err := _validate_brand_name(name)) is not None:
+        request.session["flash_error"] = err
+        return RedirectResponse(url="/admin/brands", status_code=303)
+
     exists = db.query(Brand).filter(Brand.name == name).first()
     if exists:
         request.session["flash_error"] = f"Бренд «{name}» уже существует."
@@ -227,6 +254,10 @@ def admin_brand_edit(
     changed = False
 
     if name and name != brand.name:
+        if (err := _validate_brand_name(name)) is not None:
+            request.session["flash_error"] = err
+            return RedirectResponse(url="/admin/brands", status_code=303)
+
         exists = (
             db.query(Brand)
               .filter(Brand.name == name, Brand.id != brand_id)

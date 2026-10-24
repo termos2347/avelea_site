@@ -9,6 +9,8 @@ from threading import Lock
 
 from fastapi import HTTPException, Request
 
+from app.core.config import TRUSTED_PROXIES
+
 
 # ============================================================
 # CSRF + авторизация админа
@@ -83,6 +85,11 @@ async def require_admin(request: Request) -> bool:
 _lock = Lock()
 _attempts: dict[str, deque[float]] = defaultdict(deque)
 
+# Верхняя граница ключей. Защита от memory-DoS: атакующий с 1M
+# уникальных XFF иначе раздует dict на сотни MB.
+_MAX_TRACKED_KEYS = 10_000
+_last_purge = 0.0
+
 DEFAULT_MAX = 5         # попыток
 DEFAULT_WINDOW = 300    # за 5 минут
 
@@ -98,18 +105,41 @@ def is_blocked(
     max_attempts: int = DEFAULT_MAX,
     window: int = DEFAULT_WINDOW,
 ) -> bool:
-    """True, если клиент исчерпал лимит."""
+    """True, если клиент исчерпал лимит.
+
+    Не создаёт запись в _attempts для незнакомых ключей — иначе
+    атакующий уникальными XFF раздувает dict.
+    """
     now = time.monotonic()
     with _lock:
-        q = _attempts[key]
+        q = _attempts.get(key)
+        if q is None:
+            return False
         _prune(q, now, window)
         return len(q) >= max_attempts
 
 
 def register_failure(key: str) -> None:
-    """Отмечает одну неудачную попытку."""
+    """Отмечает одну неудачную попытку.
+
+    Не даёт dict расти безгранично: при достижении лимита ключей
+    новые не отслеживаются (fail-open, чтобы не жечь RAM).
+    Периодически чистит пустые deque (раз в минуту).
+    """
+    global _last_purge
+    now = time.monotonic()
     with _lock:
-        _attempts[key].append(time.monotonic())
+        if key not in _attempts and len(_attempts) >= _MAX_TRACKED_KEYS:
+            return
+        _attempts[key].append(now)
+
+        if now - _last_purge > 60:
+            _last_purge = now
+            for k in list(_attempts.keys()):
+                q = _attempts[k]
+                _prune(q, now, DEFAULT_WINDOW)
+                if not q:
+                    del _attempts[k]
 
 
 def reset(key: str) -> None:
@@ -120,22 +150,35 @@ def reset(key: str) -> None:
 
 def reset_all() -> None:
     """Полная очистка — используется в тестах."""
+    global _last_purge
     with _lock:
         _attempts.clear()
+        _last_purge = 0.0
 
 
 def client_key(request) -> str:
     """Идентификатор клиента для лимита.
 
-    За localtunnel/прокси request.client.host — это IP туннеля,
-    а не реальный. Поэтому читаем X-Forwarded-For, если он есть.
-    Если приложение доступно напрямую без прокси — XFF можно
-    подделать, но для защиты от перебора это некритично.
+    X-Forwarded-For учитывается ТОЛЬКО от доверенных прокси
+    (TRUSTED_PROXIES). Иначе заголовок подделывается клиентом,
+    и каждый запрос получает свой bucket — brute-force не блокируется.
 
-    ВАЖНО: этот комментарий — из старой версии. XFF подделывается,
-    защита обходится. Фикс (TRUSTED_PROXIES) — отдельная задача.
+    Парсим справа налево: правый элемент дописал ближайший доверенный
+    прокси (реальный клиент, если прокси один — типичный nginx с
+    `$proxy_add_x_forwarded_for`). Левый край — клиентский мусор.
     """
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    direct = request.client.host if request.client else "unknown"
+
+    # Пришло не от прокси → XFF подделывается, игнорируем.
+    if direct not in TRUSTED_PROXIES:
+        return direct
+
+    xff = request.headers.get("x-forwarded-for", "")
+    if not xff:
+        return direct
+
+    parts = [p.strip() for p in xff.split(",") if p.strip()]
+    while parts and parts[-1] in TRUSTED_PROXIES:
+        parts.pop()
+
+    return parts[-1] if parts else direct

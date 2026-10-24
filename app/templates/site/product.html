@@ -157,7 +157,7 @@
         {% if product_categories %}
         <div class="flex flex-wrap gap-1.5 mb-5">
             {% for c in product_categories %}
-            <a href="/catalog?category={{ c }}"
+            <a href="/catalog?category={{ c|urlq }}"
                class="inline-flex items-center gap-1 px-3 py-1 rounded-full
                       bg-pink-100 hover:bg-pink-200 text-pink-800 text-xs transition">
                 <i class="fas fa-tag text-[9px]"></i>
